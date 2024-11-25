@@ -14,6 +14,8 @@ interface VindiCustomerInterface
     const ENTITY_ID = 'entity_id';
     const MAGENTO_CUSTOMER_ID = 'magento_customer_id';
     const VINDI_CUSTOMER_ID = 'vindi_customer_id';
+    const CODE = 'code';
+    const ENVIRONMENT = 'environment';
     /**#@-*/
 
     /**
@@ -38,6 +40,20 @@ interface VindiCustomerInterface
     public function getVindiCustomerId();
 
     /**
+     * Get code
+     *
+     * @return string
+     */
+    public function getCode();
+
+    /**
+     * Get environment
+     *
+     * @return string
+     */
+    public function getEnvironment();
+
+    /**
      * Set entity ID
      *
      * @param int $entityId
@@ -60,4 +76,20 @@ interface VindiCustomerInterface
      * @return $this
      */
     public function setVindiCustomerId($vindiCustomerId);
+
+    /**
+     * Set code
+     *
+     * @param string $code
+     * @return $this
+     */
+    public function setCode($code);
+
+    /**
+     * Set environment
+     *
+     * @param string $environment
+     * @return $this
+     */
+    public function setEnvironment($environment);
 }

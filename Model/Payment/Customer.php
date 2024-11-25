@@ -13,6 +13,7 @@ use Magento\Store\Model\StoreManagerInterface;
 use Vindi\Payment\Model\ResourceModel\PaymentProfile\CollectionFactory as PaymentProfileCollectionFactory;
 use Vindi\Payment\Model\ResourceModel\VindiCustomer\CollectionFactory as VindiCustomerCollectionFactory;
 use Vindi\Payment\Model\VindiCustomerFactory;
+use Vindi\Payment\Helper\Data;
 
 class Customer
 {
@@ -42,7 +43,12 @@ class Customer
     /** @var VindiCustomerFactory */
     protected $vindiCustomerFactory;
 
+    /** @var Data */
+    protected $helper;
+
     /**
+     * Customer constructor.
+     *
      * @param CustomerRepositoryInterface $customerRepository
      * @param Api $api
      * @param ManagerInterface $messageManager
@@ -51,6 +57,7 @@ class Customer
      * @param PaymentProfileCollectionFactory $paymentProfileCollectionFactory
      * @param VindiCustomerCollectionFactory $vindiCustomerCollectionFactory
      * @param VindiCustomerFactory $vindiCustomerFactory
+     * @param Data $helper
      */
     public function __construct(
         CustomerRepositoryInterface $customerRepository,
@@ -60,7 +67,8 @@ class Customer
         StoreManagerInterface $storeManager,
         PaymentProfileCollectionFactory $paymentProfileCollectionFactory,
         VindiCustomerCollectionFactory $vindiCustomerCollectionFactory,
-        VindiCustomerFactory $vindiCustomerFactory
+        VindiCustomerFactory $vindiCustomerFactory,
+        Data $helper
     ) {
         $this->customerRepository = $customerRepository;
         $this->api = $api;
@@ -70,6 +78,7 @@ class Customer
         $this->paymentProfileCollectionFactory = $paymentProfileCollectionFactory;
         $this->vindiCustomerCollectionFactory = $vindiCustomerCollectionFactory;
         $this->vindiCustomerFactory = $vindiCustomerFactory;
+        $this->helper = $helper;
     }
 
     /**
@@ -84,6 +93,8 @@ class Customer
         $billing = $order->getBillingAddress();
         $customer = null;
         $vindiCustomerId = null;
+
+        $environment = $this->getEnvironment();
 
         if (!$order->getCustomerIsGuest()) {
             $customer = $this->customerRepository->get($billing->getEmail());
@@ -111,14 +122,21 @@ class Customer
             return $vindiCustomerId;
         }
 
+        $addressFields = $this->processStreetFields($billing->getStreet());
+
+        $street = $addressFields['street'];
+        $number = $addressFields['number'];
+        $additionalDetails = $addressFields['additional_details'];
+        $neighborhood = $addressFields['neighborhood'];
+
         $address = [
-            'street' => $billing->getStreetLine(1) ?: '',
-            'number' => $billing->getStreetLine(2) ?: '',
-            'additional_details' => $billing->getStreetLine(3) ?: '',
-            'neighborhood' => $billing->getStreetLine(4) ?: '',
+            'street' => $street,
+            'number' => $number,
+            'additional_details' => $additionalDetails,
+            'neighborhood' => $neighborhood,
             'zipcode' => $billing->getPostcode(),
-            'city' => $billing->getCity(),
-            'state' => $billing->getRegionCode(),
+            'city'    => $billing->getCity(),
+            'state'   => $billing->getRegionCode(),
             'country' => $billing->getCountryId(),
         ];
 
@@ -151,7 +169,7 @@ class Customer
         }
 
         if ($customer && $customer->getId()) {
-            $this->registerVindiCustomer($customer->getId(), $vindiCustomerId);
+            $this->registerVindiCustomer($customer->getId(), $vindiCustomerId, $uniqueCode, $environment);
         }
 
         return $vindiCustomerId;
@@ -166,6 +184,8 @@ class Customer
      */
     public function findOrCreateFromCustomerAccount(CustomerInterface $customer)
     {
+        $environment = $this->getEnvironment();
+
         $vindiCustomerId = $this->findVindiCustomerIdByCustomerId($customer->getId());
 
         if ($vindiCustomerId) {
@@ -188,18 +208,12 @@ class Customer
         }
 
         $billingStreet = $billingAddress->getStreet();
+        $addressFields = $this->processStreetFields($billingStreet);
 
-        if (!$billingStreet) {
-            $street = $billingAddress->getStreetLine(1);
-            $number = $billingAddress->getStreetLine(2);
-            $additionalDetails = $billingAddress->getStreetLine(3);
-            $neighborhood = $billingAddress->getStreetLine(4);
-        }
-
-        $street = $billingStreet[0] ?? '';
-        $number = $billingStreet[1] ?? '';
-        $additionalDetails = $billingStreet[2] ?? '';
-        $neighborhood = $billingStreet[3] ?? '';
+        $street = $addressFields['street'];
+        $number = $addressFields['number'];
+        $additionalDetails = $addressFields['additional_details'];
+        $neighborhood = $addressFields['neighborhood'];
 
         $region = $billingAddress->getRegion();
 
@@ -218,8 +232,8 @@ class Customer
             'additional_details' => $additionalDetails,
             'neighborhood' => $neighborhood,
             'zipcode' => $billingAddress->getPostcode(),
-            'city' => $billingAddress->getCity(),
-            'state' => $state,
+            'city'    => $billingAddress->getCity(),
+            'state'   => $state,
             'country' => $billingAddress->getCountryId(),
         ];
 
@@ -236,11 +250,11 @@ class Customer
         $uniqueCode = $baseUrl . '_' . $customer->getId() . '_' . time();
 
         $customerVindi = [
-            'name' => $customer->getFirstname() . ' ' . $customer->getLastname(),
-            'email' => $customer->getEmail(),
+            'name'    => $customer->getFirstname() . ' ' . $customer->getLastname(),
+            'email'   => $customer->getEmail(),
             'registry_code' => $registryCode,
-            'code' => $uniqueCode,
-            'phones' => $this->formatPhone($billingAddress->getTelephone()),
+            'code'    => $uniqueCode,
+            'phones'  => $this->formatPhone($billingAddress->getTelephone()),
             'address' => $address
         ];
 
@@ -251,43 +265,71 @@ class Customer
             return false;
         }
 
-        $this->registerVindiCustomer($customer->getId(), $vindiCustomerId);
+        $this->registerVindiCustomer($customer->getId(), $vindiCustomerId, $uniqueCode, $environment);
 
         return $vindiCustomerId;
     }
 
     /**
-     * Register Vindi customer ID in vindi_customers table.
+     * Register Vindi customer in the vindi_customers table.
      *
      * @param int $magentoCustomerId
      * @param string $vindiCustomerId
+     * @param string $code
+     * @param string $environment
      */
-    protected function registerVindiCustomer($magentoCustomerId, $vindiCustomerId)
+    protected function registerVindiCustomer($magentoCustomerId, $vindiCustomerId, $code, $environment)
     {
         $vindiCustomer = $this->vindiCustomerFactory->create();
         $vindiCustomer->setMagentoCustomerId($magentoCustomerId);
         $vindiCustomer->setVindiCustomerId($vindiCustomerId);
+        $vindiCustomer->setCode($code);
+        $vindiCustomer->setEnvironment($environment);
         $vindiCustomer->save();
     }
 
     /**
-     * Find Vindi customer ID by Magento customer ID using ORM.
+     * Find Vindi Customer ID by Magento Customer ID.
      *
      * @param int $customerId
-     * @return string|false
+     *
+     * @return string|bool
+     * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function findVindiCustomerIdByCustomerId($customerId)
     {
         $collection = $this->vindiCustomerCollectionFactory->create();
-        $item = $collection->addFieldToFilter('magento_customer_id', $customerId)->getFirstItem();
+        $item = $collection->addFieldToFilter('magento_customer_id', $customerId)
+            ->addFieldToFilter('environment', $this->getEnvironment())
+            ->getFirstItem();
+
         if ($item->getId()) {
             return $item->getVindiCustomerId();
         }
 
-        $collection = $this->paymentProfileCollectionFactory->create();
-        $item = $collection->addFieldToFilter('customer_id', $customerId)->getFirstItem();
-        return $item->getVindiCustomerId() ?: false;
+        $collection = $this->vindiCustomerCollectionFactory->create();
+        $item = $collection->addFieldToFilter('magento_customer_id', $customerId)
+            ->getFirstItem();
+
+        if (!$item->getId()) {
+            return false;
+        }
+
+        $vindiCustomerId = $item->getVindiCustomerId();
+
+        $response = $this->api->request("customers/{$vindiCustomerId}", 'GET');
+
+        if (!$response || !isset($response['customer']['id'])) {
+            return false;
+        }
+
+        $item->setEnvironment($this->getEnvironment());
+        $item->setCode($response['customer']['code']);
+        $item->save();
+
+        return $vindiCustomerId;
     }
+
 
     /**
      * Make an API request to create a Customer.
@@ -425,4 +467,66 @@ class Customer
         }
         return $document;
     }
+
+    /**
+     * @return string
+     */
+    protected function getEnvironment()
+    {
+        $mode = $this->helper->getModuleGeneralConfig("mode");
+        return ($mode === "1") ? "production" : "sandbox";
+    }
+
+    /**
+     * Extract and format address fields dynamically based on available street lines.
+     *
+     * @param array|null $billingStreet
+     * @return array
+     */
+    protected function processStreetFields($billingStreet)
+    {
+        $street = '';
+        $number = '';
+        $additionalDetails = '';
+        $neighborhood = '';
+
+        if (is_array($billingStreet)) {
+            $lineCount = count($billingStreet);
+
+            switch ($lineCount) {
+                case 4:
+                    $street = $billingStreet[0];
+                    $number = $billingStreet[1];
+                    $additionalDetails = $billingStreet[2];
+                    $neighborhood = $billingStreet[3];
+                    break;
+
+                case 3:
+                    $street = $billingStreet[0];
+                    $number = $billingStreet[1];
+                    $neighborhood = $billingStreet[2];
+                    break;
+
+                case 2:
+                    $street = $billingStreet[0];
+                    $number = $billingStreet[1];
+                    break;
+
+                case 1:
+                    $street = $billingStreet[0];
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        return [
+            'street' => $street,
+            'number' => $number,
+            'additional_details' => $additionalDetails,
+            'neighborhood' => $neighborhood,
+        ];
+    }
+
 }

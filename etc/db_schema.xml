@@ -140,6 +140,8 @@
         <column xsi:type="int" name="entity_id" padding="10" unsigned="true" nullable="false" identity="true" comment="Entity ID"/>
         <column xsi:type="int" name="magento_customer_id" nullable="false" comment="Magento Customer ID"/>
         <column xsi:type="varchar" name="vindi_customer_id" length="255" nullable="false" comment="Vindi Customer ID"/>
+        <column xsi:type="varchar" name="code" length="255" nullable="false" comment="Unique Code"/>
+        <column xsi:type="varchar" name="environment" length="50" nullable="false" comment="Environment"/>
         <constraint xsi:type="primary" referenceId="PRIMARY">
             <column name="entity_id"/>
         </constraint>
@@ -148,6 +150,12 @@
         </index>
         <index referenceId="VINDI_CUSTOMERS_VINDI_CUSTOMER_ID_INDEX" indexType="btree">
             <column name="vindi_customer_id"/>
+        </index>
+        <index referenceId="VINDI_CUSTOMERS_CODE_INDEX" indexType="btree">
+            <column name="code"/>
+        </index>
+        <index referenceId="VINDI_CUSTOMERS_ENVIRONMENT_INDEX" indexType="btree">
+            <column name="environment"/>
         </index>
     </table>
     <table name="vindi_vr_payment_link" resource="default" engine="innodb" comment="Vindi Payment Link">
