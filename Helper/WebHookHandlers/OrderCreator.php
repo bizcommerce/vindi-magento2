@@ -20,44 +20,13 @@ use Vindi\Payment\Helper\Data;
  */
 class OrderCreator
 {
-    /**
-     * @var OrderFactory
-     */
     protected $orderFactory;
-
-    /**
-     * @var SubscriptionOrderRepository
-     */
     protected $subscriptionOrderRepository;
-
-    /**
-     * @var SubscriptionOrderFactory
-     */
     protected $subscriptionOrderFactory;
-
-    /**
-     * @var OrderService
-     */
     protected $orderService;
-
-    /**
-     * @var PaymentBill
-     */
     protected $paymentBill;
-
-    /**
-     * @var OrderRepository
-     */
     private $orderRepository;
-
-    /**
-     * @var ProductFactory
-     */
     private $productFactory;
-
-    /**
-     * @var OrderItemInterfaceFactory
-     */
     private $orderItemFactory;
 
     /**
@@ -92,6 +61,8 @@ class OrderCreator
     }
 
     /**
+     * Create an order from bill data and update payment method
+     *
      * @param array $billData
      * @return bool
      */
@@ -108,6 +79,7 @@ class OrderCreator
 
             if ($originalOrder) {
                 $newOrder = $this->replicateOrder($originalOrder, $bill);
+                $this->updatePaymentMethod($newOrder, $billData);
                 $this->orderRepository->save($newOrder);
 
                 $this->registerSubscriptionOrder($newOrder, $subscriptionId);
@@ -120,6 +92,30 @@ class OrderCreator
             return false;
         } catch (\Exception $e) {
             return false;
+        }
+    }
+
+    /**
+     * Update payment method for the new order based on bill data
+     *
+     * @param Order $order
+     * @param array $billData
+     */
+    protected function updatePaymentMethod(Order $order, $billData)
+    {
+        $paymentMethodMap = [
+            'pix'           => 'vindi_pix',
+            'bank_slip'     => 'vindi_bankslip',
+            'pix_bank_slip' => 'vindi_bankslippix',
+            'credit_card'   => 'vindi',
+        ];
+
+        $paymentMethodCode = $billData['bill']['charges'][0]['payment_method']['code'] ?? null;
+
+        if (isset($paymentMethodMap[$paymentMethodCode])) {
+            $payment = $order->getPayment();
+            $payment->setMethod($paymentMethodMap[$paymentMethodCode]);
+            $order->setPayment($payment);
         }
     }
 

@@ -6,43 +6,5 @@
         <referenceContainer name="content">
             <uiComponent name="vindi_payment_subscription_form"/>
         </referenceContainer>
-
-        <referenceBlock name="head.additional">
-            <block class="Magento\Framework\View\Element\Text" name="custom_js">
-                <arguments>
-                    <argument name="text" xsi:type="string">
-                        <![CDATA[
-						<script type="text/javascript">
-							document.addEventListener("DOMContentLoaded", function() {
-								function waitForPaymentMethodField() {
-									var paymentMethodField = document.querySelector('[name="vindi_subscription_items_grid[payment_method]"]');
-
-									if (paymentMethodField) {
-									    var paymentSettingsTab = document.getElementById('tab_payment_settings').closest('li');
-
-										function togglePaymentSettingsTab() {
-											if (paymentMethodField.value === 'credit_card') {
-												paymentSettingsTab.style.display = 'list-item';
-											} else {
-												paymentSettingsTab.style.display = 'none';
-											}
-										}
-
-										togglePaymentSettingsTab();
-
-										paymentMethodField.addEventListener('change', togglePaymentSettingsTab);
-									} else {
-										setTimeout(waitForPaymentMethodField, 500);
-									}
-								}
-
-								waitForPaymentMethodField();
-							});
-						</script>
-						]]>
-                    </argument>
-                </arguments>
-            </block>
-        </referenceBlock>
     </body>
 </page>
