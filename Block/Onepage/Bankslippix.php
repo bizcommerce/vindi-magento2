@@ -126,6 +126,16 @@ class Bankslippix extends Template
     }
 
     /**
+     * Returns the original BankSlipPix QR code to copy and paster
+     *
+     * @return bool|string
+     */
+    public function getQrcodeCopyAndPaste()
+    {
+        return $this->getOrder()->getPayment()->getAdditionalInformation('qrcode_original_path');
+    }
+
+    /**
      * Retrieves the last real order from the checkout session
      *
      * @return Order

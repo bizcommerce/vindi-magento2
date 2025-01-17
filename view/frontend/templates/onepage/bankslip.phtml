@@ -6,6 +6,28 @@ use Vindi\Payment\Block\Onepage\Bankslip;
 <?php if ($block->canShowBankslip()) : ?>
     <div class="checkout-success qr-code">
         <?php if ($block->getBankslipPrintUrl()) : ?>
+            <?php if ($block->getBankslipBarcode()) : ?>
+                <div class="payment-success__container">
+                    <div class="content">
+                        <h3><?= __('Pay with Bankslip:') ?></h3>
+                        <div class="vindi-bankslip bankslip">
+                            <div class="bankslip-barcode-container">
+                                <div class="bankslip-number-container">
+                                    <strong><?= __('Bankslip code:') ?></strong>
+                                    <div class="bankslip-number"><?= $block->getBankslipBarcode() ?></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="align-button">
+                            <button class="bankslip-copy-button"
+                                    data-text="<?= $block->escapeHtml(__('Copied!')) ?>"
+                                    onclick="vindiVr.copyCode(this, '.bankslip-number', false)">
+                                <?= __('Copy Barcode') ?>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
             <div class="container-button-print">
                 <button
                     id="vindi-bankslip-button-print"

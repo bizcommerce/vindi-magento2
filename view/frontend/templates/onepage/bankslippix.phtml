@@ -29,8 +29,25 @@ use Vindi\Payment\Block\Onepage\Bankslippix;
             <div data-bind="scope: 'vindiPix'" class="box-qr">
                 <!-- ko template: getTemplate() --><!-- /ko -->
             </div>
-            <div id="copied-success" class="copied" style="display: none">
-                <span><?= __('QR Code Key copied') ?></span>
+            <div class="payment-success__container">
+                <div class="content">
+                    <h3><?= __('Pay with Pix:') ?></h3>
+                    <div class="vindi-bankslip bankslip">
+                        <div class="bankslip-barcode-container">
+                            <div class="bankslip-number-container">
+                                <strong><?= __('Pix code:') ?></strong>
+                                <div class="bankslip-number"><?= $block->getQrcodeCopyAndPaste() ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="align-button">
+                        <button class="bankslip-copy-button"
+                                data-text="<?= $block->escapeHtml(__('Copied!')) ?>"
+                                onclick="vindiVr.copyCode(this, '.bankslip-number', false)">
+                            <?= __('Copy Pix code') ?>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="container-button-print">

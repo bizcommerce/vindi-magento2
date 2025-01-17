@@ -584,6 +584,15 @@ abstract class AbstractMethod extends OriginAbstractMethod
             $payment->setAdditionalInformation('due_at', $bill['charges'][0]['due_at']);
         }
 
+        // Add barcode to bank slip payment additional information
+        if (
+            $body['payment_method_code'] === PaymentMethod::BANK_SLIP
+            && isset($bill['charges'][0]['last_transaction']['gateway_response_fields']['barcode'])
+        ) {
+                $payment->setAdditionalInformation('barcode',
+                    $bill['charges'][0]['last_transaction']['gateway_response_fields']['barcode']);
+        }
+
         $isValidPix = isset($bill['charges'][0]['last_transaction']['gateway_response_fields']['qrcode_original_path']);
         if (
             $isValidPix

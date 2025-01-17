@@ -81,6 +81,16 @@ class Bankslip extends \Magento\Framework\View\Element\Template
     }
 
     /**
+     * Returns the barcode for the bank slip
+     *
+     * @return string
+     */
+    public function getBankslipBarcode()
+    {
+        return $this->getOrder()->getPayment()->getAdditionalInformation('barcode');
+    }
+
+    /**
      * Returns the next billing date of the subscription
      *
      * @return string|null
