@@ -47,16 +47,10 @@ class PaymentProfiles implements OptionSourceInterface
         $options = [];
 
         $customerId             = $this->registry->registry('current_customer_id');
-        $paymentMethod          = $this->registry->registry('vindi_current_subscription_payment_method');
         $selectedPaymentProfile = $this->registry->registry('vindi_current_subscription_payment_profile'); // Retrieve selected payment profile
 
         if (!$customerId) {
             throw new LocalizedException(__('Customer ID is not set.'));
-        }
-
-        if ($paymentMethod !== 'credit_card') {
-            $options[] = ['value' => '', 'label' => __('--- ---')];
-            return $options;
         }
 
         $paymentProfileCollection = $this->paymentProfileCollectionFactory->create()
@@ -110,4 +104,3 @@ class PaymentProfiles implements OptionSourceInterface
         return $options;
     }
 }
-

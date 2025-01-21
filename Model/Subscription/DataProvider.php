@@ -79,6 +79,7 @@ class DataProvider extends \Magento\Ui\DataProvider\ModifierPoolDataProvider
             $result['id'] = $subscription->getId();
 
             $result['vindi_subscription_items_grid']['payment_method'] = $subscription->getPaymentMethod();
+            $result['payment_settings']['payment_method'] = $subscription->getPaymentMethod();
 
             $this->loadedData[$subscription->getId()] = $result;
         }

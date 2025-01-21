@@ -11,8 +11,6 @@
         <buttons>
             <button class="Vindi\Payment\Block\Adminhtml\Subscription\Edit\BackButton" name="back"/>
             <button class="Vindi\Payment\Block\Adminhtml\Subscription\Edit\SaveChangesButton" name="save_and_continue"/>
-<!--            <button class="Vindi\Payment\Block\Adminhtml\Subscription\Edit\AddItemButton" name="add_item"/>-->
-<!--            <button class="Vindi\Payment\Block\Adminhtml\Subscription\Edit\AddDiscountButton" name="add_discount"/>-->
             <button class="Vindi\Payment\Block\Adminhtml\Subscription\Edit\DropdownButton" name="dropdown_button"/>
         </buttons>
         <layout>
@@ -108,12 +106,29 @@
         <settings>
             <label translate="true">Payment Profile</label>
         </settings>
-        <field name="payment_profile" sortOrder="10" formElement="select">
+
+        <!-- Payment Method Select -->
+        <field name="payment_method" sortOrder="10" formElement="select">
+            <argument name="data" xsi:type="array">
+                <item name="options" xsi:type="object">Vindi\Payment\Model\Config\Source\PaymentMethods</item>
+                <item name="config" xsi:type="array">
+                    <item name="dataType" xsi:type="string">int</item>
+                    <item name="component" xsi:type="string">Vindi_Payment/js/form/element/payment-method</item>
+                    <item name="label" xsi:type="string" translate="true">Payment Method</item>
+                    <item name="formElement" xsi:type="string">select</item>
+                    <item name="source" xsi:type="string">payment_method</item>
+                    <item name="dataScope" xsi:type="string">payment_method</item>
+                </item>
+            </argument>
+        </field>
+
+        <!-- Payment Profile Select -->
+        <field name="payment_profile" sortOrder="20" formElement="select">
             <settings>
                 <dataType>select</dataType>
-                <label translate="true">Credit Card</label>
+                <label translate="true">Payment Profile</label>
                 <dataScope>payment_profile</dataScope>
-                <notice translate="true">Cards will only be available for subscriptions registered as a credit card.</notice>
+                <notice translate="true">Select the payment profile for the customer.</notice>
             </settings>
             <formElements>
                 <select>

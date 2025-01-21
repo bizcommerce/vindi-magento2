@@ -62,17 +62,23 @@ class Save extends Action
                 return $resultRedirect->setPath('*/*/');
             }
 
-            if (empty($data['payment_settings']['payment_profile'])) {
-                $this->messageManager->addWarningMessage(__('Only credit card subscriptions can have a card registered! If you want to change the item, click edit in the grid listing.'));
-                return $resultRedirect->setPath('*/*/edit', ['id' => $id]);
-            }
-
             try {
-                $request = $this->api->request('subscriptions/' . $id, 'PUT', [
-                    'payment_profile' => [
-                        'id' => $data["payment_settings"]["payment_profile"]
-                    ]
-                ]);
+                $requestData = [
+                    'payment_method_code' => $data['payment_settings']['payment_method']
+                ];
+
+                if ($data['payment_settings']['payment_method'] === 'credit_card') {
+                    if (empty($data['payment_settings']['payment_profile'])) {
+                        $this->messageManager->addWarningMessage(__('You must select a payment profile for credit card subscriptions.'));
+                        return $resultRedirect->setPath('*/*/edit', ['id' => $id]);
+                    }
+
+                    $requestData['payment_profile'] = [
+                        'id' => $data['payment_settings']['payment_profile']
+                    ];
+                }
+
+                $request = $this->api->request('subscriptions/' . $id, 'PUT', $requestData);
             } catch (Exception $e) {
                 $this->messageManager->addExceptionMessage($e, __('API request failed: %1', $e->getMessage()));
                 return $resultRedirect->setPath('*/*/edit', ['id' => $id]);
@@ -89,7 +95,11 @@ class Save extends Action
                 return $resultRedirect->setPath('*/*/edit', ['id' => $id]);
             }
 
-            $model->setData('payment_profile', $data["payment_settings"]["payment_profile"]);
+            $model->setData('payment_method', $data['payment_settings']['payment_method']);
+
+            if (isset($data['payment_settings']['payment_profile'])) {
+                $model->setData('payment_profile', $data['payment_settings']['payment_profile']);
+            }
 
             try {
                 $model->save();
