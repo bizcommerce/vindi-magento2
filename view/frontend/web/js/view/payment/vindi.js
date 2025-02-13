@@ -24,6 +24,10 @@ define(
             {
                 type: 'vindi_pix',
                 component: 'Vindi_Payment/js/view/payment/method-renderer/vindi-pix'
+            },
+            {
+                type: 'vindi_cardpix',
+                component: 'Vindi_Payment/js/view/payment/method-renderer/vindi-cardpix'
             }
         );
         return Component.extend({});

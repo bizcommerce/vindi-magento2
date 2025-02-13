@@ -192,6 +192,26 @@
                         <comment><![CDATA[Instructions to be shown in payment link success page, it can be HTML]]></comment>
                     </field>
                 </group>
+                <group id="vindi_cardpix" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="500" translate="label">
+                    <label>Card + Pix</label>
+                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label"
+                           type="select">
+                        <label>Enabled</label>
+                        <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                        <backend_model>Vindi\Payment\Model\Config\Backend\ApiKeyValidator</backend_model>
+                        <config_path>payment/vindi_cardpix/active</config_path>
+                    </field>
+                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label"
+                           type="text">
+                        <label>Title</label>
+                        <config_path>payment/vindi_cardpix/title</config_path>
+                    </field>
+                    <field id="payment_link_instructions" translate="label comment" type="textarea" sortOrder="20200" showInDefault="1" showInWebsite="1" showInStore="1">
+                        <label>Instructions on the payment link success page</label>
+                        <config_path>payment/vindi_cardpix/payment_link_instructions</config_path>
+                        <comment><![CDATA[Instructions to be shown in payment link success page, it can be HTML]]></comment>
+                    </field>
+                </group>
             </group>
         </section>
     </system>

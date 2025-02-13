@@ -72,6 +72,16 @@
                 <can_use_internal>1</can_use_internal>
                 <payment_link_instructions>To pay, print or scan the code or QR code of the document by clicking "View Bolepix". You can also copy the Bolepix barcode and paste it into your financial institution's app.</payment_link_instructions>
             </vindi_bankslippix>
+            <vindi_cardpix>
+                <active>0</active>
+                <model>Vindi\Payment\Model\Payment\CardPix</model>
+                <title>Vindi - Card + Pix</title>
+                <allowspecific>0</allowspecific>
+                <payment_action>authorize</payment_action>
+                <group>offline</group>
+                <can_use_internal>1</can_use_internal>
+                <payment_link_instructions>To pay, complete the card payment first, then scan the PIX QR code.</payment_link_instructions>
+            </vindi_cardpix>
         </payment>
         <vindiconfiguration>
             <general>

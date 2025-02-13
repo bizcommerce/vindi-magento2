@@ -16,5 +16,8 @@
         <method name="vindi_pix">
             <allow_multiple_address>0</allow_multiple_address>
         </method>
+        <method name="vindi_cardpix">
+            <allow_multiple_address>0</allow_multiple_address>
+        </method>
     </methods>
 </payment>
