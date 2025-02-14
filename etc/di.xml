@@ -203,4 +203,24 @@
             <argument name="resourceModel" xsi:type="string">Vindi\Payment\Model\ResourceModel\VindiSubscriptionItem</argument>
         </arguments>
     </virtualType>
+
+    <!-- VindiPaymentSplit -->
+    <preference for="Vindi\Payment\Api\Data\PaymentSplitInterface" type="Vindi\Payment\Model\PaymentSplit"/>
+    <preference for="Vindi\Payment\Api\PaymentSplitRepositoryInterface" type="Vindi\Payment\Model\PaymentSplitRepository"/>
+
+    <type name="Magento\Framework\View\Element\UiComponent\DataProvider\CollectionFactory">
+        <arguments>
+            <argument name="collections" xsi:type="array">
+                <item name="vindi_payment_paymentsplit_listing_data_source" xsi:type="string">Vindi\Payment\Model\ResourceModel\PaymentSplit\Grid\Collection</item>
+                <item name="vindi_payment_paymentsplit_data_source" xsi:type="string">Vindi\Payment\Model\ResourceModel\PaymentSplit\Form\DataProvider</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <virtualType name="Vindi\Payment\Model\ResourceModel\PaymentSplit\Grid\Collection" type="Magento\Framework\View\Element\UiComponent\DataProvider\SearchResult">
+        <arguments>
+            <argument name="mainTable" xsi:type="string">vindi_payment_split</argument>
+            <argument name="resourceModel" xsi:type="string">Vindi\Payment\Model\ResourceModel\PaymentSplit</argument>
+        </arguments>
+    </virtualType>
 </config>

@@ -36,7 +36,6 @@
                     <legend class="legend">
                         <span><!-- ko i18n: 'Card Information'--><!-- /ko --></span>
                     </legend><br />
-
                     <!-- ko if: (hasPaymentProfiles()) -->
                     <div class="field number required">
                         <label data-bind="attr: {for: getCode() + '_cc_payment_profile'}" class="label">
@@ -55,7 +54,6 @@
                         </div>
                     </div>
                     <!-- /ko -->
-
                     <div class="field number cc-number required vindi-cc-number-container" data-bind="visible: !selectedPaymentProfile()">
                         <div class="credit-card-types-container">
                             <ul class="credit-card-types">
@@ -81,7 +79,6 @@
                                    value=""
                                    data-bind="attr: {id: getCode() + '_cc_type', 'data-container': getCode() + '-cc-type'}, value: creditCardType">
                         </div>
-
                         <div class="control">
                             <input name="payment[cc_number]"
                                    type="number"
@@ -100,7 +97,6 @@
                       valueUpdate: 'keyup' "/>
                         </div>
                     </div>
-
                     <div class="field number required" data-bind="attr: {id: getCode() + '-cc-owner-container'}, visible: !selectedPaymentProfile()">
                         <div class="control">
                             <input type="text"
@@ -119,7 +115,6 @@
                       valueUpdate: 'keyup' "/>
                         </div>
                     </div>
-
                     <div class="field number required vindi-cc-exp-cvv" data-bind="visible: !selectedPaymentProfile()">
                         <span data-bind="attr: {id: getCode() + '-cc-exp-date-container'}">
                             <input type="text"
@@ -139,7 +134,6 @@
                           value: creditCardExpDate,
                           valueUpdate: 'keyup' "/>
                         </span>
-
                         <!-- ko if: (hasVerification())-->
                         <span data-bind="attr: {id: getCode() + '-cc-cvv'}">
                             <input type="text"
@@ -160,7 +154,6 @@
                         </span>
                         <!-- /ko -->
                     </div>
-
                     <!-- ko if: (installmentsAllowed())-->
                     <div class="field number required installments" data-bind="attr: {id: getCode() + '_installments'}">
                         <div class="control">
@@ -175,7 +168,6 @@
                                 value: selectedInstallments">
                             </select>
                         </div>
-
                         <div class="vindi-container vindi-preload" data-bind="visible: !selectedPaymentProfile()">
                             <div class="vindi-creditcard">
                                 <div id="vindi-front" class="vindi-front">
@@ -193,7 +185,7 @@
         <!-- Pix Payment Section -->
         <div class="pix-payment-section">
             <h3 data-bind="i18n: 'Pagamento com PIX'"></h3>
-            <div class="field amount required" max-width: 500px;>
+            <div class="field amount required" style="max-width: 500px;">
                 <label class="label">
                     <span data-bind="i18n: 'Valor a pagar com PIX'"></span>
                 </label>
