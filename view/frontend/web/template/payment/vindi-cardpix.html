@@ -1,4 +1,15 @@
-<!-- File: view/frontend/web/template/payment/vindi-cardpix.html -->
+<!-- File: app/code/Vindi/Payment/view/frontend/web/template/payment/vindi-cardpix.html -->
+<style>
+    .error-border {
+        border: 1px solid red;
+        color: red;
+    }
+    .error-message {
+        color: red;
+        font-size: 12px;
+        margin-top: 5px;
+    }
+</style>
 <div class="payment-method" data-bind="css: {'_active': (getCode() == isChecked())}">
     <div class="payment-method-title field choice">
         <input type="radio"
@@ -23,12 +34,15 @@
             <h3 data-bind="i18n: 'Pagamento com Cartão de Crédito'"></h3>
             <div class="field amount required" style="max-width: 500px;">
                 <label class="label">
-                    <span data-bind="i18n: 'Valor a pagar com Cartão de Crédito'"></span>
+                    <span data-bind="i18n: 'Valor a pagar com Cartão de Crédito:'"></span>
                 </label>
                 <div class="control">
                     <input type="number"
                            class="input-text"
-                           data-bind="value: creditAmountDisplay, enable: isCreditEditable, attr: {placeholder: $t('0.00')}" />
+                           data-bind="value: creditAmountDisplay, enable: isCreditEditable, attr: {placeholder: $t('0,00')}, css: {'error-border': creditInvalid()}" />
+                    <!-- ko if: creditInvalid -->
+                    <div class="error-message" data-bind="text: $t('O valor do Cartão de Crédito não pode exceder o total do pedido de ') + formattedOrderTotal()"></div>
+                    <!-- /ko -->
                 </div>
             </div>
             <form class="form container-vindi">
@@ -44,7 +58,7 @@
                         <div class="control">
                             <select name="payment[payment_profile]"
                                     class="input-text select"
-                                    data-bind="attr: {id: getCode() + '_cc_payment_profile', 'data-container': getCode() + '-cc-number', 'data-validate': JSON.stringify({'required-number':true, 'validate-card-type':getCcAvailableTypesValues(), 'validate-card-number':'#' + getCode() + '_cc_type', 'validate-cc-type':'#' + getCode() + '_cc_type'})},
+                                    data-bind="attr: {'id': getCode() + '_cc_payment_profile', 'data-container': getCode() + '-cc-number', 'data-validate': JSON.stringify({'required-number':true, 'validate-card-type':getCcAvailableTypesValues(), 'validate-card-number':'#' + getCode() + '_cc_type', 'validate-cc-type':'#' + getCode() + '_cc_type'})},
                                 enable: isActive($parents),
                                 options: getPaymentProfiles(),
                                 optionsValue: 'value',
@@ -161,6 +175,7 @@
                                     class="select credit-card-installments"
                                     data-bind="attr: {id: getCode() + '_installments', 'data-container': getCode() + '-installments', 'data-validate': JSON.stringify({required:true, 'validate-cc-exp':'#' + getCode() + '_expiration_yr'})},
                                 enable: isActive($parents),
+                                disable: isInstallmentsDisabled,
                                 options: creditCardInstallments,
                                 optionsValue: 'value',
                                 optionsText: 'text',
@@ -182,17 +197,21 @@
                 <div afterRender="loadCard"></div>
             </form>
         </div>
+        <hr>
         <!-- Pix Payment Section -->
         <div class="pix-payment-section">
             <h3 data-bind="i18n: 'Pagamento com PIX'"></h3>
             <div class="field amount required" style="max-width: 500px;">
                 <label class="label">
-                    <span data-bind="i18n: 'Valor a pagar com PIX'"></span>
+                    <span data-bind="i18n: 'Valor a pagar com PIX:'"></span>
                 </label>
                 <div class="control">
                     <input type="number"
                            class="input-text"
-                           data-bind="value: pixAmountDisplay, enable: isPixEditable, attr: {placeholder: $t('0.00')}" />
+                           data-bind="value: pixAmountDisplay, enable: isPixEditable, attr: {placeholder: $t('0,00')}, css: {'error-border': pixInvalid()}" />
+                    <!-- ko if: pixInvalid -->
+                    <div class="error-message" data-bind="text: $t('The PIX amount cannot exceed the order total of ') + formattedOrderTotal()"></div>
+                    <!-- /ko -->
                 </div>
             </div>
             <div class="block-payment-pix">

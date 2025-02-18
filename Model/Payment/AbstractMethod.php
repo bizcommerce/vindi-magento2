@@ -1,5 +1,4 @@
 <?php
-// File: app/code/Vindi/Payment/Model/Payment/AbstractMethod.php
 namespace Vindi\Payment\Model\Payment;
 
 use Magento\Framework\Api\AttributeValueFactory;
@@ -263,16 +262,26 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return $billCredit['id'] . '|' . $billPix['id'];
     }
 
-    private function buildSplitBillItems(Order $order, $amount)
+    private function buildSplitBillItems(Order $order, $targetAmount)
     {
-        return [
-            [
-                'description' => 'Order #' . $order->getIncrementId(),
-                'pricing_schema' => [
-                    'price' => (float)$amount
-                ]
-            ]
-        ];
+        $originalItems = $this->productManagement->findOrCreateProductsFromOrder($order);
+        $totalOriginal = 0;
+        foreach ($originalItems as $item) {
+            $totalOriginal += isset($item['amount']) ? (float)$item['amount'] : 0;
+        }
+        $splitItems = [];
+        if ($totalOriginal > 0) {
+            foreach ($originalItems as $item) {
+                $originalAmount = isset($item['amount']) ? (float)$item['amount'] : 0;
+                $proportionalAmount = ($originalAmount / $totalOriginal) * $targetAmount;
+                $proportionalAmount = round($proportionalAmount, 2);
+                $splitItems[] = [
+                    'product_id' => $item['product_id'],
+                    'amount' => $proportionalAmount
+                ];
+            }
+        }
+        return $splitItems;
     }
 
     protected function handleSubscriptionOrder(InfoInterface $payment, OrderItemInterface $orderItem)

@@ -75,7 +75,7 @@
             <vindi_cardpix>
                 <active>0</active>
                 <model>Vindi\Payment\Model\Payment\CardPix</model>
-                <title>Vindi - Card + Pix</title>
+                <title>Vindi - Cartão + Pix</title>
                 <allowspecific>0</allowspecific>
                 <payment_action>authorize</payment_action>
                 <group>offline</group>

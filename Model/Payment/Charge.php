@@ -1,6 +1,4 @@
 <?php
-// File: app/code/Vindi/Payment/Model/Payment/Charge.php
-
 namespace Vindi\Payment\Model\Payment;
 
 use Vindi\Payment\Helper\Api;

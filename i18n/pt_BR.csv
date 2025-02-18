@@ -730,3 +730,4 @@
 "Amount to pay with Credit Card","Valor a pagar com Cartão de Crédito"
 "PIX Payment","Pagamento com PIX"
 "Amount to pay with PIX","Valor a pagar com PIX"
+"The Credit Card amount cannot exceed the order total of ","O valor do Cartão de Crédito não pode exceder o total do pedido de "

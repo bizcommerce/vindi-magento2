@@ -1,4 +1,4 @@
-// File: view/frontend/web/js/view/payment/vindi-cardpix.js
+// File: app/code/Vindi/Payment/view/frontend/web/js/view/payment/vindi-cardpix.js
 define([
     'underscore',
     'ko',
@@ -57,6 +57,12 @@ define([
             maxInstallments: 1,
             taxvat: taxvat
         },
+
+        /**
+         * Get payment data
+         *
+         * @return {Object}
+         */
         getData: function () {
             let ccExpMonth = '';
             let ccExpYear = '';
@@ -92,6 +98,12 @@ define([
 
             return data;
         },
+
+        /**
+         * Initialize observables and computed properties
+         *
+         * @return {Component}
+         */
         initObservable: function () {
             var self = this;
 
@@ -113,6 +125,8 @@ define([
                     'maxInstallments'
                 ]);
 
+            self.isInstallmentsDisabled = ko.observable(false);
+
             setCouponCodeAction.registerSuccessCallback(function () {
                 self.updateInstallments();
             });
@@ -127,6 +141,9 @@ define([
 
             var orderTotal = parseFloat(totals.getSegment('grand_total').value) || 0;
             self.orderTotal = orderTotal;
+            self.formattedOrderTotal = ko.computed(function() {
+                return priceUtils.formatPrice(self.orderTotal, window.checkoutConfig.currency);
+            });
 
             self.creditAmountDisplay = ko.computed({
                 read: function() {
@@ -171,6 +188,20 @@ define([
                 return self.selectedManualMethod() === 'pix' || !self.selectedManualMethod();
             });
 
+            self.creditInvalid = ko.computed(function() {
+                var credit = parseFloat(self.creditAmountManual() || 0);
+                return credit > self.orderTotal;
+            });
+
+            self.pixInvalid = ko.computed(function() {
+                var pix = parseFloat(self.pixAmountManual() || 0);
+                return pix > self.orderTotal;
+            });
+
+            self.creditAmountManual.subscribe(function(newValue) {
+                self.updateInstallments();
+            });
+
             this.vindiCreditCardNumber.subscribe(function (value) {
                 let result;
                 self.selectedCardType(null);
@@ -201,6 +232,11 @@ define([
             return this;
         },
 
+        /**
+         * Validate payment fields
+         *
+         * @return {Boolean}
+         */
         validate: function () {
             var self = this;
             if (this.selectedPaymentProfile() == null || this.selectedPaymentProfile() == '') {
@@ -230,6 +266,7 @@ define([
                 }
             }
 
+            var documentValue = this.taxvat.value();
             if (!documentValue || documentValue === '') {
                 self.messageContainer.addErrorMessage({'message': ('CPF/CNPJ é obrigatório')});
                 return false;
@@ -251,6 +288,17 @@ define([
 
             var credit = parseFloat(self.creditAmountDisplay() || 0);
             var pix = parseFloat(self.pixAmountDisplay() || 0);
+
+            if (credit > self.orderTotal) {
+                self.messageContainer.addErrorMessage({'message': $t('The Credit Card amount cannot exceed the order total of ') + self.formattedOrderTotal()});
+                return false;
+            }
+
+            if (pix > self.orderTotal) {
+                self.messageContainer.addErrorMessage({'message': $t('The PIX amount cannot exceed the order total of ') + self.formattedOrderTotal()});
+                return false;
+            }
+
             if ((credit + pix).toFixed(2) != self.orderTotal.toFixed(2)) {
                 self.messageContainer.addErrorMessage({'message': $t('The sum of Credit Card and PIX amounts must equal the total order amount.')});
                 return false;
@@ -259,6 +307,11 @@ define([
             return true;
         },
 
+        /**
+         * Initialize component
+         *
+         * @return {Component}
+         */
         initialize: function () {
             var self = this;
             this._super();
@@ -305,12 +358,21 @@ define([
             });
         },
 
+        /**
+         * Get card icon for given type
+         *
+         * @param {String} type
+         * @return {Object|Boolean}
+         */
         getIcons: function (type) {
             return window.checkoutConfig.payment.vindi?.icons?.hasOwnProperty(type)
                 ? window.checkoutConfig.payment.vindi.icons[type]
                 : false;
         },
 
+        /**
+         * Load the credit card form
+         */
         loadCard: function () {
             let ccName = document.getElementById(this.getCode() + '_cc_owner');
             let ccNumber = document.getElementById(this.getCode() + '_cc_number');
@@ -323,26 +385,56 @@ define([
             creditCardForm(ccName, ccNumber, ccExpDate, ccCvv, ccSingle, ccFront, ccBack);
         },
 
+        /**
+         * Check if component is active
+         *
+         * @return {Boolean}
+         */
         isActive: function () {
             return true;
         },
 
+        /**
+         * Get available credit card types
+         *
+         * @return {Object}
+         */
         getCcAvailableTypes: function () {
             return window.checkoutConfig.payment.vindi.availableTypes;
         },
 
+        /**
+         * Get credit card months
+         *
+         * @return {Object}
+         */
         getCcMonths: function () {
             return window.checkoutConfig.payment.vindi.months['vindi'];
         },
 
+        /**
+         * Get credit card years
+         *
+         * @return {Object}
+         */
         getCcYears: function () {
             return window.checkoutConfig.payment.vindi.years['vindi'];
         },
 
+        /**
+         * Check if credit card verification is required
+         *
+         * @return {Boolean}
+         */
         hasVerification: function () {
             return window.checkoutConfig.payment.vindi.hasVerification['vindi'];
         },
 
+        /**
+         * Get available credit card types values
+         *
+         * @return {Array}
+         */
         getCcAvailableTypesValues: function () {
             return _.map(this.getCcAvailableTypes(), function (value, key) {
                 return {
@@ -351,6 +443,12 @@ define([
                 };
             });
         },
+
+        /**
+         * Get credit card months values
+         *
+         * @return {Array}
+         */
         getCcMonthsValues: function () {
             return _.map(this.getCcMonths(), function (value, key) {
                 return {
@@ -359,6 +457,12 @@ define([
                 };
             });
         },
+
+        /**
+         * Get credit card years values
+         *
+         * @return {Array}
+         */
         getCcYearsValues: function () {
             return _.map(this.getCcYears(), function (value, key) {
                 return {
@@ -367,6 +471,12 @@ define([
                 };
             });
         },
+
+        /**
+         * Get credit card types values
+         *
+         * @return {Array}
+         */
         getCcTypesValues: function () {
             return _.map(this.getCcAvailableTypes(), function (value, key) {
                 return {
@@ -375,31 +485,41 @@ define([
                 };
             });
         },
+
+        /**
+         * Check if installments are allowed
+         *
+         * @return {Boolean}
+         */
         installmentsAllowed: function () {
             let isAllowed = parseInt(window.checkoutConfig.payment.vindi.isInstallmentsAllowedInStore);
             return isAllowed !== 0 ? true : false;
         },
+
+        /**
+         * Update available installments options based on the credit card amount.
+         * The installments select is disabled during calculation and re-enabled after.
+         *
+         * @param {Number|null} maxInstallments
+         */
         updateInstallments: function (maxInstallments = null) {
             let self = this;
-            let ccCheckoutConfig = window.checkoutConfig.payment.vindi;
+            self.isInstallmentsDisabled(true);
             let installments = [];
-
+            let creditValue = parseFloat(self.creditAmountDisplay() || 0);
+            let ccCheckoutConfig = window.checkoutConfig.payment.vindi;
             if (ccCheckoutConfig) {
-                let allowInstallments = ccCheckoutConfig.isInstallmentsAllowedInStore;
                 let maxInstallmentsNumber = maxInstallments || ccCheckoutConfig.maxInstallments;
                 let minInstallmentsValue = ccCheckoutConfig.minInstallmentsValue;
-
-                let grandTotal = totals.getSegment('grand_total').value;
+                let totalForInstallments = creditValue;
                 if (maxInstallmentsNumber > 1 && self.installmentsAllowed()) {
-                    let installmentsTimes = Math.floor(grandTotal / minInstallmentsValue);
-
+                    let installmentsTimes = Math.floor(totalForInstallments / minInstallmentsValue);
                     for (let i = 1; i <= maxInstallmentsNumber; i++) {
-                        let value = Math.ceil((grandTotal / i) * 100) / 100;
+                        let value = Math.ceil((totalForInstallments / i) * 100) / 100;
                         installments.push({
                             'value': i,
                             'text': `${i} de ${self.getFormattedPrice(value)}`
                         });
-
                         if (i + 1 > installmentsTimes) {
                             break;
                         }
@@ -407,16 +527,29 @@ define([
                 } else {
                     installments.push({
                         'value': 1,
-                        'text': `1 de ${self.getFormattedPrice(grandTotal)}`
+                        'text': `1 de ${self.getFormattedPrice(totalForInstallments)}`
                     });
                 }
             }
             self.creditCardInstallments(installments);
+            self.isInstallmentsDisabled(false);
         },
+
+        /**
+         * Format price based on store configuration
+         *
+         * @param {Number} price
+         * @return {String}
+         */
         getFormattedPrice: function (price) {
             return priceUtils.formatPrice(price, quote.getPriceFormat());
         },
 
+        /**
+         * Get saved payment profiles
+         *
+         * @return {Array}
+         */
         getPaymentProfiles: function () {
             let paymentProfiles = [];
             const savedCards = window.checkoutConfig.payment?.vindi?.saved_cards;
@@ -433,10 +566,18 @@ define([
             return paymentProfiles;
         },
 
+        /**
+         * Check if there are saved payment profiles
+         *
+         * @return {Boolean}
+         */
         hasPaymentProfiles: function () {
             return this.getPaymentProfiles().length > 0;
         },
 
+        /**
+         * Check plan installments via AJAX
+         */
         checkPlanInstallments: function () {
             var self = this;
             $.ajax({
@@ -457,25 +598,52 @@ define([
             });
         },
 
+        /**
+         * Get URL for given path
+         *
+         * @param {String} path
+         * @return {String}
+         */
         getUrl: function (path) {
             var url = window.BASE_URL + path;
             return url;
         },
 
+        /**
+         * Get informational message for PIX payment
+         *
+         * @return {String}
+         */
         getInfoMessage: function () {
             return window?.checkoutConfig?.payment?.vindi_pix?.info_message;
         },
 
+        /**
+         * Check if document field is active
+         *
+         * @return {Boolean}
+         */
         isActiveDocument: function () {
             return window?.checkoutConfig?.payment?.vindi_pix?.enabledDocument;
         },
 
+        /**
+         * Check CPF input field on keyup event
+         *
+         * @param {Object} self
+         * @param {Event} event
+         */
         checkCpf: function (self, event) {
             this.formatTaxvat(event.target);
             const message = documentValidate.isValidTaxvat(this?.taxvat?.value()) ? '' : 'CPF/CNPJ inválido';
             $('#cpfResponse').text(message);
         },
 
+        /**
+         * Format document field using taxvat model
+         *
+         * @param {HTMLElement} target
+         */
         formatTaxvat: function (target) {
             taxvat.formatDocument(target);
         }
