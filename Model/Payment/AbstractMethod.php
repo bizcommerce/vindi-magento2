@@ -34,6 +34,9 @@ use Vindi\Payment\Model\SubscriptionRepository;
 use Vindi\Payment\Model\ResourceModel\Subscription\Collection as SubscriptionCollection;
 use Vindi\Payment\Model\PaymentSplitFactory;
 
+/**
+ * Class AbstractMethod
+ */
 abstract class AbstractMethod extends OriginAbstractMethod
 {
     protected $api;
@@ -59,6 +62,39 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
     abstract protected function getPaymentMethodCode();
 
+    /**
+     * Constructor.
+     *
+     * @param Context $context
+     * @param Registry $registry
+     * @param ExtensionAttributesFactory $extensionFactory
+     * @param AttributeValueFactory $customAttributeFactory
+     * @param Data $paymentData
+     * @param ScopeConfigInterface $scopeConfig
+     * @param Logger $logger
+     * @param Api $api
+     * @param InvoiceService $invoiceService
+     * @param Customer $customer
+     * @param ProductManagementInterface $productManagement
+     * @param PlanManagementInterface $planManagement
+     * @param SubscriptionInterface $subscriptionRepository
+     * @param VindiPlanRepository $vindiPlanRepository
+     * @param PaymentProfileFactory $paymentProfileFactory
+     * @param PaymentProfileRepository $paymentProfileRepository
+     * @param ResourceConnection $resourceConnection
+     * @param Bill $bill
+     * @param Profile $profile
+     * @param PaymentMethod $paymentMethod
+     * @param LoggerInterface $psrLogger
+     * @param TimezoneInterface $date
+     * @param \Vindi\Payment\Helper\Data $helperData
+     * @param SubscriptionRepository $subscriptionRepositoryModel
+     * @param SubscriptionCollection $subscriptionCollection
+     * @param PaymentSplitFactory $paymentSplitFactory
+     * @param AbstractResource|null $resource
+     * @param AbstractDb|null $resourceCollection
+     * @param array $data
+     */
     public function __construct(
         Context $context,
         Registry $registry,
@@ -124,6 +160,12 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $this->paymentSplitFactory = $paymentSplitFactory;
     }
 
+    /**
+     * Check if payment method is available.
+     *
+     * @param \Magento\Quote\Api\Data\CartInterface|null $quote
+     * @return bool
+     */
     public function isAvailable(\Magento\Quote\Api\Data\CartInterface $quote = null)
     {
         if (
@@ -149,142 +191,225 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return parent::isAvailable($quote);
     }
 
+    /**
+     * Assign data to payment method.
+     *
+     * @param DataObject $data
+     * @return $this
+     */
     public function assignData(DataObject $data)
     {
         parent::assignData($data);
         return $this;
     }
 
+    /**
+     * Validate payment method.
+     *
+     * @return $this
+     */
     public function validate()
     {
         parent::validate();
         return $this;
     }
 
+    /**
+     * Authorize payment.
+     *
+     * @param InfoInterface $payment
+     * @param float $amount
+     * @return mixed
+     */
     public function authorize(InfoInterface $payment, $amount)
     {
         parent::authorize($payment, $amount);
         return $this->processPayment($payment, $amount);
     }
 
+    /**
+     * Capture payment.
+     *
+     * @param InfoInterface $payment
+     * @param float $amount
+     * @return mixed
+     */
     public function capture(InfoInterface $payment, $amount)
     {
         parent::capture($payment, $amount);
         return $this->processPayment($payment, $amount);
     }
 
+    /**
+     * Process the payment through external API calls.
+     *
+     * @param InfoInterface $payment
+     * @param float $amount
+     * @return mixed
+     * @throws LocalizedException
+     */
     protected function processPayment(InfoInterface $payment, $amount)
     {
-        /** @var Order $order */
         $order = $payment->getOrder();
         $paymentMethodCode = $this->getPaymentMethodCode();
-
-        if ($plan = $this->isSubscriptionOrder($order)) {
-            if ($paymentMethodCode !== PaymentMethod::CARD_PIX) {
-                return $this->handleSubscriptionOrder($payment, $plan);
+        $plan = $this->isSubscriptionOrder($order);
+        if ($plan) {
+            if ($this->isMultiMethod($paymentMethodCode)) {
+                if ($paymentMethodCode !== PaymentMethod::CARD_CARD) {
+                    return $this->handleError($order);
+                }
+                return $this->processMultiMethodSubscriptionPayment($payment, $amount, $plan);
+            } else {
+                return $this->processSingleMethodSubscriptionPayment($payment, $plan);
+            }
+        } else {
+            if ($this->isMultiMethod($paymentMethodCode)) {
+                return $this->processMultiMethodInvoicePayment($payment, $amount);
+            } else {
+                return $this->processSingleMethodInvoicePayment($payment, $amount);
             }
         }
+    }
 
+    /**
+     * Determine if the payment method code is multi-method.
+     *
+     * @param string $code
+     * @return bool
+     */
+    protected function isMultiMethod($code)
+    {
+        $multiMethods = [
+            PaymentMethod::CARD_PIX,
+            'card_boleto',
+            'card_card'
+        ];
+        return in_array($code, $multiMethods);
+    }
+
+    /**
+     * Process single-method invoice payment.
+     *
+     * @param InfoInterface $payment
+     * @param float $amount
+     * @return mixed
+     * @throws LocalizedException
+     */
+    protected function processSingleMethodInvoicePayment(InfoInterface $payment, $amount)
+    {
+        $order = $payment->getOrder();
+        $paymentMethodCode = $this->getPaymentMethodCode();
         $customerId = $this->customer->findOrCreate($order);
         $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
-
         $body = [
             'customer_id' => $customerId,
             'payment_method_code' => $paymentMethodCode,
             'bill_items' => $productList,
             'code' => $order->getIncrementId()
         ];
-
-        if ($paymentMethodCode !== PaymentMethod::CARD_PIX) {
-            if ($paymentMethodCode === PaymentMethod::CREDIT_CARD) {
-                $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
-                    ? $this->getPaymentProfile((int) $payment->getAdditionalInformation('payment_profile'))
-                    : $this->createPaymentProfile($order, $payment, $customerId);
-                $body['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
-            }
-            $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
-            if ($installments) {
-                $body['installments'] = (int)$installments;
-            }
-            if ($bill = $this->bill->create($body)) {
-                $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
-                if ($this->successfullyPaid($body, $bill)) {
-                    $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
-                    $order->setVindiBillId($bill['id']);
-                    return $bill['id'];
-                }
-                $this->bill->delete($bill['id']);
-            }
-            return $this->handleError($order);
+        if ($paymentMethodCode === PaymentMethod::CREDIT_CARD) {
+            $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
+                ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
+                : $this->createPaymentProfile($order, $payment, $customerId);
+            $body['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
         }
-
-        $amountCredit = $payment->getAdditionalInformation('amount_credit');
-        $amountPix = $payment->getAdditionalInformation('amount_pix');
-
-        if (!$amountCredit || !$amountPix) {
-            return $this->handleError($order);
-        }
-
-        $bodyCredit = $body;
-        $bodyCredit['payment_method_code'] = PaymentMethod::CREDIT_CARD;
-        $bodyCredit['bill_items'] = $this->buildSplitBillItems($order, $amountCredit);
-        $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
-            ? $this->getPaymentProfile((int) $payment->getAdditionalInformation('payment_profile'))
-            : $this->createPaymentProfile($order, $payment, $customerId);
-        $bodyCredit['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
         $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
         if ($installments) {
-            $bodyCredit['installments'] = (int)$installments;
+            $body['installments'] = (int)$installments;
         }
-        $billCredit = $this->bill->create($bodyCredit);
-        if (!$billCredit || !$this->successfullyPaid($bodyCredit, $billCredit)) {
-            if ($billCredit && isset($billCredit['id'])) {
-                $this->bill->delete($billCredit['id']);
+        if ($bill = $this->bill->create($body)) {
+            $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
+            if ($this->successfullyPaid($body, $bill)) {
+                $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
+                $order->setVindiBillId($bill['id']);
+                return $bill['id'];
             }
-            return $this->handleError($order);
+            $this->bill->delete($bill['id']);
         }
-        $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
-
-        $bodyPix = $body;
-        $bodyPix['payment_method_code'] = PaymentMethod::PIX;
-        $bodyPix['bill_items'] = $this->buildSplitBillItems($order, $amountPix);
-        $billPix = $this->bill->create($bodyPix);
-        if (!$billPix || !$this->successfullyPaid($bodyPix, $billPix)) {
-            if ($billPix && isset($billPix['id'])) {
-                $this->bill->delete($billPix['id']);
-            }
-            return $this->handleError($order);
-        }
-        $this->handleBankSplitAdditionalInformation($payment, $bodyPix, $billPix);
-
-        $order->setVindiBillId($billCredit['id'] . ',' . $billPix['id']);
-        $this->savePaymentSplitRecord($order, $billCredit, $billPix, $amountCredit, $amountPix);
-        return $billCredit['id'] . '|' . $billPix['id'];
+        return $this->handleError($order);
     }
 
-    private function buildSplitBillItems(Order $order, $targetAmount)
+    /**
+     * Process multi-method invoice payment.
+     *
+     * @param InfoInterface $payment
+     * @param float $amount
+     * @return mixed
+     * @throws LocalizedException
+     */
+    protected function processMultiMethodInvoicePayment(InfoInterface $payment, $amount)
     {
-        $originalItems = $this->productManagement->findOrCreateProductsFromOrder($order);
-        $totalOriginal = 0;
-        foreach ($originalItems as $item) {
-            $totalOriginal += isset($item['amount']) ? (float)$item['amount'] : 0;
-        }
-        $splitItems = [];
-        if ($totalOriginal > 0) {
-            foreach ($originalItems as $item) {
-                $originalAmount = isset($item['amount']) ? (float)$item['amount'] : 0;
-                $proportionalAmount = ($originalAmount / $totalOriginal) * $targetAmount;
-                $proportionalAmount = round($proportionalAmount, 2);
-                $splitItems[] = [
-                    'product_id' => $item['product_id'],
-                    'amount' => $proportionalAmount
-                ];
+        $order = $payment->getOrder();
+        $paymentMethodCode = $this->getPaymentMethodCode();
+        $customerId = $this->customer->findOrCreate($order);
+        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+        $body = [
+            'customer_id' => $customerId,
+            'payment_method_code' => $paymentMethodCode,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId()
+        ];
+        if ($paymentMethodCode === PaymentMethod::CARD_PIX) {
+            $amountCredit = $payment->getAdditionalInformation('amount_credit');
+            $amountPix = $payment->getAdditionalInformation('amount_pix');
+            if (!$amountCredit || !$amountPix) {
+                return $this->handleError($order);
             }
+            $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+            $bodyCredit = $body;
+            $bodyCredit['payment_method_code'] = PaymentMethod::CREDIT_CARD;
+            $bodyCredit['code'] = $order->getIncrementId() . '-01';
+            $bodyCredit['bill_items'][] = [
+                'product_id' => $multiPaymentDiscountProductId,
+                'amount' => -((float)$amountPix)
+            ];
+            $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
+                ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
+                : $this->createPaymentProfile($order, $payment, $customerId);
+            $bodyCredit['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
+            $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
+            if ($installments) {
+                $bodyCredit['installments'] = (int)$installments;
+            }
+            $billCredit = $this->bill->create($bodyCredit);
+            if (!$billCredit || !$this->successfullyPaid($bodyCredit, $billCredit)) {
+                if ($billCredit && isset($billCredit['id'])) {
+                    $this->bill->delete($billCredit['id']);
+                }
+                return $this->handleError($order);
+            }
+            $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
+            $bodyPix = $body;
+            $bodyPix['payment_method_code'] = PaymentMethod::PIX;
+            $bodyPix['code'] = $order->getIncrementId() . '-02';
+            $bodyPix['bill_items'][] = [
+                'product_id' => $multiPaymentDiscountProductId,
+                'amount' => -((float)$amountCredit)
+            ];
+            $billPix = $this->bill->create($bodyPix);
+            if (!$billPix || !$this->successfullyPaid($bodyPix, $billPix)) {
+                if ($billPix && isset($billPix['id'])) {
+                    $this->bill->delete($billPix['id']);
+                }
+                $this->bill->delete($billCredit['id']);
+                return $this->handleError($order);
+            }
+            $this->handleBankSplitAdditionalInformation($payment, $bodyPix, $billPix);
+            $order->setVindiBillId($billCredit['id'] . ',' . $billPix['id']);
+            $this->savePaymentSplitRecord($order, $billCredit, $billPix, $amountCredit, $amountPix);
+            return $billCredit['id'] . '|' . $billPix['id'];
         }
-        return $splitItems;
+        return $this->handleError($order);
     }
 
-    protected function handleSubscriptionOrder(InfoInterface $payment, OrderItemInterface $orderItem)
+    /**
+     * Process single-method subscription payment.
+     *
+     * @param InfoInterface $payment
+     * @param OrderItemInterface $orderItem
+     * @return mixed
+     */
+    protected function processSingleMethodSubscriptionPayment(InfoInterface $payment, OrderItemInterface $orderItem)
     {
         try {
             $order = $payment->getOrder();
@@ -309,7 +434,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             $installments = $payment->getAdditionalInformation('installments');
             if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
                 $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
-                    ? $this->getPaymentProfile((int) $payment->getAdditionalInformation('payment_profile'))
+                    ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
                     : $this->createPaymentProfile($order, $payment, $customerId);
                 if ($paymentProfile) {
                     $body['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
@@ -346,9 +471,9 @@ abstract class AbstractMethod extends OriginAbstractMethod
                 } else {
                     $this->subscriptionRepository->deleteAndCancelBills($subscription['id']);
                     $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-                    $subscription = $objectManager->create(\Vindi\Payment\Model\Subscription::class)->load($subscription['id']);
-                    $subscription->setStatus('canceled');
-                    $subscription->save();
+                    $sub = $objectManager->create(\Vindi\Payment\Model\Subscription::class)->load($subscription['id']);
+                    $sub->setStatus('canceled');
+                    $sub->save();
                     if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
                         $paymentProfileId = $paymentProfile->getPaymentProfileId();
                         if ($paymentProfileId) {
@@ -365,6 +490,276 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return $this->handleError($order);
     }
 
+    /**
+     * Process multi-method subscription payment.
+     * (Placeholder for future "CARD + CARD" subscription logic)
+     *
+     * @param InfoInterface $payment
+     * @param float $amount
+     * @param OrderItemInterface $orderItem
+     * @return mixed
+     */
+    protected function processMultiMethodSubscriptionPayment(InfoInterface $payment, $amount, OrderItemInterface $orderItem)
+    {
+        return $this->handleError($payment->getOrder());
+    }
+
+    /**
+     * Retrieve discount product ID for multi-payment scenarios.
+     *
+     * @return int
+     * @throws LocalizedException
+     */
+    protected function getMultiPaymentDiscountProductId()
+    {
+        if (method_exists($this->productManagement, 'findOrCreateProduct')) {
+            return $this->productManagement->findOrCreateProduct('multi_payment_discount', 'Multi Payment Discount');
+        }
+        throw new LocalizedException(__('Multi payment discount product not found.'));
+    }
+
+    /**
+     * Retrieve discount product ID for single discount (if needed).
+     *
+     * @return int
+     * @throws LocalizedException
+     */
+    protected function getDiscountProductId()
+    {
+        if (method_exists($this->productManagement, 'findOrCreateProduct')) {
+            return $this->productManagement->findOrCreateProduct('cupom', 'Cupom de Desconto');
+        }
+        throw new LocalizedException(__('Discount product not found.'));
+    }
+
+    /**
+     * Handle error during payment processing.
+     *
+     * @param Order $order
+     * @return void
+     * @throws LocalizedException
+     */
+    protected function handleError(Order $order)
+    {
+        $this->psrLogger->error(__(sprintf('Error on order payment %d.', $order->getId())));
+        $message = __('There has been a payment confirmation error. Verify data and try again');
+        $order->setState(Order::STATE_CANCELED)
+            ->setStatus($order->getConfig()->getStateDefaultStatus(Order::STATE_CANCELED))
+            ->addStatusHistoryComment($message->getText());
+        throw new LocalizedException($message);
+    }
+
+    /**
+     * Handle additional information for bank split payments.
+     *
+     * @param InfoInterface $payment
+     * @param array $body
+     * @param mixed $bill
+     * @return void
+     */
+    protected function handleBankSplitAdditionalInformation(InfoInterface $payment, array $body, $bill)
+    {
+        if (
+            $body['payment_method_code'] === PaymentMethod::BANK_SLIP
+            || $body['payment_method_code'] === PaymentMethod::BANK_SLIP_PIX
+        ) {
+            $payment->setAdditionalInformation('print_url', $bill['charges'][0]['print_url']);
+            $payment->setAdditionalInformation('due_at', $bill['charges'][0]['due_at']);
+        }
+        $isValidPix = isset($bill['charges'][0]['last_transaction']['gateway_response_fields']['qrcode_original_path']);
+        if (
+            $isValidPix
+            && (
+                $body['payment_method_code'] === PaymentMethod::PIX
+                || $body['payment_method_code'] === PaymentMethod::BANK_SLIP_PIX
+            )
+        ) {
+            foreach ($bill['charges'][0]['last_transaction']['gateway_response_fields'] as $key => $value) {
+                $payment->setAdditionalInformation($key, $value);
+            }
+        }
+    }
+
+    /**
+     * Check if the payment was successful.
+     *
+     * @param array $body
+     * @param mixed $bill
+     * @param array $subscription
+     * @return bool
+     */
+    protected function successfullyPaid(array $body, $bill, array $subscription = [])
+    {
+        if (!$bill) {
+            $billingType = $subscription['billing_trigger_type'] ?? null;
+            if ($billingType != 'day_of_month') {
+                return true;
+            } elseif ($subscription['id'] && $subscription['status'] == 'active') {
+                return true;
+            }
+        }
+        return $this->isValidPaymentMethodCode($body['payment_method_code'])
+            || $this->isValidStatus($bill)
+            || $this->isWaitingPaymentMethodResponse($bill);
+    }
+
+    /**
+     * Check if the payment method code is valid.
+     *
+     * @param string $paymentMethodCode
+     * @return bool
+     */
+    protected function isValidPaymentMethodCode($paymentMethodCode)
+    {
+        $paymentMethodsCode = [
+            PaymentMethod::BANK_SLIP,
+            PaymentMethod::DEBIT_CARD,
+            PaymentMethod::PIX,
+            PaymentMethod::BANK_SLIP_PIX
+        ];
+        return in_array($paymentMethodCode, $paymentMethodsCode);
+    }
+
+    /**
+     * Check if the payment is waiting for a response.
+     *
+     * @param mixed $bill
+     * @return bool
+     */
+    protected function isWaitingPaymentMethodResponse($bill)
+    {
+        if (!$bill) {
+            return false;
+        }
+        return reset($bill['charges'])['last_transaction']['status'] === Bill::WAITING_STATUS;
+    }
+
+    /**
+     * Check if the bill status is valid.
+     *
+     * @param mixed $bill
+     * @return bool
+     */
+    protected function isValidStatus($bill)
+    {
+        if (!$bill) {
+            return false;
+        }
+        $billStatus = [
+            Bill::PAID_STATUS,
+            Bill::REVIEW_STATUS
+        ];
+        $chargeStatus = reset($bill['charges'])['status'] === Bill::FRAUD_REVIEW_STATUS;
+        return in_array($bill['status'], $billStatus) || $chargeStatus;
+    }
+
+    /**
+     * Create payment profile.
+     *
+     * @param Order $order
+     * @param InfoInterface $payment
+     * @param int $customerId
+     * @return PaymentProfile
+     */
+    public function createPaymentProfile(Order $order, InfoInterface $payment, $customerId)
+    {
+        $paymentProfile = $this->profile->create($payment, $customerId, $this->getPaymentMethodCode());
+        $paymentProfileData = $paymentProfile['payment_profile'];
+        $paymentProfileModel = $this->paymentProfileFactory->create();
+        $paymentProfileModel->setData([
+            'payment_profile_id' => $paymentProfileData['id'],
+            'vindi_customer_id' => $customerId,
+            'customer_id' => $order->getCustomerId(),
+            'customer_email' => $order->getCustomerEmail(),
+            'cc_name' => $payment->getCcOwner(),
+            'cc_type' => $payment->getCcType(),
+            'cc_last_4' => $payment->getCcLast4(),
+            'status' => $paymentProfileData["status"],
+            'token' => $paymentProfileData["token"],
+            'type' => $paymentProfileData["type"],
+        ]);
+        $this->paymentProfileRepository->save($paymentProfileModel);
+        return $paymentProfileModel;
+    }
+
+    /**
+     * Save order to subscription orders table.
+     *
+     * @param Order $order
+     * @return void
+     */
+    private function saveOrderToSubscriptionOrdersTable(Order $order)
+    {
+        $tableName = $this->resourceConnection->getTableName('vindi_subscription_orders');
+        $data = [
+            'increment_id'    => $order->getIncrementId(),
+            'subscription_id' => $order->getVindiSubscriptionId(),
+            'created_at'      => $this->date->date()->format('Y-m-d H:i:s'),
+            'total'           => $order->getGrandTotal()
+        ];
+        try {
+            $this->connection->insert($tableName, $data);
+        } catch (\Exception $e) {
+            $this->psrLogger->error('Error saving order to subscription orders table: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Retrieve payment profile.
+     *
+     * @param int $paymentProfileId
+     * @return PaymentProfile
+     */
+    protected function getPaymentProfile(int $paymentProfileId): PaymentProfile
+    {
+        return $this->paymentProfileRepository->getById($paymentProfileId);
+    }
+
+    /**
+     * Save payment split record.
+     *
+     * @param Order $order
+     * @param mixed $billCredit
+     * @param mixed $billPix
+     * @param float $amountCredit
+     * @param float $amountPix
+     * @return void
+     */
+    protected function savePaymentSplitRecord(Order $order, $billCredit, $billPix, $amountCredit, $amountPix)
+    {
+        $paymentSplit = $this->paymentSplitFactory->create();
+        $data = [
+            'order_id' => $order->getId(),
+            'order_increment_id' => $order->getIncrementId(),
+            'payment_method' => PaymentMethod::CARD_PIX,
+            'amount_credit' => $amountCredit,
+            'amount_pix' => $amountPix,
+            'total_amount' => $order->getGrandTotal(),
+            'bill_id_credit' => isset($billCredit['id']) ? $billCredit['id'] : '',
+            'bill_id_pix' => isset($billPix['id']) ? $billPix['id'] : '',
+            'status_credit' => isset($billCredit['status']) ? $billCredit['status'] : '',
+            'status_pix' => isset($billPix['status']) ? $billPix['status'] : '',
+            'additional_data' => json_encode(['credit' => $billCredit, 'pix' => $billPix]),
+            'is_refunded' => 0,
+            'refund_amount_credit' => 0,
+            'refund_amount_pix' => 0
+        ];
+        $paymentSplit->setData($data);
+        try {
+            $paymentSplit->save();
+        } catch (\Exception $e) {
+            $this->psrLogger->error('Error saving payment split record: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Save subscription to database.
+     *
+     * @param array $subscription
+     * @param Order $order
+     * @param mixed $billId
+     * @return void
+     */
     protected function saveSubscriptionToDatabase(array $subscription, Order $order, $billId = null)
     {
         $tableName = $this->resourceConnection->getTableName('vindi_subscription');
@@ -395,6 +790,12 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
     }
 
+    /**
+     * Determine if the order is a subscription.
+     *
+     * @param Order $order
+     * @return mixed
+     */
     protected function isSubscriptionOrder(Order $order)
     {
         foreach ($order->getItems() as $item) {
@@ -410,154 +811,5 @@ abstract class AbstractMethod extends OriginAbstractMethod
             }
         }
         return false;
-    }
-
-    protected function handleError(Order $order)
-    {
-        $this->psrLogger->error(__(sprintf('Error on order payment %d.', $order->getId())));
-        $message = __('There has been a payment confirmation error. Verify data and try again');
-        $order->setState(Order::STATE_CANCELED)
-            ->setStatus($order->getConfig()->getStateDefaultStatus(Order::STATE_CANCELED))
-            ->addStatusHistoryComment($message->getText());
-        throw new LocalizedException($message);
-    }
-
-    protected function handleBankSplitAdditionalInformation(InfoInterface $payment, array $body, $bill)
-    {
-        if (
-            $body['payment_method_code'] === PaymentMethod::BANK_SLIP
-            || $body['payment_method_code'] === PaymentMethod::BANK_SLIP_PIX
-        ) {
-            $payment->setAdditionalInformation('print_url', $bill['charges'][0]['print_url']);
-            $payment->setAdditionalInformation('due_at', $bill['charges'][0]['due_at']);
-        }
-        $isValidPix = isset($bill['charges'][0]['last_transaction']['gateway_response_fields']['qrcode_original_path']);
-        if (
-            $isValidPix
-            && (
-                $body['payment_method_code'] === PaymentMethod::PIX
-                || $body['payment_method_code'] === PaymentMethod::BANK_SLIP_PIX
-            )
-        ) {
-            foreach ($bill['charges'][0]['last_transaction']['gateway_response_fields'] as $key => $value) {
-                $payment->setAdditionalInformation($key, $value);
-            }
-        }
-    }
-
-    protected function successfullyPaid(array $body, $bill, array $subscription = [])
-    {
-        if (!$bill) {
-            $billingType = $subscription['billing_trigger_type'] ?? null;
-            if ($billingType != 'day_of_month') {
-                return true;
-            } elseif ($subscription['id'] && $subscription['status'] == 'active') {
-                return true;
-            }
-        }
-        return $this->isValidPaymentMethodCode($body['payment_method_code'])
-            || $this->isValidStatus($bill)
-            || $this->isWaitingPaymentMethodResponse($bill);
-    }
-
-    protected function isValidPaymentMethodCode($paymentMethodCode)
-    {
-        $paymentMethodsCode = [
-            PaymentMethod::BANK_SLIP,
-            PaymentMethod::DEBIT_CARD,
-            PaymentMethod::PIX,
-            PaymentMethod::BANK_SLIP_PIX
-        ];
-        return in_array($paymentMethodCode, $paymentMethodsCode);
-    }
-
-    protected function isWaitingPaymentMethodResponse($bill)
-    {
-        if (!$bill) {
-            return false;
-        }
-        return reset($bill['charges'])['last_transaction']['status'] === Bill::WAITING_STATUS;
-    }
-
-    protected function isValidStatus($bill)
-    {
-        if (!$bill) {
-            return false;
-        }
-        $billStatus = [
-            Bill::PAID_STATUS,
-            Bill::REVIEW_STATUS
-        ];
-        $chargeStatus = reset($bill['charges'])['status'] === Bill::FRAUD_REVIEW_STATUS;
-        return in_array($bill['status'], $billStatus) || $chargeStatus;
-    }
-
-    public function createPaymentProfile(Order $order, InfoInterface $payment, $customerId)
-    {
-        $paymentProfile = $this->profile->create($payment, $customerId, $this->getPaymentMethodCode());
-        $paymentProfileData = $paymentProfile['payment_profile'];
-        $paymentProfileModel = $this->paymentProfileFactory->create();
-        $paymentProfileModel->setData([
-            'payment_profile_id' => $paymentProfileData['id'],
-            'vindi_customer_id' => $customerId,
-            'customer_id' => $order->getCustomerId(),
-            'customer_email' => $order->getCustomerEmail(),
-            'cc_name' => $payment->getCcOwner(),
-            'cc_type' => $payment->getCcType(),
-            'cc_last_4' => $payment->getCcLast4(),
-            'status' => $paymentProfileData["status"],
-            'token' => $paymentProfileData["token"],
-            'type' => $paymentProfileData["type"],
-        ]);
-        $this->paymentProfileRepository->save($paymentProfileModel);
-        return $paymentProfileModel;
-    }
-
-    private function saveOrderToSubscriptionOrdersTable(Order $order)
-    {
-        $tableName = $this->resourceConnection->getTableName('vindi_subscription_orders');
-        $data = [
-            'increment_id'    => $order->getIncrementId(),
-            'subscription_id' => $order->getVindiSubscriptionId(),
-            'created_at'      => $this->date->date()->format('Y-m-d H:i:s'),
-            'total'           => $order->getGrandTotal()
-        ];
-        try {
-            $this->connection->insert($tableName, $data);
-        } catch (\Exception $e) {
-            $this->psrLogger->error('Error saving order to subscription orders table: ' . $e->getMessage());
-        }
-    }
-
-    protected function getPaymentProfile(int $paymentProfileId): PaymentProfile
-    {
-        return $this->paymentProfileRepository->getById($paymentProfileId);
-    }
-
-    protected function savePaymentSplitRecord(Order $order, $billCredit, $billPix, $amountCredit, $amountPix)
-    {
-        $paymentSplit = $this->paymentSplitFactory->create();
-        $data = [
-            'order_id' => $order->getId(),
-            'order_increment_id' => $order->getIncrementId(),
-            'payment_method' => PaymentMethod::CARD_PIX,
-            'amount_credit' => $amountCredit,
-            'amount_pix' => $amountPix,
-            'total_amount' => $order->getGrandTotal(),
-            'bill_id_credit' => isset($billCredit['id']) ? $billCredit['id'] : '',
-            'bill_id_pix' => isset($billPix['id']) ? $billPix['id'] : '',
-            'status_credit' => isset($billCredit['status']) ? $billCredit['status'] : '',
-            'status_pix' => isset($billPix['status']) ? $billPix['status'] : '',
-            'additional_data' => json_encode(['credit' => $billCredit, 'pix' => $billPix]),
-            'is_refunded' => 0,
-            'refund_amount_credit' => 0,
-            'refund_amount_pix' => 0
-        ];
-        $paymentSplit->setData($data);
-        try {
-            $paymentSplit->save();
-        } catch (\Exception $e) {
-            $this->psrLogger->error('Error saving payment split record: ' . $e->getMessage());
-        }
     }
 }

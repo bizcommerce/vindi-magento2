@@ -16,6 +16,8 @@ class PaymentMethod
     public const DEBIT_CARD = 'debit_card';
 
     public const CARD_PIX = 'card_pix';
+    public const CARD_BANK_SLIP = 'card_bank_slip';
+    public const CARD_CARD = 'card_card';
 
     /**
      * @var \Vindi\Payment\Helper\Api

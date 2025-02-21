@@ -1,5 +1,4 @@
 <?php
-
 namespace Vindi\Payment\Model\Vindi;
 
 use Magento\Sales\Model\Order;
@@ -20,6 +19,7 @@ class ProductManagement implements ProductManagementInterface
 
     /**
      * ProductManagement constructor.
+     *
      * @param ProductInterface $productRepository
      */
     public function __construct(
@@ -29,13 +29,15 @@ class ProductManagement implements ProductManagementInterface
     }
 
     /**
-     * @inheritDoc
+     * Find or create a product for subscription.
+     *
+     * @param Order $order
+     * @return array
      */
     public function findOrCreateProductsToSubscription(Order $order)
     {
         $list = [];
         $discounts = [];
-
         $items = $this->findOrCreateProductsFromOrder($order);
         foreach ($items as $item) {
             if ($item['amount'] < 0) {
@@ -43,10 +45,8 @@ class ProductManagement implements ProductManagementInterface
                     'discount_type' => 'amount',
                     'amount' => $item['amount'] * -1
                 ]);
-
                 continue;
             }
-
             array_push($list, [
                 'product_id' => $item['product_id'],
                 'quantity' => 1,
@@ -55,56 +55,61 @@ class ProductManagement implements ProductManagementInterface
                 ]
             ]);
         }
-
         if (!empty($discounts)) {
             foreach ($discounts as $discount) {
                 $list[0]['discounts'][] = $discount;
             }
         }
-
         return $list;
     }
 
     /**
-     * @inheritDoc
+     * Find or create products from order.
+     *
+     * @param Order $order
+     * @return array
      */
     public function findOrCreateProductsFromOrder(Order $order)
     {
         $list = [];
         foreach ($order->getItems() as $item) {
             $productType = $item->getProduct()->getTypeId();
-            $vindiProductId = $this->productRepository
-                ->findOrCreateProduct($item->getSku(), $item->getName(), $productType);
-
+            $vindiProductId = $this->productRepository->findOrCreateProduct($item->getSku(), $item->getName(), $productType);
             for ($i = 0; $i < $item->getQtyOrdered(); $i++) {
                 $itemPrice = $this->getItemPrice($item, $productType);
-
-                if (! $itemPrice)
+                if (!$itemPrice) {
                     continue;
-
+                }
                 array_push($list, [
                     'product_id' => $vindiProductId,
                     'amount' => $itemPrice
                 ]);
             }
         }
-
         $list = $this->buildTax($list, $order);
         $list = $this->buildDiscount($list, $order);
         $list = $this->buildShipping($list, $order);
-
         return $list;
     }
 
+    /**
+     * Get item price.
+     *
+     * @param mixed $item
+     * @param string $productType
+     * @return float|int
+     */
     private function getItemPrice($item, $productType)
     {
-        if ('bundle' == $productType)
+        if ('bundle' == $productType) {
             return 0;
-
+        }
         return $item->getPrice();
     }
 
     /**
+     * Build tax item.
+     *
      * @param array $list
      * @param Order $order
      * @return array
@@ -118,11 +123,12 @@ class ProductManagement implements ProductManagementInterface
                 'amount' => $order->getTaxAmount()
             ]);
         }
-
         return $list;
     }
 
     /**
+     * Build discount item.
+     *
      * @param array $list
      * @param Order $order
      * @return array
@@ -136,11 +142,12 @@ class ProductManagement implements ProductManagementInterface
                 'amount' => $order->getDiscountAmount()
             ]);
         }
-
         return $list;
     }
 
     /**
+     * Build shipping item.
+     *
      * @param array $list
      * @param Order $order
      * @return array
@@ -154,12 +161,11 @@ class ProductManagement implements ProductManagementInterface
                 'amount' => $order->getShippingAmount()
             ]);
         }
-
         return $list;
     }
 
     /**
-     * Find or create a product directly in Vindi Payments by providing the Magento product
+     * Find or create a product directly in Vindi Payments.
      *
      * @param MagentoProductInterface $product
      * @return int Vindi Product ID
@@ -169,7 +175,19 @@ class ProductManagement implements ProductManagementInterface
         $sku = $product->getSku();
         $name = $product->getName();
         $type = $product->getTypeId();
-
         return $this->productRepository->findOrCreateProduct($sku, $name, $type);
+    }
+
+    /**
+     * Find or create a product using the product repository.
+     *
+     * @param string $itemSku
+     * @param string $itemName
+     * @param string $itemType
+     * @return int|false
+     */
+    public function findOrCreateProduct($itemSku, $itemName, $itemType = 'simple')
+    {
+        return $this->productRepository->findOrCreateProduct($itemSku, $itemName, $itemType);
     }
 }

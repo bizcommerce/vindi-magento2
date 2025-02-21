@@ -1,5 +1,4 @@
 <?php
-
 namespace Vindi\Payment\Model\Vindi;
 
 use Vindi\Payment\Api\ProductInterface;
@@ -19,6 +18,7 @@ class Product implements ProductInterface
 
     /**
      * Product constructor.
+     *
      * @param Api $api
      */
     public function __construct(
@@ -28,18 +28,21 @@ class Product implements ProductInterface
     }
 
     /**
-     * @inheritDoc
+     * Find or create a product.
+     *
+     * @param string $itemSku
+     * @param string $itemName
+     * @param string $itemType
+     * @return int|false
      */
     public function findOrCreateProduct($itemSku, $itemName, $itemType = 'simple')
     {
         $itemName = $itemType == 'configurable' ? $itemSku : $itemName;
         $itemSku = Data::sanitizeItemSku($itemSku);
         $vindiProductId = $this->findProductByCode($itemSku);
-
         if ($vindiProductId) {
             return $vindiProductId;
         }
-
         $body = [
             'code' => $itemSku,
             'name' => $itemName,
@@ -48,27 +51,25 @@ class Product implements ProductInterface
                 'price' => 0,
             ],
         ];
-
         $response = $this->api->request('products', 'POST', $body);
-
         if ($response) {
             return $response['product']['id'];
         }
-
         return false;
     }
 
     /**
-     * @inheritDoc
+     * Find a product by its code.
+     *
+     * @param string $code
+     * @return int|false
      */
     public function findProductByCode($code)
     {
         $response = $this->api->request("products?query=code%3D{$code}", 'GET');
-
         if ($response && (1 === count($response['products'])) && isset($response['products'][0]['id'])) {
             return $response['products'][0]['id'];
         }
-
         return false;
     }
 }
