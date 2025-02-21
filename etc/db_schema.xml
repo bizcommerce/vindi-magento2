@@ -180,17 +180,13 @@
         <column xsi:type="int" name="order_id" unsigned="true" nullable="false" comment="Order ID"/>
         <column xsi:type="varchar" name="order_increment_id" nullable="false" length="50" comment="Order Increment ID"/>
         <column xsi:type="varchar" name="payment_method" nullable="false" length="32" comment="Payment Method"/>
-        <column xsi:type="decimal" name="amount_credit" scale="4" precision="12" nullable="false" default="0.0000" comment="Amount to be paid by Credit Card"/>
-        <column xsi:type="decimal" name="amount_pix" scale="4" precision="12" nullable="false" default="0.0000" comment="Amount to be paid by PIX"/>
+        <column xsi:type="decimal" name="amount" scale="4" precision="12" nullable="false" default="0.0000" comment="Amount for Payment Method"/>
         <column xsi:type="decimal" name="total_amount" scale="4" precision="12" nullable="false" comment="Total Order Amount"/>
-        <column xsi:type="varchar" name="bill_id_credit" nullable="true" length="64" comment="Bill ID for Credit Card Transaction"/>
-        <column xsi:type="varchar" name="bill_id_pix" nullable="true" length="64" comment="Bill ID for PIX Transaction"/>
-        <column xsi:type="varchar" name="status_credit" nullable="true" length="32" comment="Status of Credit Card Transaction"/>
-        <column xsi:type="varchar" name="status_pix" nullable="true" length="32" comment="Status of PIX Transaction"/>
+        <column xsi:type="varchar" name="bill_id" nullable="true" length="64" comment="Bill ID for Transaction"/>
+        <column xsi:type="varchar" name="status" nullable="true" length="32" comment="Status of Transaction"/>
         <column xsi:type="text" name="additional_data" nullable="true" comment="Additional Data in JSON Format"/>
         <column xsi:type="tinyint" name="is_refunded" nullable="false" default="0" comment="Refund Flag"/>
-        <column xsi:type="decimal" name="refund_amount_credit" scale="4" precision="12" nullable="true" default="0.0000" comment="Refund Amount for Credit Card"/>
-        <column xsi:type="decimal" name="refund_amount_pix" scale="4" precision="12" nullable="true" default="0.0000" comment="Refund Amount for PIX"/>
+        <column xsi:type="decimal" name="refund_amount" scale="4" precision="12" nullable="true" default="0.0000" comment="Refund Amount"/>
         <column xsi:type="timestamp" name="refund_date" nullable="true" comment="Refund Date"/>
         <column xsi:type="timestamp" name="created_at" nullable="false" default="CURRENT_TIMESTAMP" comment="Creation Time"/>
         <column xsi:type="timestamp" name="updated_at" nullable="false" default="CURRENT_TIMESTAMP" on_update="true" comment="Update Time"/>

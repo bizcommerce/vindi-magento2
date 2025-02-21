@@ -14,7 +14,11 @@ use Vindi\Payment\Model\Payment\BankSlip as BankSlipPayment;
 use Vindi\Payment\Model\Payment\BankSlipPix as BankSlipPixPayment;
 use Vindi\Payment\Model\Payment\Pix as PixPayment;
 use Vindi\Payment\Model\Payment\Vindi as VindiPayment;
+use Vindi\Payment\Model\Payment\PaymentMethod;
 
+/**
+ * Data helper class
+ */
 class Data extends AbstractHelper
 {
 
@@ -162,7 +166,9 @@ class Data extends AbstractHelper
     }
 
     /**
-     * @param $code
+     * Sanitize SKU code.
+     *
+     * @param string $code
      * @return string
      */
     public static function sanitizeItemSku($code)
@@ -176,6 +182,22 @@ class Data extends AbstractHelper
                 "aaaaeeiooouuncAAAAEEIOOOUUNC-"
             )
         ));
+    }
+
+    /**
+     * Determine if the payment method code is multi-method.
+     *
+     * @param string $code
+     * @return bool
+     */
+    public function isMultiMethod($code)
+    {
+        $multiMethods = [
+            PaymentMethod::CARD_PIX,
+            'card_boleto',
+            'card_card'
+        ];
+        return in_array($code, $multiMethods);
     }
 
     /**
@@ -233,7 +255,6 @@ class Data extends AbstractHelper
                     return $item;
                 }
             } catch (\Exception $e) {
-                // Handle exception if necessary
             }
         }
 
@@ -241,7 +262,7 @@ class Data extends AbstractHelper
     }
 
     /**
-     * Sanitize sensitive data in the log entries
+     * Sanitize sensitive data in the log entries.
      *
      * @param string $data
      * @return string

@@ -35,7 +35,7 @@ use Vindi\Payment\Model\ResourceModel\Subscription\Collection as SubscriptionCol
 use Vindi\Payment\Model\PaymentSplitFactory;
 
 /**
- * Class AbstractMethod
+ * Abstract Payment Method class
  */
 abstract class AbstractMethod extends OriginAbstractMethod
 {
@@ -254,7 +254,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $paymentMethodCode = $this->getPaymentMethodCode();
         $plan = $this->isSubscriptionOrder($order);
         if ($plan) {
-            if ($this->isMultiMethod($paymentMethodCode)) {
+            if ($this->helperData->isMultiMethod($paymentMethodCode)) {
                 if ($paymentMethodCode !== PaymentMethod::CARD_CARD) {
                     return $this->handleError($order);
                 }
@@ -263,28 +263,12 @@ abstract class AbstractMethod extends OriginAbstractMethod
                 return $this->processSingleMethodSubscriptionPayment($payment, $plan);
             }
         } else {
-            if ($this->isMultiMethod($paymentMethodCode)) {
+            if ($this->helperData->isMultiMethod($paymentMethodCode)) {
                 return $this->processMultiMethodInvoicePayment($payment, $amount);
             } else {
                 return $this->processSingleMethodInvoicePayment($payment, $amount);
             }
         }
-    }
-
-    /**
-     * Determine if the payment method code is multi-method.
-     *
-     * @param string $code
-     * @return bool
-     */
-    protected function isMultiMethod($code)
-    {
-        $multiMethods = [
-            PaymentMethod::CARD_PIX,
-            'card_boleto',
-            'card_card'
-        ];
-        return in_array($code, $multiMethods);
     }
 
     /**
@@ -727,28 +711,44 @@ abstract class AbstractMethod extends OriginAbstractMethod
      */
     protected function savePaymentSplitRecord(Order $order, $billCredit, $billPix, $amountCredit, $amountPix)
     {
-        $paymentSplit = $this->paymentSplitFactory->create();
-        $data = [
+        $paymentSplitCredit = $this->paymentSplitFactory->create();
+        $dataCredit = [
             'order_id' => $order->getId(),
             'order_increment_id' => $order->getIncrementId(),
-            'payment_method' => PaymentMethod::CARD_PIX,
-            'amount_credit' => $amountCredit,
-            'amount_pix' => $amountPix,
+            'payment_method' => PaymentMethod::CREDIT_CARD,
+            'amount' => $amountCredit,
             'total_amount' => $order->getGrandTotal(),
-            'bill_id_credit' => isset($billCredit['id']) ? $billCredit['id'] : '',
-            'bill_id_pix' => isset($billPix['id']) ? $billPix['id'] : '',
-            'status_credit' => isset($billCredit['status']) ? $billCredit['status'] : '',
-            'status_pix' => isset($billPix['status']) ? $billPix['status'] : '',
-            'additional_data' => json_encode(['credit' => $billCredit, 'pix' => $billPix]),
+            'bill_id' => isset($billCredit['id']) ? $billCredit['id'] : '',
+            'status' => isset($billCredit['status']) ? $billCredit['status'] : '',
+            'additional_data' => json_encode($billCredit),
             'is_refunded' => 0,
-            'refund_amount_credit' => 0,
-            'refund_amount_pix' => 0
+            'refund_amount' => 0
         ];
-        $paymentSplit->setData($data);
+        $paymentSplitCredit->setData($dataCredit);
         try {
-            $paymentSplit->save();
+            $paymentSplitCredit->save();
         } catch (\Exception $e) {
-            $this->psrLogger->error('Error saving payment split record: ' . $e->getMessage());
+            $this->psrLogger->error('Error saving payment split record (credit): ' . $e->getMessage());
+        }
+
+        $paymentSplitPix = $this->paymentSplitFactory->create();
+        $dataPix = [
+            'order_id' => $order->getId(),
+            'order_increment_id' => $order->getIncrementId(),
+            'payment_method' => PaymentMethod::PIX,
+            'amount' => $amountPix,
+            'total_amount' => $order->getGrandTotal(),
+            'bill_id' => isset($billPix['id']) ? $billPix['id'] : '',
+            'status' => isset($billPix['status']) ? $billPix['status'] : '',
+            'additional_data' => json_encode($billPix),
+            'is_refunded' => 0,
+            'refund_amount' => 0
+        ];
+        $paymentSplitPix->setData($dataPix);
+        try {
+            $paymentSplitPix->save();
+        } catch (\Exception $e) {
+            $this->psrLogger->error('Error saving payment split record (pix): ' . $e->getMessage());
         }
     }
 

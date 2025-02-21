@@ -1,4 +1,3 @@
-// File: app/code/Vindi/Payment/view/frontend/web/js/view/payment/vindi-cardpix.js
 define([
     'underscore',
     'ko',
