@@ -1,4 +1,6 @@
 <?php
+// File: app/code/Vindi/Payment/Model/Payment/AbstractMethod.php
+
 namespace Vindi\Payment\Model\Payment;
 
 use Magento\Framework\Api\AttributeValueFactory;

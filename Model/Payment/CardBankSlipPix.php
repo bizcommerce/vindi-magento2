@@ -1,4 +1,6 @@
 <?php
+// File: app/code/Vindi/Payment/Model/Payment/CardBankslipPix.php
+
 namespace Vindi\Payment\Model\Payment;
 
 use Magento\Framework\DataObject;
