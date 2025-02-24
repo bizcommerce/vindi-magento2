@@ -29,7 +29,7 @@
                            class="input-text"
                            data-bind="value: creditAmountDisplay, enable: isCreditEditable, attr: {placeholder: $t('0,00')}, css: {'error-border': creditInvalid()}" />
                     <!-- ko if: creditInvalid -->
-                    <div class="error-message" data-bind="text: $t('The Credit Card amount cannot exceed the order total of ') + formattedOrderTotal()"></div>
+                    <div class="error-message" data-bind="text: $t('O valor do Cartão de Crédito não pode exceder o total do pedido de ') + formattedOrderTotal()"></div>
                     <!-- /ko -->
                 </div>
             </div>
@@ -186,23 +186,23 @@
             </form>
         </div>
         <hr>
-        <!-- Bolepix Payment Section -->
-        <div class="bolepix-payment-section">
+        <!-- Pix Payment Section -->
+        <div class="pix-payment-section">
             <h3 data-bind="i18n: 'Pagamento com Bolepix'"></h3>
             <div class="field amount required" style="max-width: 500px;">
                 <label class="label">
-                    <span data-bind="i18n: 'Valor a pagar com Bolepix:'"></span>
+                    <span data-bind="i18n: 'Valor a pagar com PIX:'"></span>
                 </label>
                 <div class="control">
                     <input type="number"
                            class="input-text"
-                           data-bind="value: bankslipPixAmountDisplay, enable: isBankslipEditable, attr: {placeholder: $t('0,00')}, css: {'error-border': bankslipInvalid()}" />
-                    <!-- ko if: bankslipInvalid -->
-                    <div class="error-message" data-bind="text: $t('The Bolepix amount cannot exceed the order total of ') + formattedOrderTotal()"></div>
+                           data-bind="value: pixAmountDisplay, enable: isPixEditable, attr: {placeholder: $t('0,00')}, css: {'error-border': pixInvalid()}" />
+                    <!-- ko if: pixInvalid -->
+                    <div class="error-message" data-bind="text: $t('The PIX amount cannot exceed the order total of ') + formattedOrderTotal()"></div>
                     <!-- /ko -->
                 </div>
             </div>
-            <div class="block-payment-bolepix">
+            <div class="block-payment-pix">
                 <!-- ko i18n: getInfoMessage() --><!-- /ko -->
             </div>
             <!-- ko if: isActiveDocument() -->
@@ -240,6 +240,8 @@
                 </fieldset>
             </form>
             <!-- /ko -->
+        </div>
+        <div class="pix-payment-section">
         </div>
         <div class="checkout-agreements-block">
             <!-- ko foreach: $parent.getRegion('before-place-order') -->

@@ -5,7 +5,6 @@
         <css src="Vindi_Payment::css/card.css"/>
         <css src="Vindi_Payment::css/cardpix.css"/>
         <css src="Vindi_Payment::css/cardcard.css"/>
-
     </head>
     <body>
         <referenceBlock name="checkout.root">

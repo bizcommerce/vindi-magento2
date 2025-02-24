@@ -25,11 +25,7 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
      */
     protected $_methodCode = 'vindi_cardbankslippix';
 
-    /**
-     * @var Data
-     */
     protected $helperData;
-
     /**
      * @var CcConfig
      */
@@ -55,17 +51,6 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
      */
     protected $creditCardTypeSource;
 
-    /**
-     * Constructor
-     *
-     * @param CcConfig $ccConfig
-     * @param PaymentHelper $paymentHelper
-     * @param Data $data
-     * @param CustomerSession $customerSession
-     * @param PaymentMethod $paymentMethod
-     * @param PaymentProfileCollection $paymentProfileCollection
-     * @param CardImagesSource $creditCardTypeSource
-     */
     public function __construct(
         CcConfig $ccConfig,
         PaymentHelper $paymentHelper,
@@ -101,14 +86,15 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
                     'minInstallmentsValue' => (int) $this->helperData->getMinInstallmentsValue(),
                     'saved_cards' => $this->getPaymentProfiles(),
                     'credit_card_images' => $this->getCreditCardImages(),
-                    'bankslip_pix_enabled' => true
+                    'bankslip_pix_enabled' => true,
+                    'enabledDocument' => true
                 ]
             ]
         ];
     }
 
     /**
-     * Get saved payment profiles.
+     * Get saved payment profiles
      *
      * @return array
      */
@@ -127,11 +113,12 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
                 ];
             }
         }
+
         return $paymentProfiles;
     }
 
     /**
-     * Get credit card images.
+     * Get credit card images
      *
      * @return array
      */
@@ -139,6 +126,7 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
     {
         $ccImages = [];
         $creditCardOptionArray = $this->creditCardTypeSource->toOptionArray();
+
         foreach ($creditCardOptionArray as $creditCardOption) {
             $ccImages[] = [
                 'code' => $creditCardOption['code'],
@@ -146,6 +134,7 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
                 'value' => $creditCardOption['value']
             ];
         }
+
         return $ccImages;
     }
 }
