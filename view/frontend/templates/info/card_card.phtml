@@ -1,0 +1,30 @@
+<?php
+/**
+ * @var \Vindi\Payment\Block\Info\CardCard $block
+ */
+?>
+<div class="card-card-info">
+    <?php if ($block->canShowCcInfo()) : ?>
+        <dl class="payment-method cc-info">
+            <dt class="title">
+                <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
+            </dt>
+            <dd class="content">
+                <p><?php echo __('First Card Details:'); ?></p>
+                <?php $first = $block->getFirstCardInfo(); ?>
+                <p><?php echo sprintf(__('Brand: %s'), $first['brand'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Owner: %s'), $first['owner'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Number: %s'), $first['number'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Installments: %s'), $first['installments'] ?? ''); ?></p>
+                <p><?php echo __('Second Card Details:'); ?></p>
+                <?php $second = $block->getSecondCardInfo(); ?>
+                <p><?php echo sprintf(__('Brand: %s'), $second['brand'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Owner: %s'), $second['owner'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Number: %s'), $second['number'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Installments: %s'), $second['installments'] ?? ''); ?></p>
+            </dd>
+        </dl>
+    <?php else: ?>
+        <span><?php echo __($block->getPaymentMethodName()); ?></span>
+    <?php endif; ?>
+</div>

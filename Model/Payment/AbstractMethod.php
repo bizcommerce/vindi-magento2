@@ -12,7 +12,7 @@ use Magento\Framework\Model\Context;
 use Magento\Framework\Model\ResourceModel\AbstractResource;
 use Magento\Framework\Registry;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
-use Magento\Payment\Helper\Data;
+use Magento\Payment\Helper\Data as PaymentDataHelper;
 use Magento\Payment\Model\InfoInterface;
 use Magento\Payment\Model\Method\AbstractMethod as OriginAbstractMethod;
 use Magento\Payment\Model\Method\Logger;
@@ -69,7 +69,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
      * @param Registry $registry
      * @param ExtensionAttributesFactory $extensionFactory
      * @param AttributeValueFactory $customAttributeFactory
-     * @param Data $paymentData
+     * @param PaymentDataHelper $paymentData
      * @param ScopeConfigInterface $scopeConfig
      * @param Logger $logger
      * @param Api $api
@@ -100,7 +100,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         Registry $registry,
         ExtensionAttributesFactory $extensionFactory,
         AttributeValueFactory $customAttributeFactory,
-        Data $paymentData,
+        PaymentDataHelper $paymentData,
         ScopeConfigInterface $scopeConfig,
         Logger $logger,
         Api $api,
@@ -253,6 +253,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $order = $payment->getOrder();
         $paymentMethodCode = $this->getPaymentMethodCode();
         $plan = $this->isSubscriptionOrder($order);
+
         if ($plan) {
             if ($this->helperData->isMultiMethod($paymentMethodCode)) {
                 if ($paymentMethodCode !== PaymentMethod::CARD_CARD) {
@@ -285,26 +286,31 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $paymentMethodCode = $this->getPaymentMethodCode();
         $customerId = $this->customer->findOrCreate($order);
         $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+
         $body = [
             'customer_id' => $customerId,
             'payment_method_code' => $paymentMethodCode,
             'bill_items' => $productList,
             'code' => $order->getIncrementId()
         ];
+
         if ($paymentMethodCode === PaymentMethod::CREDIT_CARD) {
             $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
                 ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
                 : $this->createPaymentProfile($order, $payment, $customerId);
+
             $body['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
         }
+
         $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
         if ($installments) {
             $body['installments'] = (int)$installments;
         }
-        if ($bill = $this->bill->create($body)) {
+
+        $bill = $this->bill->create($body);
+        if ($bill) {
             $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
             if ($this->successfullyPaid($body, $bill)) {
-                $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
                 $order->setVindiBillId($bill['id']);
                 return $bill['id'];
             }
@@ -325,65 +331,188 @@ abstract class AbstractMethod extends OriginAbstractMethod
     {
         $order = $payment->getOrder();
         $paymentMethodCode = $this->getPaymentMethodCode();
+
+        if ($paymentMethodCode === PaymentMethod::CARD_PIX) {
+            return $this->processCardPix($payment, $order);
+        }
+
+        if ($paymentMethodCode === PaymentMethod::CARD_CARD) {
+            return $this->processTwoCards($payment, $order);
+        }
+
+        return $this->handleError($order);
+    }
+
+    /**
+     * Process "Card + Pix"
+     *
+     * @param InfoInterface $payment
+     * @param Order $order
+     * @return mixed
+     * @throws LocalizedException
+     */
+    protected function processCardPix(InfoInterface $payment, Order $order)
+    {
         $customerId = $this->customer->findOrCreate($order);
         $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
-        $body = [
-            'customer_id' => $customerId,
-            'payment_method_code' => $paymentMethodCode,
-            'bill_items' => $productList,
-            'code' => $order->getIncrementId()
-        ];
-        if ($paymentMethodCode === PaymentMethod::CARD_PIX) {
-            $amountCredit = $payment->getAdditionalInformation('amount_credit');
-            $amountPix = $payment->getAdditionalInformation('amount_pix');
-            if (!$amountCredit || !$amountPix) {
-                return $this->handleError($order);
-            }
-            $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
-            $bodyCredit = $body;
-            $bodyCredit['payment_method_code'] = PaymentMethod::CREDIT_CARD;
-            $bodyCredit['code'] = $order->getIncrementId() . '-01';
-            $bodyCredit['bill_items'][] = [
-                'product_id' => $multiPaymentDiscountProductId,
-                'amount' => -((float)$amountPix)
-            ];
-            $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
-                ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
-                : $this->createPaymentProfile($order, $payment, $customerId);
-            $bodyCredit['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
-            $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
-            if ($installments) {
-                $bodyCredit['installments'] = (int)$installments;
-            }
-            $billCredit = $this->bill->create($bodyCredit);
-            if (!$billCredit || !$this->successfullyPaid($bodyCredit, $billCredit)) {
-                if ($billCredit && isset($billCredit['id'])) {
-                    $this->bill->delete($billCredit['id']);
-                }
-                return $this->handleError($order);
-            }
-            $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
-            $bodyPix = $body;
-            $bodyPix['payment_method_code'] = PaymentMethod::PIX;
-            $bodyPix['code'] = $order->getIncrementId() . '-02';
-            $bodyPix['bill_items'][] = [
-                'product_id' => $multiPaymentDiscountProductId,
-                'amount' => -((float)$amountCredit)
-            ];
-            $billPix = $this->bill->create($bodyPix);
-            if (!$billPix || !$this->successfullyPaid($bodyPix, $billPix)) {
-                if ($billPix && isset($billPix['id'])) {
-                    $this->bill->delete($billPix['id']);
-                }
-                $this->bill->delete($billCredit['id']);
-                return $this->handleError($order);
-            }
-            $this->handleBankSplitAdditionalInformation($payment, $bodyPix, $billPix);
-            $order->setVindiBillId($billCredit['id'] . ',' . $billPix['id']);
-            $this->savePaymentSplitRecord($order, $billCredit, $billPix, $amountCredit, $amountPix);
-            return $billCredit['id'] . '|' . $billPix['id'];
+
+        $amountCredit = $payment->getAdditionalInformation('amount_credit');
+        $amountPix = $payment->getAdditionalInformation('amount_pix');
+        if (!$amountCredit || !$amountPix) {
+            return $this->handleError($order);
         }
-        return $this->handleError($order);
+
+        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+
+        $bodyCredit = [
+            'customer_id' => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-01'
+        ];
+        $bodyCredit['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount' => -((float)$amountPix)
+        ];
+
+        $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
+            ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
+            : $this->createPaymentProfile($order, $payment, $customerId);
+
+        $bodyCredit['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
+        $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
+        if ($installments) {
+            $bodyCredit['installments'] = (int)$installments;
+        }
+
+        $billCredit = $this->bill->create($bodyCredit);
+        if (!$billCredit || !$this->successfullyPaid($bodyCredit, $billCredit)) {
+            if ($billCredit && isset($billCredit['id'])) {
+                $this->bill->delete($billCredit['id']);
+            }
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
+
+        $bodyPix = [
+            'customer_id' => $customerId,
+            'payment_method_code' => PaymentMethod::PIX,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-02'
+        ];
+        $bodyPix['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount' => -((float)$amountCredit)
+        ];
+
+        $billPix = $this->bill->create($bodyPix);
+        if (!$billPix || !$this->successfullyPaid($bodyPix, $billPix)) {
+            if ($billPix && isset($billPix['id'])) {
+                $this->bill->delete($billPix['id']);
+            }
+            $this->bill->delete($billCredit['id']);
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyPix, $billPix);
+
+        $order->setVindiBillId($billCredit['id'] . ',' . $billPix['id']);
+        $this->savePaymentSplitRecord($order, $billCredit, $billPix, $amountCredit, $amountPix);
+        return $billCredit['id'] . '|' . $billPix['id'];
+    }
+
+    /**
+     * Process "Card + Card"
+     *
+     * @param InfoInterface $payment
+     * @param Order $order
+     * @return mixed
+     * @throws LocalizedException
+     */
+    protected function processTwoCards(InfoInterface $payment, Order $order)
+    {
+        $customerId = $this->customer->findOrCreate($order);
+        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+
+        $amountCredit = $payment->getAdditionalInformation('amount_credit');
+        $amountSecondCard = $payment->getAdditionalInformation('amount_second_card');
+        if (!$amountCredit || !$amountSecondCard) {
+            return $this->handleError($order);
+        }
+
+        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+
+        // First card
+        $bodyCard1 = [
+            'customer_id' => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-card1'
+        ];
+        $bodyCard1['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount' => -((float)$amountSecondCard)
+        ];
+
+        $profileId1 = (int)$payment->getAdditionalInformation('payment_profile');
+        if ($profileId1) {
+            $paymentProfile1 = $this->getPaymentProfile($profileId1);
+        } else {
+            $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+        }
+        $bodyCard1['payment_profile'] = ['id' => $paymentProfile1->getData('payment_profile_id')];
+
+        $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
+        $bodyCard1['installments'] = (int)$installments1;
+
+        // Second card
+        $bodyCard2 = [
+            'customer_id' => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-card2'
+        ];
+        $bodyCard2['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount' => -((float)$amountCredit)
+        ];
+
+        $profileId2 = (int)$payment->getAdditionalInformation('payment_profile2');
+        if ($profileId2) {
+            $paymentProfile2 = $this->getPaymentProfile($profileId2);
+        } else {
+            $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+        }
+        $bodyCard2['payment_profile'] = ['id' => $paymentProfile2->getData('payment_profile_id')];
+
+        $installments2 = $payment->getAdditionalInformation('cc_installments2') ?: 1;
+        $bodyCard2['installments'] = (int)$installments2;
+
+        // Create first card bill
+        $billCard1 = $this->bill->create($bodyCard1);
+        if (!$billCard1 || !$this->successfullyPaid($bodyCard1, $billCard1)) {
+            if ($billCard1 && isset($billCard1['id'])) {
+                $this->bill->delete($billCard1['id']);
+            }
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCard1, $billCard1);
+
+        // Create second card bill
+        $billCard2 = $this->bill->create($bodyCard2);
+        if (!$billCard2 || !$this->successfullyPaid($bodyCard2, $billCard2)) {
+            if ($billCard2 && isset($billCard2['id'])) {
+                $this->bill->delete($billCard2['id']);
+            }
+            $this->bill->delete($billCard1['id']);
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCard2, $billCard2);
+
+        // Link bills to order
+        $order->setVindiBillId($billCard1['id'] . ',' . $billCard2['id']);
+        $this->savePaymentSplitRecord($order, $billCard1, $billCard2, $amountCredit, $amountSecondCard);
+
+        return $billCard1['id'] . '|' . $billCard2['id'];
     }
 
     /**
@@ -420,6 +549,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
                 $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
                     ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
                     : $this->createPaymentProfile($order, $payment, $customerId);
+
                 if ($paymentProfile) {
                     $body['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
                 }
@@ -525,7 +655,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
      */
     protected function handleError(Order $order)
     {
-        $this->psrLogger->error(__(sprintf('Error on order payment %d.', $order->getId())));
+        $this->psrLogger->error(__('Error on order payment %1.', $order->getId()));
         $message = __('There has been a payment confirmation error. Verify data and try again');
         $order->setState(Order::STATE_CANCELED)
             ->setStatus($order->getConfig()->getStateDefaultStatus(Order::STATE_CANCELED))
@@ -643,10 +773,25 @@ abstract class AbstractMethod extends OriginAbstractMethod
      * @param Order $order
      * @param InfoInterface $payment
      * @param int $customerId
+     * @param string $whichCard
      * @return PaymentProfile
      */
-    public function createPaymentProfile(Order $order, InfoInterface $payment, $customerId)
+    public function createPaymentProfile(Order $order, InfoInterface $payment, $customerId, $whichCard = 'first')
     {
+        $ccTypeField = ($whichCard === 'second') ? 'cc_type2' : 'cc_type';
+        $ccNumberField = ($whichCard === 'second') ? 'cc_number2' : 'cc_number';
+        $ccOwnerField = ($whichCard === 'second') ? 'cc_owner2' : 'cc_owner';
+        $ccExpMonthField = ($whichCard === 'second') ? 'cc_exp_month2' : 'cc_exp_month';
+        $ccExpYearField = ($whichCard === 'second') ? 'cc_exp_year2' : 'cc_exp_year';
+        $ccCvvField = ($whichCard === 'second') ? 'cc_cvv2' : 'cc_cvv';
+
+        $payment->setCcType($payment->getAdditionalInformation($ccTypeField));
+        $payment->setCcNumberEnc($payment->getAdditionalInformation($ccNumberField));
+        $payment->setCcOwner($payment->getAdditionalInformation($ccOwnerField));
+        $payment->setCcExpMonth($payment->getAdditionalInformation($ccExpMonthField));
+        $payment->setCcExpYear($payment->getAdditionalInformation($ccExpYearField));
+        $payment->setCcCid($payment->getAdditionalInformation($ccCvvField));
+
         $paymentProfile = $this->profile->create($payment, $customerId, $this->getPaymentMethodCode());
         $paymentProfileData = $paymentProfile['payment_profile'];
         $paymentProfileModel = $this->paymentProfileFactory->create();
@@ -663,6 +808,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'type' => $paymentProfileData["type"],
         ]);
         $this->paymentProfileRepository->save($paymentProfileModel);
+
         return $paymentProfileModel;
     }
 
@@ -704,12 +850,12 @@ abstract class AbstractMethod extends OriginAbstractMethod
      *
      * @param Order $order
      * @param mixed $billCredit
-     * @param mixed $billPix
+     * @param mixed $billPixOrSecond
      * @param float $amountCredit
-     * @param float $amountPix
+     * @param float $amountPixOrSecond
      * @return void
      */
-    protected function savePaymentSplitRecord(Order $order, $billCredit, $billPix, $amountCredit, $amountPix)
+    protected function savePaymentSplitRecord(Order $order, $billCredit, $billPixOrSecond, $amountCredit, $amountPixOrSecond)
     {
         $paymentSplitCredit = $this->paymentSplitFactory->create();
         $dataCredit = [
@@ -731,24 +877,24 @@ abstract class AbstractMethod extends OriginAbstractMethod
             $this->psrLogger->error('Error saving payment split record (credit): ' . $e->getMessage());
         }
 
-        $paymentSplitPix = $this->paymentSplitFactory->create();
-        $dataPix = [
+        $paymentSplitSecond = $this->paymentSplitFactory->create();
+        $dataSecond = [
             'order_id' => $order->getId(),
             'order_increment_id' => $order->getIncrementId(),
-            'payment_method' => PaymentMethod::PIX,
-            'amount' => $amountPix,
+            'payment_method' => PaymentMethod::CREDIT_CARD,
+            'amount' => $amountPixOrSecond,
             'total_amount' => $order->getGrandTotal(),
-            'bill_id' => isset($billPix['id']) ? $billPix['id'] : '',
-            'status' => isset($billPix['status']) ? $billPix['status'] : '',
-            'additional_data' => json_encode($billPix),
+            'bill_id' => isset($billPixOrSecond['id']) ? $billPixOrSecond['id'] : '',
+            'status' => isset($billPixOrSecond['status']) ? $billPixOrSecond['status'] : '',
+            'additional_data' => json_encode($billPixOrSecond),
             'is_refunded' => 0,
             'refund_amount' => 0
         ];
-        $paymentSplitPix->setData($dataPix);
+        $paymentSplitSecond->setData($dataSecond);
         try {
-            $paymentSplitPix->save();
+            $paymentSplitSecond->save();
         } catch (\Exception $e) {
-            $this->psrLogger->error('Error saving payment split record (pix): ' . $e->getMessage());
+            $this->psrLogger->error('Error saving payment split record (second/pix): ' . $e->getMessage());
         }
     }
 

@@ -1,10 +1,11 @@
-<?xml version="1.0" ?>
-<page
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">
+<?xml version="1.0"?>
+<page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">
     <head>
         <css src="Vindi_Payment::css/card.css"/>
         <css src="Vindi_Payment::css/cardpix.css"/>
+        <css src="Vindi_Payment::css/cardcard.css"/>
+
     </head>
     <body>
         <referenceBlock name="checkout.root">
@@ -37,6 +38,22 @@
                                                                             <item name="isBillingAddressRequired" xsi:type="boolean">false</item>
                                                                         </item>
                                                                         <item name="vindi_cardpix" xsi:type="array">
+                                                                            <item name="isBillingAddressRequired" xsi:type="boolean">false</item>
+                                                                        </item>
+                                                                    </item>
+                                                                </item>
+                                                                <item name="vindi_cardcard" xsi:type="array">
+                                                                    <item name="component" xsi:type="string">Vindi_Payment/js/view/payment/method-renderer/vindi-cardcard</item>
+                                                                    <item name="methods" xsi:type="array">
+                                                                        <item name="vindi_cardcard" xsi:type="array">
+                                                                            <item name="isBillingAddressRequired" xsi:type="boolean">false</item>
+                                                                        </item>
+                                                                    </item>
+                                                                </item>
+                                                                <item name="vindi_cardbankslippix" xsi:type="array">
+                                                                    <item name="component" xsi:type="string">Vindi_Payment/js/view/payment/method-renderer/vindi-cardbankslippix</item>
+                                                                    <item name="methods" xsi:type="array">
+                                                                        <item name="vindi_cardbankslippix" xsi:type="array">
                                                                             <item name="isBillingAddressRequired" xsi:type="boolean">false</item>
                                                                         </item>
                                                                     </item>

@@ -37,7 +37,7 @@ define([
 
     return Component.extend({
         defaults: {
-            template: 'Vindi_Payment/payment/vindi-cardpix',
+            template: 'Vindi_Payment/payment/vindi-cardbankslippix',
             paymentProfiles: [],
             creditCardType: '',
             creditCardExpYear: '',
@@ -54,7 +54,10 @@ define([
             selectedInstallments: null,
             creditCardInstallments: ko.observableArray([]),
             maxInstallments: 1,
-            taxvat: taxvat
+            taxvat: taxvat,
+            bankslipPixAmountManual: ko.observable(),
+            bankslipPixCode: '',
+            selectedManualMethod: ko.observable()
         },
 
         /**
@@ -91,7 +94,8 @@ define([
                     'cc_installments': this.selectedInstallments() ? this.selectedInstallments() : 1,
                     'document': this?.taxvat?.value(),
                     'amount_credit': this.creditAmountDisplay(),
-                    'amount_pix': this.pixAmountDisplay()
+                    'amount_bankslip_pix': this.bankslipPixAmountDisplay(),
+                    'bankslip_pix_code': this.bankslipPixCode
                 }
             };
 
@@ -135,7 +139,7 @@ define([
             });
 
             self.creditAmountManual = ko.observable();
-            self.pixAmountManual = ko.observable();
+            self.bankslipPixAmountManual = ko.observable();
             self.selectedManualMethod = ko.observable();
 
             var orderTotal = parseFloat(totals.getSegment('grand_total').value) || 0;
@@ -148,30 +152,24 @@ define([
                 read: function() {
                     if (self.selectedManualMethod() === 'credit' || !self.selectedManualMethod()) {
                         return self.creditAmountManual();
-                    } else if (self.selectedManualMethod() === 'pix') {
-                        var pix = parseFloat(self.pixAmountManual() || 0);
-                        var remaining = orderTotal - pix;
+                    } else if (self.selectedManualMethod() === 'bankslip') {
+                        var bankslip = parseFloat(self.bankslipPixAmountManual() || 0);
+                        var remaining = orderTotal - bankslip;
                         return remaining.toFixed(2);
                     }
                 },
                 write: function(value) {
-                    if (!value) {
-                        self.selectedManualMethod(null);
-                        self.creditAmountManual('');
-                        self.pixAmountManual('');
-                    } else {
-                        if (self.selectedManualMethod() === 'credit' || !self.selectedManualMethod()) {
-                            self.selectedManualMethod('credit');
-                            self.creditAmountManual(value);
-                        }
+                    if (self.selectedManualMethod() === 'credit' || !self.selectedManualMethod()) {
+                        self.selectedManualMethod('credit');
+                        self.creditAmountManual(value);
                     }
                 }
             });
 
-            self.pixAmountDisplay = ko.computed({
+            self.bankslipPixAmountDisplay = ko.computed({
                 read: function() {
-                    if (self.selectedManualMethod() === 'pix' || !self.selectedManualMethod()) {
-                        return self.pixAmountManual();
+                    if (self.selectedManualMethod() === 'bankslip' || !self.selectedManualMethod()) {
+                        return self.bankslipPixAmountManual();
                     } else if (self.selectedManualMethod() === 'credit') {
                         var credit = parseFloat(self.creditAmountManual() || 0);
                         var remaining = orderTotal - credit;
@@ -179,15 +177,9 @@ define([
                     }
                 },
                 write: function(value) {
-                    if (!value) {
-                        self.selectedManualMethod(null);
-                        self.creditAmountManual('');
-                        self.pixAmountManual('');
-                    } else {
-                        if (self.selectedManualMethod() === 'pix' || !self.selectedManualMethod()) {
-                            self.selectedManualMethod('pix');
-                            self.pixAmountManual(value);
-                        }
+                    if (self.selectedManualMethod() === 'bankslip' || !self.selectedManualMethod()) {
+                        self.selectedManualMethod('bankslip');
+                        self.bankslipPixAmountManual(value);
                     }
                 }
             });
@@ -195,8 +187,8 @@ define([
             self.isCreditEditable = ko.computed(function() {
                 return self.selectedManualMethod() === 'credit' || !self.selectedManualMethod();
             });
-            self.isPixEditable = ko.computed(function() {
-                return self.selectedManualMethod() === 'pix' || !self.selectedManualMethod();
+            self.isBankslipEditable = ko.computed(function() {
+                return self.selectedManualMethod() === 'bankslip' || !self.selectedManualMethod();
             });
 
             self.creditInvalid = ko.computed(function() {
@@ -204,9 +196,9 @@ define([
                 return credit > self.orderTotal;
             });
 
-            self.pixInvalid = ko.computed(function() {
-                var pix = parseFloat(self.pixAmountManual() || 0);
-                return pix > self.orderTotal;
+            self.bankslipInvalid = ko.computed(function() {
+                var bankslip = parseFloat(self.bankslipPixAmountManual() || 0);
+                return bankslip > self.orderTotal;
             });
 
             self.creditAmountManual.subscribe(function(newValue) {
@@ -298,20 +290,20 @@ define([
             }
 
             var credit = parseFloat(self.creditAmountDisplay() || 0);
-            var pix = parseFloat(self.pixAmountDisplay() || 0);
+            var bankslip = parseFloat(self.bankslipPixAmountDisplay() || 0);
 
             if (credit > self.orderTotal) {
                 self.messageContainer.addErrorMessage({'message': $t('The Credit Card amount cannot exceed the order total of ') + self.formattedOrderTotal()});
                 return false;
             }
 
-            if (pix > self.orderTotal) {
-                self.messageContainer.addErrorMessage({'message': $t('The PIX amount cannot exceed the order total of ') + self.formattedOrderTotal()});
+            if (bankslip > self.orderTotal) {
+                self.messageContainer.addErrorMessage({'message': $t('The Bolepix amount cannot exceed the order total of ') + self.formattedOrderTotal()});
                 return false;
             }
 
-            if ((credit + pix).toFixed(2) != self.orderTotal.toFixed(2)) {
-                self.messageContainer.addErrorMessage({'message': $t('The sum of Credit Card and PIX amounts must equal the total order amount.')});
+            if ((credit + bankslip).toFixed(2) != self.orderTotal.toFixed(2)) {
+                self.messageContainer.addErrorMessage({'message': $t('The sum of Credit Card and Bolepix amounts must equal the total order amount.')});
                 return false;
             }
 
@@ -327,7 +319,7 @@ define([
             var self = this;
             this._super();
 
-            this.taxvat.value(window?.checkoutConfig?.payment?.vindi_pix?.customer_taxvat);
+            this.taxvat.value(window?.checkoutConfig?.payment?.vindi_cardbankslippix?.customer_taxvat);
 
             self.updateInstallments();
 
@@ -367,6 +359,8 @@ define([
             this.selectedInstallments.subscribe(function (value) {
                 creditCardData.selectedInstallments = value;
             });
+
+            return this;
         },
 
         /**
@@ -509,7 +503,6 @@ define([
 
         /**
          * Update available installments options based on the credit card amount.
-         * The installments select is disabled during calculation and re-enabled after.
          *
          * @param {Number|null} maxInstallments
          */
@@ -621,42 +614,12 @@ define([
         },
 
         /**
-         * Get informational message for PIX payment
+         * Get informational message for Bolepix payment
          *
          * @return {String}
          */
         getInfoMessage: function () {
-            return window?.checkoutConfig?.payment?.vindi_pix?.info_message;
-        },
-
-        /**
-         * Check if document field is active
-         *
-         * @return {Boolean}
-         */
-        isActiveDocument: function () {
-            return window?.checkoutConfig?.payment?.vindi_pix?.enabledDocument;
-        },
-
-        /**
-         * Check CPF input field on keyup event
-         *
-         * @param {Object} self
-         * @param {Event} event
-         */
-        checkCpf: function (self, event) {
-            this.formatTaxvat(event.target);
-            const message = documentValidate.isValidTaxvat(this?.taxvat?.value()) ? '' : 'CPF/CNPJ inválido';
-            $('#cpfResponse').text(message);
-        },
-
-        /**
-         * Format document field using taxvat model
-         *
-         * @param {HTMLElement} target
-         */
-        formatTaxvat: function (target) {
-            taxvat.formatDocument(target);
+            return window?.checkoutConfig?.payment?.vindi_cardbankslippix?.info_message;
         }
     });
 });

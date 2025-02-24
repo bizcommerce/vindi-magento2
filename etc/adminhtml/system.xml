@@ -1,45 +1,37 @@
-<?xml version="1.0" ?>
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
     <system>
         <section id="payment">
             <group id="vindi" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label">
                 <label>Vindi Recurring (VR)</label>
                 <group id="configuration" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label">
                     <label>General</label>
-                    <field id="mode" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20"
-                           translate="label"
-                           type="select">
+                    <field id="mode" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label" type="select">
                         <label>Mode</label>
                         <source_model>Vindi\Payment\Model\Config\Source\Mode</source_model>
                         <config_path>vindiconfiguration/general/mode</config_path>
                     </field>
-                    <field id="api_key" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="40" translate="label"
-                           type="text">
+                    <field id="api_key" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="40" translate="label" type="text">
                         <label>Api Key</label>
                         <validate>required-entry</validate>
                         <config_path>vindiconfiguration/general/api_key</config_path>
                     </field>
-                    <field id="webhook_key" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="50"
-                           translate="label" type="text">
+                    <field id="webhook_key" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="50" translate="label" type="text">
                         <label>Webhook Key</label>
                         <comment model="Vindi\Payment\Model\WebhookKey"/>
                         <frontend_model>Vindi\Payment\Block\System\Config\Form\Field\Disable</frontend_model>
                         <config_path>vindiconfiguration/general/webhook_key</config_path>
                     </field>
-                    <field id="order_status" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="100"
-                           translate="label" type="select">
+                    <field id="order_status" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="100" translate="label" type="select">
                         <label>New Order Status</label>
                         <source_model>Magento\Sales\Model\Config\Source\Order\Status</source_model>
                         <config_path>vindiconfiguration/general/order_status</config_path>
                     </field>
-                    <field id="paid_order_status" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="110"
-                           translate="label" type="select">
+                    <field id="paid_order_status" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="110" translate="label" type="select">
                         <label>Paid Order Status</label>
                         <source_model>Magento\Sales\Model\Config\Source\Order\Status</source_model>
                         <config_path>vindiconfiguration/general/paid_order_status</config_path>
                     </field>
-
                     <field id="info_message" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="100" translate="label" type="text">
                         <label>PIX Payment method message</label>
                         <comment>Message when selecting the payment method on the checkout screen.</comment>
@@ -64,36 +56,30 @@
                 </group>
                 <group id="vindi_cc" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="100" translate="label">
                     <label>Credit Card</label>
-                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label"
-                           type="select">
+                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label" type="select">
                         <label>Enabled</label>
                         <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                         <backend_model>Vindi\Payment\Model\Config\Backend\ApiKeyValidator</backend_model>
                         <config_path>payment/vindi/active</config_path>
                     </field>
-                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="30" translate="label"
-                           type="text">
+                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="30" translate="label" type="text">
                         <label>Title</label>
                         <config_path>payment/vindi/title</config_path>
                     </field>
-                    <field id="allow_installments" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="70"
-                           translate="label" type="select">
+                    <field id="allow_installments" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="70" translate="label" type="select">
                         <label>Allow Installments</label>
                         <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                         <config_path>payment/vindi/allow_installments</config_path>
                     </field>
-                    <field id="max_installments" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="80"
-                           translate="label" type="text">
+                    <field id="max_installments" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="80" translate="label" type="text">
                         <label>Max Installments</label>
                         <config_path>payment/vindi/max_installments</config_path>
                     </field>
-                    <field id="min_installment_value" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="90"
-                           translate="label" type="text">
+                    <field id="min_installment_value" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="90" translate="label" type="text">
                         <label>Min Installment Value</label>
                         <config_path>payment/vindi/min_installment_value</config_path>
                     </field>
-                    <field id="verify_method" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="110"
-                           translate="label" type="select">
+                    <field id="verify_method" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="110" translate="label" type="select">
                         <label>Verify Profile?</label>
                         <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                         <config_path>payment/vindi/verify_method</config_path>
@@ -111,20 +97,17 @@
                 </group>
                 <group id="vindi_pix" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="200" translate="label comment">
                     <label>Pix</label>
-                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label"
-                           type="select">
+                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label" type="select">
                         <label>Enabled</label>
                         <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                         <backend_model>Vindi\Payment\Model\Config\Backend\ApiKeyValidator</backend_model>
                         <config_path>payment/vindi_pix/active</config_path>
                     </field>
-                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label"
-                           type="text">
+                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label" type="text">
                         <label>Title</label>
                         <config_path>payment/vindi_pix/title</config_path>
                     </field>
-                    <field id="enabled_document" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="30" translate="label"
-                           type="select">
+                    <field id="enabled_document" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="30" translate="label" type="select">
                         <label>Enabled document</label>
                         <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                         <backend_model>Vindi\Payment\Model\Config\Backend\ApiKeyValidator</backend_model>
@@ -144,15 +127,13 @@
                 </group>
                 <group id="vindi_bankslip" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="300" translate="label comment">
                     <label>Boleto Bancário</label>
-                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label"
-                           type="select">
+                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label" type="select">
                         <label>Enabled</label>
                         <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                         <backend_model>Vindi\Payment\Model\Config\Backend\ApiKeyValidator</backend_model>
                         <config_path>payment/vindi_bankslip/active</config_path>
                     </field>
-                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label"
-                           type="text">
+                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label" type="text">
                         <label>Title</label>
                         <config_path>payment/vindi_bankslip/title</config_path>
                     </field>
@@ -169,15 +150,13 @@
                 </group>
                 <group id="vindi_bankslippix" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="400" translate="label comment">
                     <label>Bolepix</label>
-                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label"
-                           type="select">
+                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label" type="select">
                         <label>Enabled</label>
                         <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                         <backend_model>Vindi\Payment\Model\Config\Backend\ApiKeyValidator</backend_model>
                         <config_path>payment/vindi_bankslippix/active</config_path>
                     </field>
-                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label"
-                           type="text">
+                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label" type="text">
                         <label>Title</label>
                         <config_path>payment/vindi_bankslippix/title</config_path>
                     </field>
@@ -194,21 +173,55 @@
                 </group>
                 <group id="vindi_cardpix" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="500" translate="label">
                     <label>Cartão + Pix</label>
-                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label"
-                           type="select">
+                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label" type="select">
                         <label>Enabled</label>
                         <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                         <backend_model>Vindi\Payment\Model\Config\Backend\ApiKeyValidator</backend_model>
                         <config_path>payment/vindi_cardpix/active</config_path>
                     </field>
-                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label"
-                           type="text">
+                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label" type="text">
                         <label>Title</label>
                         <config_path>payment/vindi_cardpix/title</config_path>
                     </field>
                     <field id="payment_link_instructions" translate="label comment" type="textarea" sortOrder="20200" showInDefault="1" showInWebsite="1" showInStore="1">
                         <label>Instructions on the payment link success page</label>
                         <config_path>payment/vindi_cardpix/payment_link_instructions</config_path>
+                        <comment><![CDATA[Instructions to be shown in payment link success page, it can be HTML]]></comment>
+                    </field>
+                </group>
+                <group id="vindi_cardcard" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="600" translate="label">
+                    <label>Cartão + Cartão</label>
+                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label" type="select">
+                        <label>Enabled</label>
+                        <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                        <backend_model>Vindi\Payment\Model\Config\Backend\ApiKeyValidator</backend_model>
+                        <config_path>payment/vindi_cardcard/active</config_path>
+                    </field>
+                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label" type="text">
+                        <label>Title</label>
+                        <config_path>payment/vindi_cardcard/title</config_path>
+                    </field>
+                    <field id="payment_link_instructions" translate="label comment" type="textarea" sortOrder="20200" showInDefault="1" showInWebsite="1" showInStore="1">
+                        <label>Instructions on the payment link success page</label>
+                        <config_path>payment/vindi_cardcard/payment_link_instructions</config_path>
+                        <comment><![CDATA[Instructions to be shown in payment link success page, it can be HTML]]></comment>
+                    </field>
+                </group>
+                <group id="vindi_cardbankslippix" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="700" translate="label">
+                    <label>Cartão + Bolepix</label>
+                    <field id="active" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="10" translate="label" type="select">
+                        <label>Enabled</label>
+                        <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                        <backend_model>Vindi\Payment\Model\Config\Backend\ApiKeyValidator</backend_model>
+                        <config_path>payment/vindi_cardbankslippix/active</config_path>
+                    </field>
+                    <field id="title" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="20" translate="label" type="text">
+                        <label>Title</label>
+                        <config_path>payment/vindi_cardbankslippix/title</config_path>
+                    </field>
+                    <field id="payment_link_instructions" translate="label comment" type="textarea" sortOrder="20200" showInDefault="1" showInWebsite="1" showInStore="1">
+                        <label>Instructions on the payment link success page</label>
+                        <config_path>payment/vindi_cardbankslippix/payment_link_instructions</config_path>
                         <comment><![CDATA[Instructions to be shown in payment link success page, it can be HTML]]></comment>
                     </field>
                 </group>

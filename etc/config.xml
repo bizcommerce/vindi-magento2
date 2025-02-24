@@ -1,6 +1,5 @@
-<?xml version="1.0" ?>
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
     <default>
         <csp>
             <mode>
@@ -82,6 +81,26 @@
                 <can_use_internal>1</can_use_internal>
                 <payment_link_instructions>To pay, complete the card payment first, then scan the PIX QR code.</payment_link_instructions>
             </vindi_cardpix>
+            <vindi_cardcard>
+                <active>0</active>
+                <model>Vindi\Payment\Model\Payment\CardCard</model>
+                <title>Vindi - Cartão + Cartão</title>
+                <allowspecific>0</allowspecific>
+                <payment_action>authorize</payment_action>
+                <group>offline</group>
+                <can_use_internal>1</can_use_internal>
+                <payment_link_instructions>Please complete the first card payment and then complete the second card payment.</payment_link_instructions>
+            </vindi_cardcard>
+            <vindi_cardbankslippix>
+                <active>0</active>
+                <model>Vindi\Payment\Model\Payment\CardBankSlipPix</model>
+                <title>Vindi - Cartão + Bolepix</title>
+                <allowspecific>0</allowspecific>
+                <payment_action>authorize</payment_action>
+                <group>offline</group>
+                <can_use_internal>1</can_use_internal>
+                <payment_link_instructions>To pay, complete the card payment first, then follow bank slip instructions.</payment_link_instructions>
+            </vindi_cardbankslippix>
         </payment>
         <vindiconfiguration>
             <general>
@@ -102,6 +121,11 @@
                 <info_message_onepage_success>Seu pedido foi concluído, abaixo segue as informações para realizar o pagamento.</info_message_onepage_success>
                 <qr_code_warning_message>Seu navegador não da suporte a renderização do QRCode. Use o código do PIX para realizar o pagamento ou acesse o link abaixo para acessar o QR Code.</qr_code_warning_message>
             </vindi_bankslippix>
+            <vindi_cardbankslippix>
+                <info_message>Os dados para o pagamento serão exibidos após finalizar o pedido.</info_message>
+                <info_message_onepage_success>Seu pedido foi concluído, abaixo segue as informações para realizar o pagamento.</info_message_onepage_success>
+                <qr_code_warning_message>Seu navegador não da suporte a renderização do QRCode. Use o código para realizar o pagamento ou acesse o link abaixo para acessar o QR Code.</qr_code_warning_message>
+            </vindi_cardbankslippix>
         </checkout>
     </default>
 </config>

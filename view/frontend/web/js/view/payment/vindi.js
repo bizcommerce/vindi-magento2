@@ -28,6 +28,14 @@ define(
             {
                 type: 'vindi_cardpix',
                 component: 'Vindi_Payment/js/view/payment/method-renderer/vindi-cardpix'
+            },
+            {
+                type: 'vindi_cardcard',
+                component: 'Vindi_Payment/js/view/payment/method-renderer/vindi-cardcard'
+            },
+            {
+                type: 'vindi_cardbankslippix',
+                component: 'Vindi_Payment/js/view/payment/method-renderer/vindi-cardbankslippix'
             }
         );
         return Component.extend({});

@@ -1,3 +1,8 @@
+/* File: app/code/Vindi/Payment/view/frontend/web/js/view/payment/vindi-cardcard.js */
+/*jshint browser:true jquery:true*/
+/*eslint-disable no-alert, no-unused-vars*/
+/*browser:true*/
+/*global define*/
 define([
     'underscore',
     'ko',
@@ -37,7 +42,7 @@ define([
 
     return Component.extend({
         defaults: {
-            template: 'Vindi_Payment/payment/vindi-cardpix',
+            template: 'Vindi_Payment/payment/vindi-cardcard',
             paymentProfiles: [],
             creditCardType: '',
             creditCardExpYear: '',
@@ -45,21 +50,33 @@ define([
             creditCardNumber: '',
             vindiCreditCardNumber: '',
             creditCardOwner: '',
-            creditCardSsStartMonth: '',
-            creditCardSsStartYear: '',
-            showCardData: ko.observable(true),
+            creditCardExpDate: '',
             creditCardVerificationNumber: '',
             selectedPaymentProfile: null,
             selectedCardType: null,
             selectedInstallments: null,
             creditCardInstallments: ko.observableArray([]),
             maxInstallments: 1,
+
+            creditCardType2: '',
+            creditCardExpYear2: '',
+            creditCardExpMonth2: '',
+            creditCardNumber2: '',
+            vindiCreditCardNumber2: '',
+            creditCardOwner2: '',
+            creditCardExpDate2: '',
+            creditCardVerificationNumber2: '',
+            selectedPaymentProfile2: null,
+            selectedCardType2: null,
+            selectedInstallments2: null,
+            creditCardInstallments2: ko.observableArray([]),
+            maxInstallments2: 1,
+
             taxvat: taxvat
         },
 
         /**
-         * Get payment data
-         *
+         * Return payment data
          * @return {Object}
          */
         getData: function () {
@@ -67,40 +84,58 @@ define([
             let ccExpYear = '';
             let ccExpDate = this.creditCardExpDate();
 
-            if (typeof ccExpDate !== "undefined" && ccExpDate !== null) {
+            if (ccExpDate && ccExpDate.split('/').length >= 2) {
                 let ccExpDateFull = ccExpDate.split('/');
-                ccExpMonth = ccExpDateFull[0];
-                ccExpYear = ccExpDateFull[1];
+                ccExpMonth = ccExpDateFull[0] || '';
+                ccExpYear = ccExpDateFull[1] || '';
             }
 
             this.creditCardExpYear(ccExpYear);
             this.creditCardExpMonth(ccExpMonth);
 
-            var data = {
+            let ccExpMonth2 = '';
+            let ccExpYear2 = '';
+            let ccExpDate2 = this.creditCardExpDate2();
+
+            if (ccExpDate2 && ccExpDate2.split('/').length >= 2) {
+                let ccExpDateFull2 = ccExpDate2.split('/');
+                ccExpMonth2 = ccExpDateFull2[0] || '';
+                ccExpYear2 = ccExpDateFull2[1] || '';
+            }
+
+            this.creditCardExpYear2(ccExpYear2);
+            this.creditCardExpMonth2(ccExpMonth2);
+
+            return {
                 'method': this.getCode(),
                 'additional_data': {
                     'payment_profile': this.selectedPaymentProfile(),
                     'cc_type': this.selectedCardType(),
-                    'cc_exp_year': ccExpYear.length === 4 ? ccExpYear : '20' + ccExpYear,
+                    'cc_exp_year': (ccExpYear && ccExpYear.length === 4 ? ccExpYear : (ccExpYear ? '20' + ccExpYear : '')),
                     'cc_exp_month': ccExpMonth,
                     'cc_number': this.creditCardNumber(),
                     'cc_owner': this.creditCardOwner(),
-                    'cc_ss_start_month': this.creditCardSsStartMonth(),
-                    'cc_ss_start_year': this.creditCardSsStartYear(),
                     'cc_cvv': this.creditCardVerificationNumber(),
                     'cc_installments': this.selectedInstallments() ? this.selectedInstallments() : 1,
+
+                    'payment_profile2': this.selectedPaymentProfile2(),
+                    'cc_type2': this.selectedCardType2(),
+                    'cc_exp_year2': (ccExpYear2 && ccExpYear2.length === 4 ? ccExpYear2 : (ccExpYear2 ? '20' + ccExpYear2 : '')),
+                    'cc_exp_month2': ccExpMonth2,
+                    'cc_number2': this.creditCardNumber2(),
+                    'cc_owner2': this.creditCardOwner2(),
+                    'cc_cvv2': this.creditCardVerificationNumber2(),
+                    'cc_installments2': this.selectedInstallments2() ? this.selectedInstallments2() : 1,
+
                     'document': this?.taxvat?.value(),
                     'amount_credit': this.creditAmountDisplay(),
-                    'amount_pix': this.pixAmountDisplay()
+                    'amount_second_card': this.secondCardAmountDisplay()
                 }
             };
-
-            return data;
         },
 
         /**
-         * Initialize observables and computed properties
-         *
+         * Initialize observables
          * @return {Component}
          */
         initObservable: function () {
@@ -116,26 +151,40 @@ define([
                     'vindiCreditCardNumber',
                     'creditCardOwner',
                     'creditCardVerificationNumber',
-                    'creditCardSsStartMonth',
-                    'creditCardSsStartYear',
                     'selectedCardType',
                     'selectedPaymentProfile',
                     'selectedInstallments',
-                    'maxInstallments'
+                    'maxInstallments',
+
+                    'creditCardType2',
+                    'creditCardExpDate2',
+                    'creditCardExpYear2',
+                    'creditCardExpMonth2',
+                    'creditCardNumber2',
+                    'vindiCreditCardNumber2',
+                    'creditCardOwner2',
+                    'creditCardVerificationNumber2',
+                    'selectedCardType2',
+                    'selectedPaymentProfile2',
+                    'selectedInstallments2',
+                    'maxInstallments2'
                 ]);
 
             self.isInstallmentsDisabled = ko.observable(false);
+            self.isInstallmentsDisabled2 = ko.observable(false);
 
             setCouponCodeAction.registerSuccessCallback(function () {
                 self.updateInstallments();
+                self.updateInstallments2();
             });
 
             cancelCouponCodeAction.registerSuccessCallback(function () {
                 self.updateInstallments();
+                self.updateInstallments2();
             });
 
             self.creditAmountManual = ko.observable();
-            self.pixAmountManual = ko.observable();
+            self.secondCardAmountManual = ko.observable();
             self.selectedManualMethod = ko.observable();
 
             var orderTotal = parseFloat(totals.getSegment('grand_total').value) || 0;
@@ -148,9 +197,9 @@ define([
                 read: function() {
                     if (self.selectedManualMethod() === 'credit' || !self.selectedManualMethod()) {
                         return self.creditAmountManual();
-                    } else if (self.selectedManualMethod() === 'pix') {
-                        var pix = parseFloat(self.pixAmountManual() || 0);
-                        var remaining = orderTotal - pix;
+                    } else if (self.selectedManualMethod() === 'secondCard') {
+                        var secondCard = parseFloat(self.secondCardAmountManual() || 0);
+                        var remaining = orderTotal - secondCard;
                         return remaining.toFixed(2);
                     }
                 },
@@ -158,7 +207,7 @@ define([
                     if (!value) {
                         self.selectedManualMethod(null);
                         self.creditAmountManual('');
-                        self.pixAmountManual('');
+                        self.secondCardAmountManual('');
                     } else {
                         if (self.selectedManualMethod() === 'credit' || !self.selectedManualMethod()) {
                             self.selectedManualMethod('credit');
@@ -168,10 +217,10 @@ define([
                 }
             });
 
-            self.pixAmountDisplay = ko.computed({
+            self.secondCardAmountDisplay = ko.computed({
                 read: function() {
-                    if (self.selectedManualMethod() === 'pix' || !self.selectedManualMethod()) {
-                        return self.pixAmountManual();
+                    if (self.selectedManualMethod() === 'secondCard' || !self.selectedManualMethod()) {
+                        return self.secondCardAmountManual();
                     } else if (self.selectedManualMethod() === 'credit') {
                         var credit = parseFloat(self.creditAmountManual() || 0);
                         var remaining = orderTotal - credit;
@@ -182,11 +231,11 @@ define([
                     if (!value) {
                         self.selectedManualMethod(null);
                         self.creditAmountManual('');
-                        self.pixAmountManual('');
+                        self.secondCardAmountManual('');
                     } else {
-                        if (self.selectedManualMethod() === 'pix' || !self.selectedManualMethod()) {
-                            self.selectedManualMethod('pix');
-                            self.pixAmountManual(value);
+                        if (self.selectedManualMethod() === 'secondCard' || !self.selectedManualMethod()) {
+                            self.selectedManualMethod('secondCard');
+                            self.secondCardAmountManual(value);
                         }
                     }
                 }
@@ -195,8 +244,8 @@ define([
             self.isCreditEditable = ko.computed(function() {
                 return self.selectedManualMethod() === 'credit' || !self.selectedManualMethod();
             });
-            self.isPixEditable = ko.computed(function() {
-                return self.selectedManualMethod() === 'pix' || !self.selectedManualMethod();
+            self.isSecondCardEditable = ko.computed(function() {
+                return self.selectedManualMethod() === 'secondCard' || !self.selectedManualMethod();
             });
 
             self.creditInvalid = ko.computed(function() {
@@ -204,37 +253,64 @@ define([
                 return credit > self.orderTotal;
             });
 
-            self.pixInvalid = ko.computed(function() {
-                var pix = parseFloat(self.pixAmountManual() || 0);
-                return pix > self.orderTotal;
+            self.secondCardInvalid = ko.computed(function() {
+                var secondCard = parseFloat(self.secondCardAmountManual() || 0);
+                return secondCard > self.orderTotal;
             });
 
-            self.creditAmountManual.subscribe(function(newValue) {
+            self.creditAmountManual.subscribe(function() {
                 self.updateInstallments();
+            });
+
+            self.secondCardAmountManual.subscribe(function() {
+                self.updateInstallments2();
+            });
+
+            self.creditAmountDisplay.subscribe(function() {
+                self.updateInstallments();
+            });
+
+            self.secondCardAmountDisplay.subscribe(function() {
+                self.updateInstallments2();
             });
 
             this.vindiCreditCardNumber.subscribe(function (value) {
                 let result;
                 self.selectedCardType(null);
-
-                if (value === '' || value === null) {
+                if (!value) {
                     return false;
                 }
-
                 result = cardNumberValidator(value);
                 if (!result.isValid) {
                     return false;
                 }
-
                 if (result.card !== null) {
                     self.selectedCardType(result.card.type);
                     creditCardData.creditCard = result.card;
                 }
-
                 if (result.isValid) {
                     creditCardData.vindiCreditCardNumber = value;
                     self.creditCardNumber(value);
                     self.creditCardType(result.card.type);
+                }
+            });
+
+            this.vindiCreditCardNumber2.subscribe(function (value) {
+                let result;
+                self.selectedCardType2(null);
+                if (!value) {
+                    return false;
+                }
+                result = cardNumberValidator(value);
+                if (!result.isValid) {
+                    return false;
+                }
+                if (result.card !== null) {
+                    self.selectedCardType2(result.card.type);
+                }
+                if (result.isValid) {
+                    self.creditCardNumber2(value);
+                    self.creditCardType2(result.card.type);
                 }
             });
 
@@ -244,74 +320,41 @@ define([
         },
 
         /**
-         * Validate payment fields
-         *
+         * Validate fields
          * @return {Boolean}
          */
         validate: function () {
             var self = this;
-            if (this.selectedPaymentProfile() == null || this.selectedPaymentProfile() == '') {
-                if (!this.selectedCardType() || this.selectedCardType() == '') {
-                    this.messageContainer.addErrorMessage({'message': $t('Please enter the Credit Card Type.')});
-                    return false;
-                }
-
-                if (!this.creditCardExpDate() || this.creditCardExpDate() == '') {
-                    this.messageContainer.addErrorMessage({'message': $t('Please enter the Credit Card Expiry Year.')});
-                    return false;
-                }
-
-                if (!this.creditCardNumber() || this.creditCardNumber() == '') {
-                    this.messageContainer.addErrorMessage({'message': $t('Please enter the Credit Card Number.')});
-                    return false;
-                }
-
-                if (!this.creditCardOwner() || this.creditCardOwner() == '') {
-                    this.messageContainer.addErrorMessage({'message': $t('Please enter the Credit Card Owner Name.')});
-                    return false;
-                }
-
-                if (!this.creditCardVerificationNumber() || this.creditCardVerificationNumber() == '') {
-                    this.messageContainer.addErrorMessage({'message': $t('Please enter the Credit Card CVV.')});
-                    return false;
-                }
-            }
 
             var documentValue = this.taxvat.value();
             if (!documentValue || documentValue === '') {
                 self.messageContainer.addErrorMessage({'message': ('CPF/CNPJ é obrigatório')});
                 return false;
             }
-
             if (!documentValidate.isValidTaxvat(documentValue)) {
                 self.messageContainer.addErrorMessage({'message': ('CPF/CNPJ não é válido')});
                 return false;
             }
 
-            if (this.installmentsAllowed()) {
-                if (!this.selectedInstallments() || this.selectedInstallments() == '') {
-                    this.messageContainer.addErrorMessage({'message': $t('Please enter the number of Installments.')});
-                    return false;
-                }
-            } else {
-                this.selectedInstallments(1);
-            }
-
             var credit = parseFloat(self.creditAmountDisplay() || 0);
-            var pix = parseFloat(self.pixAmountDisplay() || 0);
+            var secondCard = parseFloat(self.secondCardAmountDisplay() || 0);
 
             if (credit > self.orderTotal) {
-                self.messageContainer.addErrorMessage({'message': $t('The Credit Card amount cannot exceed the order total of ') + self.formattedOrderTotal()});
+                self.messageContainer.addErrorMessage({
+                    'message': $t('The amount for the First Card cannot exceed the order total of ') + self.formattedOrderTotal()
+                });
                 return false;
             }
-
-            if (pix > self.orderTotal) {
-                self.messageContainer.addErrorMessage({'message': $t('The PIX amount cannot exceed the order total of ') + self.formattedOrderTotal()});
+            if (secondCard > self.orderTotal) {
+                self.messageContainer.addErrorMessage({
+                    'message': $t('The amount for the Second Card cannot exceed the order total of ') + self.formattedOrderTotal()
+                });
                 return false;
             }
-
-            if ((credit + pix).toFixed(2) != self.orderTotal.toFixed(2)) {
-                self.messageContainer.addErrorMessage({'message': $t('The sum of Credit Card and PIX amounts must equal the total order amount.')});
+            if ((credit + secondCard).toFixed(2) !== self.orderTotal.toFixed(2)) {
+                self.messageContainer.addErrorMessage({
+                    'message': $t('The sum of the First Card and Second Card amounts must equal the total order amount.')
+                });
                 return false;
             }
 
@@ -319,31 +362,27 @@ define([
         },
 
         /**
-         * Initialize component
-         *
+         * Initialize
          * @return {Component}
          */
         initialize: function () {
             var self = this;
             this._super();
 
-            this.taxvat.value(window?.checkoutConfig?.payment?.vindi_pix?.customer_taxvat);
+            this.taxvat.value(window?.checkoutConfig?.payment?.vindi_cardcard?.customer_taxvat);
 
             self.updateInstallments();
+            self.updateInstallments2();
 
             this.creditCardNumber.subscribe(function (value) {
                 var result;
-
-                if (value == '' || value == null) {
+                if (!value) {
                     return false;
                 }
-
                 result = cardNumberValidator(value);
-
                 if (!result.isPotentiallyValid && !result.isValid) {
                     return false;
                 }
-
                 if (result.isValid) {
                     creditCardData.creditCardNumber = value;
                 }
@@ -358,20 +397,20 @@ define([
             });
 
             this.creditCardExpMonth.subscribe(function (value) {
-                creditCardData.expirationYear = value;
+                creditCardData.expirationMonth = value;
             });
 
             this.creditCardVerificationNumber.subscribe(function (value) {
                 creditCardData.cvvCode = value;
             });
+
             this.selectedInstallments.subscribe(function (value) {
                 creditCardData.selectedInstallments = value;
             });
         },
 
         /**
-         * Get card icon for given type
-         *
+         * Return card icons
          * @param {String} type
          * @return {Object|Boolean}
          */
@@ -382,7 +421,7 @@ define([
         },
 
         /**
-         * Load the credit card form
+         * Load the first card
          */
         loadCard: function () {
             let ccName = document.getElementById(this.getCode() + '_cc_owner');
@@ -397,8 +436,22 @@ define([
         },
 
         /**
-         * Check if component is active
-         *
+         * Load the second card
+         */
+        loadCardSecond: function () {
+            let ccName2 = document.getElementById(this.getCode() + '_cc_owner2');
+            let ccNumber2 = document.getElementById(this.getCode() + '_cc_number2');
+            let ccExpDate2 = document.getElementById(this.getCode() + '_cc_exp_date2');
+            let ccCvv2 = document.getElementById(this.getCode() + '_cc_cid2');
+            let ccSingle2 = document.getElementById('vindi-ccsingle-second');
+            let ccFront2 = document.getElementById('vindi-front-second');
+            let ccBack2 = document.getElementById('vindi-back-second');
+
+            creditCardForm(ccName2, ccNumber2, ccExpDate2, ccCvv2, ccSingle2, ccFront2, ccBack2);
+        },
+
+        /**
+         * Check if active
          * @return {Boolean}
          */
         isActive: function () {
@@ -406,8 +459,7 @@ define([
         },
 
         /**
-         * Get available credit card types
-         *
+         * Return available card types
          * @return {Object}
          */
         getCcAvailableTypes: function () {
@@ -415,8 +467,7 @@ define([
         },
 
         /**
-         * Get credit card months
-         *
+         * Return months
          * @return {Object}
          */
         getCcMonths: function () {
@@ -424,8 +475,7 @@ define([
         },
 
         /**
-         * Get credit card years
-         *
+         * Return years
          * @return {Object}
          */
         getCcYears: function () {
@@ -433,8 +483,7 @@ define([
         },
 
         /**
-         * Check if credit card verification is required
-         *
+         * Check if CVV is required
          * @return {Boolean}
          */
         hasVerification: function () {
@@ -442,8 +491,7 @@ define([
         },
 
         /**
-         * Get available credit card types values
-         *
+         * Return card type values
          * @return {Array}
          */
         getCcAvailableTypesValues: function () {
@@ -456,62 +504,16 @@ define([
         },
 
         /**
-         * Get credit card months values
-         *
-         * @return {Array}
-         */
-        getCcMonthsValues: function () {
-            return _.map(this.getCcMonths(), function (value, key) {
-                return {
-                    'value': key,
-                    'month': value
-                };
-            });
-        },
-
-        /**
-         * Get credit card years values
-         *
-         * @return {Array}
-         */
-        getCcYearsValues: function () {
-            return _.map(this.getCcYears(), function (value, key) {
-                return {
-                    'value': key,
-                    'year': value
-                };
-            });
-        },
-
-        /**
-         * Get credit card types values
-         *
-         * @return {Array}
-         */
-        getCcTypesValues: function () {
-            return _.map(this.getCcAvailableTypes(), function (value, key) {
-                return {
-                    'value': key,
-                    'name': value
-                };
-            });
-        },
-
-        /**
          * Check if installments are allowed
-         *
          * @return {Boolean}
          */
         installmentsAllowed: function () {
             let isAllowed = parseInt(window.checkoutConfig.payment.vindi.isInstallmentsAllowedInStore);
-            return isAllowed !== 0 ? true : false;
+            return isAllowed !== 0;
         },
 
         /**
-         * Update available installments options based on the credit card amount.
-         * The installments select is disabled during calculation and re-enabled after.
-         *
-         * @param {Number|null} maxInstallments
+         * Update installments for first card
          */
         updateInstallments: function (maxInstallments = null) {
             let self = this;
@@ -529,7 +531,7 @@ define([
                         let value = Math.ceil((totalForInstallments / i) * 100) / 100;
                         installments.push({
                             'value': i,
-                            'text': `${i} de ${self.getFormattedPrice(value)}`
+                            'text': i + ' de ' + self.getFormattedPrice(value)
                         });
                         if (i + 1 > installmentsTimes) {
                             break;
@@ -538,7 +540,7 @@ define([
                 } else {
                     installments.push({
                         'value': 1,
-                        'text': `1 de ${self.getFormattedPrice(totalForInstallments)}`
+                        'text': '1 de ' + self.getFormattedPrice(totalForInstallments)
                     });
                 }
             }
@@ -547,8 +549,43 @@ define([
         },
 
         /**
-         * Format price based on store configuration
-         *
+         * Update installments for second card
+         */
+        updateInstallments2: function (maxInstallments = null) {
+            let self = this;
+            self.isInstallmentsDisabled2(true);
+            let installments = [];
+            let secondCardValue = parseFloat(self.secondCardAmountDisplay() || 0);
+            let ccCheckoutConfig = window.checkoutConfig.payment.vindi;
+            if (ccCheckoutConfig) {
+                let maxInstallmentsNumber = maxInstallments || ccCheckoutConfig.maxInstallments;
+                let minInstallmentsValue = ccCheckoutConfig.minInstallmentsValue;
+                let totalForInstallments = secondCardValue;
+                if (maxInstallmentsNumber > 1 && self.installmentsAllowed()) {
+                    let installmentsTimes = Math.floor(totalForInstallments / minInstallmentsValue);
+                    for (let i = 1; i <= maxInstallmentsNumber; i++) {
+                        let value = Math.ceil((totalForInstallments / i) * 100) / 100;
+                        installments.push({
+                            'value': i,
+                            'text': i + ' de ' + self.getFormattedPrice(value)
+                        });
+                        if (i + 1 > installmentsTimes) {
+                            break;
+                        }
+                    }
+                } else {
+                    installments.push({
+                        'value': 1,
+                        'text': '1 de ' + self.getFormattedPrice(totalForInstallments)
+                    });
+                }
+            }
+            self.creditCardInstallments2(installments);
+            self.isInstallmentsDisabled2(false);
+        },
+
+        /**
+         * Return formatted price
          * @param {Number} price
          * @return {String}
          */
@@ -557,29 +594,25 @@ define([
         },
 
         /**
-         * Get saved payment profiles
-         *
+         * Return payment profiles
          * @return {Array}
          */
         getPaymentProfiles: function () {
             let paymentProfiles = [];
             const savedCards = window.checkoutConfig.payment?.vindi?.saved_cards;
-
             if (savedCards) {
                 savedCards.forEach(function (card) {
                     paymentProfiles.push({
                         'value': card.id,
-                        'text': `${card.card_type.toUpperCase()} xxxx-${card.card_number}`
+                        'text': card.card_type.toUpperCase() + ' xxxx-' + card.card_number
                     });
                 });
             }
-
             return paymentProfiles;
         },
 
         /**
-         * Check if there are saved payment profiles
-         *
+         * Check if there are saved payment profiles for the first card
          * @return {Boolean}
          */
         hasPaymentProfiles: function () {
@@ -587,7 +620,15 @@ define([
         },
 
         /**
-         * Check plan installments via AJAX
+         * Check if there are saved payment profiles for the second card
+         * @return {Boolean}
+         */
+        hasPaymentProfiles2: function () {
+            return this.getPaymentProfiles().length > 0;
+        },
+
+        /**
+         * Ajax check plan installments
          */
         checkPlanInstallments: function () {
             var self = this;
@@ -598,51 +639,39 @@ define([
                     if (response && response.installments) {
                         self.maxInstallments(response.installments);
                         self.updateInstallments(response.installments);
+                        self.maxInstallments2(response.installments);
+                        self.updateInstallments2(response.installments);
                     } else {
                         self.updateInstallments();
+                        self.updateInstallments2();
                     }
                 },
-                error: function (xhr, status, error) {
-                    console.error('Error fetching plan installments:', error);
+                error: function () {
                     self.updateInstallments();
+                    self.updateInstallments2();
                 }
             });
         },
 
         /**
-         * Get URL for given path
-         *
+         * Return URL
          * @param {String} path
          * @return {String}
          */
         getUrl: function (path) {
-            var url = window.BASE_URL + path;
-            return url;
-        },
-
-        /**
-         * Get informational message for PIX payment
-         *
-         * @return {String}
-         */
-        getInfoMessage: function () {
-            return window?.checkoutConfig?.payment?.vindi_pix?.info_message;
+            return window.BASE_URL + path;
         },
 
         /**
          * Check if document field is active
-         *
          * @return {Boolean}
          */
         isActiveDocument: function () {
-            return window?.checkoutConfig?.payment?.vindi_pix?.enabledDocument;
+            return window?.checkoutConfig?.payment?.vindi_cardcard?.enabledDocument;
         },
 
         /**
-         * Check CPF input field on keyup event
-         *
-         * @param {Object} self
-         * @param {Event} event
+         * Check CPF
          */
         checkCpf: function (self, event) {
             this.formatTaxvat(event.target);
@@ -651,8 +680,7 @@ define([
         },
 
         /**
-         * Format document field using taxvat model
-         *
+         * Format taxvat
          * @param {HTMLElement} target
          */
         formatTaxvat: function (target) {
