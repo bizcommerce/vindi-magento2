@@ -194,9 +194,10 @@ class Data extends AbstractHelper
     {
         $multiMethods = [
             PaymentMethod::CARD_PIX,
-            'card_boleto',
-            'card_card'
+            PaymentMethod::CARD_BANKSLIP_PIX,
+            PaymentMethod::CARD_CARD
         ];
+
         return in_array($code, $multiMethods);
     }
 

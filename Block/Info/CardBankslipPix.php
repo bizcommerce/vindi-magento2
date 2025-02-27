@@ -1,4 +1,5 @@
 <?php
+// File: app/code/Vindi/Payment/Block/Info/CardBankslipPix.php
 namespace Vindi\Payment\Block\Info;
 
 use Vindi\Payment\Model\Payment\PaymentMethod;
@@ -67,7 +68,7 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
         parent::__construct($context, $data);
         $this->paymentMethod   = $paymentMethod;
         $this->currency        = $currency;
-        $this->pixConfiguration = $pixConfiguration;
+        $this->pixConfiguration  = $pixConfiguration;
         $this->timezone        = $timezone;
         $this->json            = $json;
     }
@@ -133,7 +134,7 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
      */
     public function canShowBolepixInfo()
     {
-        $paymentMethod = $this->getOrder()->getPayment()->getMethod() === \Vindi\Payment\Model\Payment\Pix::CODE;
+        $paymentMethod = $this->getOrder()->getPayment()->getMethod() === \Vindi\Payment\Model\Payment\BankSlipPix::CODE;
         $daysToPayment = $this->getMaxDaysToPayment();
 
         if (!$daysToPayment) {
@@ -201,7 +202,7 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
             return null;
         }
         $timestampMaxDays = strtotime($daysToPayment);
-        return date('d/m/Y H:m:s', $timestampMaxDays);
+        return date('d/m/Y H:i:s', $timestampMaxDays);
     }
 
     /**
@@ -227,5 +228,25 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     protected function getMaxDaysToPayment(): string
     {
         return (string) $this->getOrder()->getPayment()->getAdditionalInformation('max_days_to_keep_waiting_payment');
+    }
+
+    /**
+     * Get print URL for Bolepix payments
+     *
+     * @return string
+     */
+    public function getPrintUrl(): string
+    {
+        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('print_url');
+    }
+
+    /**
+     * Get due date for Bolepix payments
+     *
+     * @return string
+     */
+    public function getDueDate(): string
+    {
+        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('due_at');
     }
 }

@@ -1,4 +1,6 @@
 <?php
+// File: app/code/Vindi/Payment/Block/Info/CardCard.php
+
 namespace Vindi\Payment\Block\Info;
 
 use Vindi\Payment\Model\Payment\PaymentMethod;
@@ -76,9 +78,9 @@ class CardCard extends \Magento\Payment\Block\Info
     {
         $payment = $this->getOrder()->getPayment();
         return [
-            'brand' => $payment->getAdditionalInformation('cc_brand1'),
-            'owner' => $payment->getAdditionalInformation('cc_owner1'),
-            'number' => $payment->getAdditionalInformation('cc_number1'),
+            'brand' => $payment->getAdditionalInformation('cc_type'),
+            'owner' => $payment->getAdditionalInformation('cc_owner'),
+            'number' => $payment->getAdditionalInformation('cc_number'),
             'installments' => $payment->getAdditionalInformation('cc_installments1')
         ];
     }
@@ -92,7 +94,7 @@ class CardCard extends \Magento\Payment\Block\Info
     {
         $payment = $this->getOrder()->getPayment();
         return [
-            'brand' => $payment->getAdditionalInformation('cc_brand2'),
+            'brand' => $payment->getAdditionalInformation('cc_type2'),
             'owner' => $payment->getAdditionalInformation('cc_owner2'),
             'number' => $payment->getAdditionalInformation('cc_number2'),
             'installments' => $payment->getAdditionalInformation('cc_installments2')

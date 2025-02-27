@@ -130,7 +130,7 @@ class CardBankslipPix extends AbstractMethod
 
         $info->setAdditionalInformation('bankslip_pix_code', $additionalData->getBankslipPixCode());
         $info->setAdditionalInformation('amount_credit', $additionalData->getAmountCredit());
-        $info->setAdditionalInformation('amount_bankslip_pix', $additionalData->getAmountBankslipPix());
+        $info->setAdditionalInformation('amount_bankslippix', $additionalData->getAmountBankslippix());
         $info->save();
 
         parent::assignData($data);

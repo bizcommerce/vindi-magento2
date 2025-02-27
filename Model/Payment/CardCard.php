@@ -116,6 +116,7 @@ class CardCard extends AbstractMethod
         $info->setAdditionalInformation('cc_cvv', (string)$additionalData->getCcCvv1());
         $info->setAdditionalInformation('cc_exp_month', (string)$additionalData->getCcExpMonth1());
         $info->setAdditionalInformation('cc_exp_year', (string)$additionalData->getCcExpYear1());
+        $info->setAdditionalInformation('cc_installments1', (string)$additionalData->getCcInstallments1());
 
         // Second Credit Card Data
         $ccType2 = $additionalData->getCcType2();
@@ -130,10 +131,14 @@ class CardCard extends AbstractMethod
         $info->setAdditionalInformation('cc_cvv2', (string)$additionalData->getCcCvv2());
         $info->setAdditionalInformation('cc_exp_month2', (string)$additionalData->getCcExpMonth2());
         $info->setAdditionalInformation('cc_exp_year2', (string)$additionalData->getCcExpYear2());
+        $info->setAdditionalInformation('cc_installments2', (string)$additionalData->getCcInstallments2());
 
         // Set amounts for each card
-        $info->setAdditionalInformation('amount_credit', $additionalData->getAmountCard1());
-        $info->setAdditionalInformation('amount_second_card', $additionalData->getAmountCard2());
+        $info->setAdditionalInformation('amount_credit', $additionalData->getAmountCredit());
+        $info->setAdditionalInformation('amount_second_card', $additionalData->getAmountSecondCard());
+
+        $info->setAdditionalInformation('payment_profile', $additionalData["payment_profile"]);
+        $info->setAdditionalInformation('payment_profile2', $additionalData["payment_profile2"]);
 
         $info->save();
 

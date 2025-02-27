@@ -171,14 +171,6 @@
                                 value: selectedInstallments">
                             </select>
                         </div>
-                        <div class="vindi-container vindi-preload" data-bind="visible: !selectedPaymentProfile()">
-                            <div class="vindi-creditcard">
-                                <div id="vindi-front" class="vindi-front">
-                                    <div id="vindi-ccsingle"></div>
-                                </div>
-                                <div id="vindi-back" class="vindi-back"></div>
-                            </div>
-                        </div>
                     </div>
                     <!-- /ko -->
                 </fieldset>
@@ -186,29 +178,29 @@
             </form>
         </div>
         <hr>
-        <!-- Pix Payment Section -->
-        <div class="pix-payment-section">
+        <!-- Bolepix Payment Section -->
+        <div class="bankslippix-payment-section">
             <h3 data-bind="i18n: 'Pagamento com Bolepix'"></h3>
             <div class="field amount required" style="max-width: 500px;">
                 <label class="label">
-                    <span data-bind="i18n: 'Valor a pagar com PIX:'"></span>
+                    <span data-bind="i18n: 'Valor a pagar com Bolepix:'"></span>
                 </label>
                 <div class="control">
                     <input type="number"
                            class="input-text"
-                           data-bind="value: pixAmountDisplay, enable: isPixEditable, attr: {placeholder: $t('0,00')}, css: {'error-border': pixInvalid()}" />
-                    <!-- ko if: pixInvalid -->
-                    <div class="error-message" data-bind="text: $t('The PIX amount cannot exceed the order total of ') + formattedOrderTotal()"></div>
+                           data-bind="value: bankslippixAmountDisplay, enable: isBankslippixEditable, attr: {placeholder: $t('0,00')}, css: {'error-border': bankslippixInvalid()}" />
+                    <!-- ko if: bankslippixInvalid -->
+                    <div class="error-message" data-bind="text: $t('The Bolepix amount cannot exceed the order total of ') + formattedOrderTotal()"></div>
                     <!-- /ko -->
                 </div>
             </div>
-            <div class="block-payment-pix">
+            <div class="block-payment-bankslippix">
                 <!-- ko i18n: getInfoMessage() --><!-- /ko -->
             </div>
             <!-- ko if: isActiveDocument() -->
             <br>
             <form class="form">
-                <fieldset data-bind="attr: {class: 'fieldset payment items ' + getCode(), id: 'payment_form_pix_' + getCode()}">
+                <fieldset data-bind="attr: {class: 'fieldset payment items ' + getCode(), id: 'payment_form_bankslippix_' + getCode()}">
                     <div class="field number required" data-bind="attr: {id: getCode() + '_document'}">
                         <label data-bind="attr: {for: getCode() + '_document'}" class="label">
                             <span><!-- ko i18n: 'CPF/CNPJ'--><!-- /ko --></span>
@@ -241,7 +233,7 @@
             </form>
             <!-- /ko -->
         </div>
-        <div class="pix-payment-section">
+        <div class="bankslippix-payment-section">
         </div>
         <div class="checkout-agreements-block">
             <!-- ko foreach: $parent.getRegion('before-place-order') -->

@@ -1,4 +1,6 @@
 <?php
+// File: app/code/Vindi/Payment/Block/Info/CardPix.php
+
 namespace Vindi\Payment\Block\Info;
 
 use Vindi\Payment\Model\Payment\PaymentMethod;
@@ -8,6 +10,9 @@ use Vindi\Payment\Api\PixConfigurationInterface;
 use Magento\Framework\Serialize\Serializer\Json;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 
+/**
+ * Block class for displaying information when the payment method is "Card + Pix"
+ */
 class CardPix extends \Magento\Payment\Block\Info
 {
     use \Vindi\Payment\Block\InfoTrait;
@@ -133,7 +138,14 @@ class CardPix extends \Magento\Payment\Block\Info
      */
     public function canShowPixInfo()
     {
-        $paymentMethod = $this->getOrder()->getPayment()->getMethod() === \Vindi\Payment\Model\Payment\Pix::CODE;
+        $method = $this->getOrder()->getPayment()->getMethod();
+        $validMethods = [
+            \Vindi\Payment\Model\Payment\Pix::CODE,
+            PaymentMethod::CARD_PIX,
+            PaymentMethod::CARD_BANKSLIP_PIX
+        ];
+
+        $paymentMethod = in_array($method, $validMethods, true);
         $daysToPayment = $this->getMaxDaysToPayment();
 
         if (!$daysToPayment) {
@@ -201,7 +213,7 @@ class CardPix extends \Magento\Payment\Block\Info
             return null;
         }
         $timestampMaxDays = strtotime($daysToPayment);
-        return date('d/m/Y H:m:s', $timestampMaxDays);
+        return date('d/m/Y H:i:s', $timestampMaxDays);
     }
 
     /**

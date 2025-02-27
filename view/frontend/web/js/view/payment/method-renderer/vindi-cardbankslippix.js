@@ -91,7 +91,7 @@ define([
                     'cc_installments': this.selectedInstallments() ? this.selectedInstallments() : 1,
                     'document': this?.taxvat?.value(),
                     'amount_credit': this.creditAmountDisplay(),
-                    'amount_pix': this.pixAmountDisplay()
+                    'amount_bankslippix': this.bankslippixAmountDisplay()
                 }
             };
 
@@ -135,7 +135,7 @@ define([
             });
 
             self.creditAmountManual = ko.observable();
-            self.pixAmountManual = ko.observable();
+            self.bankslippixAmountManual = ko.observable();
             self.selectedManualMethod = ko.observable();
 
             var orderTotal = parseFloat(totals.getSegment('grand_total').value) || 0;
@@ -148,9 +148,9 @@ define([
                 read: function() {
                     if (self.selectedManualMethod() === 'credit' || !self.selectedManualMethod()) {
                         return self.creditAmountManual();
-                    } else if (self.selectedManualMethod() === 'pix') {
-                        var pix = parseFloat(self.pixAmountManual() || 0);
-                        var remaining = orderTotal - pix;
+                    } else if (self.selectedManualMethod() === 'bankslippix') {
+                        var bankslippix = parseFloat(self.bankslippixAmountManual() || 0);
+                        var remaining = orderTotal - bankslippix;
                         return remaining.toFixed(2);
                     }
                 },
@@ -158,7 +158,7 @@ define([
                     if (!value) {
                         self.selectedManualMethod(null);
                         self.creditAmountManual('');
-                        self.pixAmountManual('');
+                        self.bankslippixAmountManual('');
                     } else {
                         if (self.selectedManualMethod() === 'credit' || !self.selectedManualMethod()) {
                             self.selectedManualMethod('credit');
@@ -168,10 +168,10 @@ define([
                 }
             });
 
-            self.pixAmountDisplay = ko.computed({
+            self.bankslippixAmountDisplay = ko.computed({
                 read: function() {
-                    if (self.selectedManualMethod() === 'pix' || !self.selectedManualMethod()) {
-                        return self.pixAmountManual();
+                    if (self.selectedManualMethod() === 'bankslippix' || !self.selectedManualMethod()) {
+                        return self.bankslippixAmountManual();
                     } else if (self.selectedManualMethod() === 'credit') {
                         var credit = parseFloat(self.creditAmountManual() || 0);
                         var remaining = orderTotal - credit;
@@ -182,11 +182,11 @@ define([
                     if (!value) {
                         self.selectedManualMethod(null);
                         self.creditAmountManual('');
-                        self.pixAmountManual('');
+                        self.bankslippixAmountManual('');
                     } else {
-                        if (self.selectedManualMethod() === 'pix' || !self.selectedManualMethod()) {
-                            self.selectedManualMethod('pix');
-                            self.pixAmountManual(value);
+                        if (self.selectedManualMethod() === 'bankslippix' || !self.selectedManualMethod()) {
+                            self.selectedManualMethod('bankslippix');
+                            self.bankslippixAmountManual(value);
                         }
                     }
                 }
@@ -195,8 +195,8 @@ define([
             self.isCreditEditable = ko.computed(function() {
                 return self.selectedManualMethod() === 'credit' || !self.selectedManualMethod();
             });
-            self.isPixEditable = ko.computed(function() {
-                return self.selectedManualMethod() === 'pix' || !self.selectedManualMethod();
+            self.isBankslippixEditable = ko.computed(function() {
+                return self.selectedManualMethod() === 'bankslippix' || !self.selectedManualMethod();
             });
 
             self.creditInvalid = ko.computed(function() {
@@ -204,9 +204,9 @@ define([
                 return credit > self.orderTotal;
             });
 
-            self.pixInvalid = ko.computed(function() {
-                var pix = parseFloat(self.pixAmountManual() || 0);
-                return pix > self.orderTotal;
+            self.bankslippixInvalid = ko.computed(function() {
+                var bankslippix = parseFloat(self.bankslippixAmountManual() || 0);
+                return bankslippix > self.orderTotal;
             });
 
             self.creditAmountManual.subscribe(function(newValue) {
@@ -298,20 +298,20 @@ define([
             }
 
             var credit = parseFloat(self.creditAmountDisplay() || 0);
-            var pix = parseFloat(self.pixAmountDisplay() || 0);
+            var bankslippix = parseFloat(self.bankslippixAmountDisplay() || 0);
 
             if (credit > self.orderTotal) {
                 self.messageContainer.addErrorMessage({'message': $t('The Credit Card amount cannot exceed the order total of ') + self.formattedOrderTotal()});
                 return false;
             }
 
-            if (pix > self.orderTotal) {
-                self.messageContainer.addErrorMessage({'message': $t('The PIX amount cannot exceed the order total of ') + self.formattedOrderTotal()});
+            if (bankslippix > self.orderTotal) {
+                self.messageContainer.addErrorMessage({'message': $t('The Bolepix amount cannot exceed the order total of ') + self.formattedOrderTotal()});
                 return false;
             }
 
-            if ((credit + pix).toFixed(2) != self.orderTotal.toFixed(2)) {
-                self.messageContainer.addErrorMessage({'message': $t('The sum of Credit Card and PIX amounts must equal the total order amount.')});
+            if ((credit + bankslippix).toFixed(2) != self.orderTotal.toFixed(2)) {
+                self.messageContainer.addErrorMessage({'message': $t('The sum of Credit Card and Bolepix amounts must equal the total order amount.')});
                 return false;
             }
 
@@ -621,7 +621,7 @@ define([
         },
 
         /**
-         * Get informational message for PIX payment
+         * Get informational message for Bolepix payment
          *
          * @return {String}
          */
