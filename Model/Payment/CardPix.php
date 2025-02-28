@@ -115,8 +115,8 @@ class CardPix extends AbstractMethod
         }
 
         $info->addData([
-            'cc_type'           => $ccType,
-            'cc_owner'          => $ccOwner,
+            'cc_type'           => (string) $ccType,
+            'cc_owner'          => (string) $ccOwner,
             'cc_last_4'         => $ccLast4,
             'cc_number'         => (string) $additionalData->getCcNumber(),
             'cc_cid'            => (string) $additionalData->getCcCvv(),

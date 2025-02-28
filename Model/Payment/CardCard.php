@@ -100,43 +100,29 @@ class CardCard extends AbstractMethod
         if (!is_object($additionalData)) {
             $additionalData = new DataObject($additionalData ?: []);
         }
-
         $info = $this->getInfoInstance();
 
-        // First Credit Card Data (without suffix)
-        $ccType = $additionalData->getCcType1();
-        $ccOwner = $additionalData->getCcOwner1();
-        $ccNumber = (string)$additionalData->getCcNumber1();
-        $ccLast4 = substr($ccNumber, -4);
+        $info->addData([
+            'cc_type'           => (string)$additionalData->getData("cc_type1"),
+            'cc_owner'          => (string)$additionalData->getData("cc_owner1"),
+            'cc_last_4'         => substr((string)$additionalData->getData("cc_number1"), -4),
+            'cc_number'         => (string)$additionalData->getData("cc_number1"),
+            'cc_cvv'            => (string)$additionalData->getData("cc_cvv1"),
+            'cc_exp_month'      => (string)$additionalData->getData("cc_exp_month1"),
+            'cc_exp_year'       => (string)$additionalData->getData("cc_exp_year1"),
+            'cc_installments1'  => (string)$additionalData->getData("cc_installments1"),
+            'cc_type2'          => (string)$additionalData->getData("cc_type2"),
+            'cc_owner2'         => (string)$additionalData->getData("cc_owner2"),
+            'cc_last_4_2'       => substr((string)$additionalData->getData("cc_number2"), -4),
+            'cc_number2'        => (string)$additionalData->getData("cc_number2"),
+            'cc_cvv2'           => (string)$additionalData->getData("cc_cvv2"),
+            'cc_exp_month2'     => (string)$additionalData->getData("cc_exp_month2"),
+            'cc_exp_year2'      => (string)$additionalData->getData("cc_exp_year2"),
+            'cc_installments2'  => (string)$additionalData->getData("cc_installments2")
+        ]);
 
-        $info->setAdditionalInformation('cc_type', $ccType);
-        $info->setAdditionalInformation('cc_owner', $ccOwner);
-        $info->setAdditionalInformation('cc_last_4', $ccLast4);
-        $info->setAdditionalInformation('cc_number', $ccNumber);
-        $info->setAdditionalInformation('cc_cvv', (string)$additionalData->getCcCvv1());
-        $info->setAdditionalInformation('cc_exp_month', (string)$additionalData->getCcExpMonth1());
-        $info->setAdditionalInformation('cc_exp_year', (string)$additionalData->getCcExpYear1());
-        $info->setAdditionalInformation('cc_installments1', (string)$additionalData->getCcInstallments1());
-
-        // Second Credit Card Data
-        $ccType2 = $additionalData->getCcType2();
-        $ccOwner2 = $additionalData->getCcOwner2();
-        $ccNumber2 = (string)$additionalData->getCcNumber2();
-        $ccLast4_2 = substr($ccNumber2, -4);
-
-        $info->setAdditionalInformation('cc_type2', $ccType2);
-        $info->setAdditionalInformation('cc_owner2', $ccOwner2);
-        $info->setAdditionalInformation('cc_last_4_2', $ccLast4_2);
-        $info->setAdditionalInformation('cc_number2', $ccNumber2);
-        $info->setAdditionalInformation('cc_cvv2', (string)$additionalData->getCcCvv2());
-        $info->setAdditionalInformation('cc_exp_month2', (string)$additionalData->getCcExpMonth2());
-        $info->setAdditionalInformation('cc_exp_year2', (string)$additionalData->getCcExpYear2());
-        $info->setAdditionalInformation('cc_installments2', (string)$additionalData->getCcInstallments2());
-
-        // Set amounts for each card
         $info->setAdditionalInformation('amount_credit', $additionalData->getAmountCredit());
         $info->setAdditionalInformation('amount_second_card', $additionalData->getAmountSecondCard());
-
         $info->setAdditionalInformation('payment_profile', $additionalData["payment_profile"]);
         $info->setAdditionalInformation('payment_profile2', $additionalData["payment_profile2"]);
 

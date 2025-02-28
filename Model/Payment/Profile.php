@@ -1,4 +1,5 @@
 <?php
+// File: app/code/Vindi/Payment/Model/Payment/Profile.php
 
 namespace Vindi\Payment\Model\Payment;
 
@@ -22,12 +23,22 @@ class Profile
         $this->paymentMethod = $paymentMethod;
     }
 
+    /**
+     * Create a payment profile from card data.
+     *
+     * @param mixed $payment
+     * @param int $customerId
+     * @param string $paymentMethodCode
+     * @return mixed
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
     public function create($payment, $customerId, $paymentMethodCode)
     {
-        $ccTypeCode = $this->paymentMethod->getCreditCardApiCode($payment->getCcType());
+        $ccType = $payment->getCcType() ?? '';
+        $ccTypeCode = $this->paymentMethod->getCreditCardApiCode($ccType);
         $creditCardData = [
             'holder_name' => $payment->getCcOwner(),
-            'card_expiration' => str_pad($payment->getCcExpMonth(), 2, '0', STR_PAD_LEFT)
+            'card_expiration' => str_pad((string)$payment->getCcExpMonth(), 2, '0', STR_PAD_LEFT)
                 . '/' . $payment->getCcExpYear(),
             'card_number' => $payment->getCcNumber(),
             'card_cvv' => $payment->getCcCid() ?: '',
@@ -51,9 +62,27 @@ class Profile
     }
 
     /**
-     * @param $payment
-     * @param $customerId
-     * @param $paymentMethodCode
+     * Create a payment profile using provided credit card data.
+     *
+     * @param array $body
+     * @return bool|mixed
+     */
+    private function createPaymentProfile($body)
+    {
+        $dataToLog = $body;
+        $cardNumber = $dataToLog['card_number'] ?? '';
+        $dataToLog['card_number'] = ($cardNumber !== '') ? '**** *' . substr($cardNumber, -3) : '';
+        $dataToLog['card_cvv'] = '***';
+
+        return $this->api->request('payment_profiles', 'POST', $body, $dataToLog);
+    }
+
+    /**
+     * Create a payment profile from customer account.
+     *
+     * @param mixed $payment
+     * @param int $customerId
+     * @param string $paymentMethodCode
      * @return bool|mixed
      * @throws \Magento\Framework\Exception\LocalizedException
      */
@@ -75,32 +104,28 @@ class Profile
     }
 
     /**
-     * @param $body
-     * @return bool|mixed
-     */
-    private function createPaymentProfile($body)
-    {
-        $dataToLog = $body;
-        $dataToLog['card_number'] = '**** *' . substr($dataToLog['card_number'], -3);
-        $dataToLog['card_cvv'] = '***';
-
-        return $this->api->request('payment_profiles', 'POST', $body, $dataToLog);
-    }
-
-    /**
-     * @param $body
+     * Create a payment profile using provided credit card data from customer account.
+     *
+     * @param array $body
      * @return bool|mixed
      */
     private function createPaymentProfileFromCustomerAccount($body)
     {
         $dataToLog = $body;
-        $dataToLog['card_number']  = '**** *' . substr($dataToLog['card_number'], -3);
-        $dataToLog['card_cvv']     = '***';
+        $cardNumber = $dataToLog['card_number'] ?? '';
+        $dataToLog['card_number'] = ($cardNumber !== '') ? '**** *' . substr($cardNumber, -3) : '';
+        $dataToLog['card_cvv'] = '***';
         $body['allow_as_fallback'] = true;
 
         return $this->api->request('payment_profiles', 'POST', $body, $dataToLog);
     }
 
+    /**
+     * Verify the payment profile.
+     *
+     * @param int $paymentProfileId
+     * @return bool
+     */
     public function verifyPaymentProfile($paymentProfileId)
     {
         $verify_status = $this->api->request('payment_profiles/' . $paymentProfileId . '/verify', 'POST');
@@ -108,8 +133,10 @@ class Profile
     }
 
     /**
-     * @param $paymentProfileId
-     * @param $dataToUpdate
+     * Update a payment profile.
+     *
+     * @param int $paymentProfileId
+     * @param array $dataToUpdate
      * @return bool|mixed
      */
     public function updatePaymentProfile($paymentProfileId, $dataToUpdate)
@@ -124,7 +151,9 @@ class Profile
     }
 
     /**
-     * @param $paymentProfileId
+     * Delete a payment profile.
+     *
+     * @param int $paymentProfileId
      * @return bool|mixed
      */
     public function deletePaymentProfile($paymentProfileId)
@@ -133,7 +162,11 @@ class Profile
     }
 
     /**
-     * @param $paymentProfileId
+     * Get a payment profile.
+     *
+     * @param int $customerId
+     * @param int $firstSix
+     * @param int $lastFour
      * @return bool|mixed
      */
     public function getPaymentProfile($customerId, $firstSix, $lastFour)

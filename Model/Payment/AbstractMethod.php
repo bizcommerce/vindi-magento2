@@ -889,22 +889,44 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $ccExpYearField = ($whichCard === 'second') ? 'cc_exp_year2' : 'cc_exp_year';
         $ccCvvField = ($whichCard === 'second') ? 'cc_cvv2' : 'cc_cvv';
 
-        $payment->setCcType($payment->getAdditionalInformation($ccTypeField));
-        $payment->setCcNumberEnc($payment->getAdditionalInformation($ccNumberField));
-        $payment->setCcOwner($payment->getAdditionalInformation($ccOwnerField));
-        $payment->setCcExpMonth($payment->getAdditionalInformation($ccExpMonthField));
-        $payment->setCcExpYear($payment->getAdditionalInformation($ccExpYearField));
-        $payment->setCcCid($payment->getAdditionalInformation($ccCvvField));
+        $value = $payment->getAdditionalInformation($ccTypeField);
+        if (!empty($value)) {
+            $payment->setCcType($value);
+        }
+        $value = $payment->getAdditionalInformation($ccNumberField);
+        if (!empty($value)) {
+            $payment->setCcNumberEnc($value);
+        }
+        $value = $payment->getAdditionalInformation($ccOwnerField);
+        if (!empty($value)) {
+            $payment->setCcOwner($value);
+        }
+        $value = $payment->getAdditionalInformation($ccExpMonthField);
+        if (!empty($value)) {
+            $payment->setCcExpMonth($value);
+        }
+        $value = $payment->getAdditionalInformation($ccExpYearField);
+        if (!empty($value)) {
+            $payment->setCcExpYear($value);
+        }
+        $value = $payment->getAdditionalInformation($ccCvvField);
+        if (!empty($value)) {
+            $payment->setCcCid($value);
+        }
 
-        $paymentProfile = $this->profile->create($payment, $customerId, $this->getPaymentMethodCode());
+        $methodCode = $this->getPaymentMethodCode();
+        if ($this->helperData->isMultiMethod($methodCode)) {
+            $methodCode = PaymentMethod::CREDIT_CARD;
+        }
+        $paymentProfile = $this->profile->create($payment, $customerId, $methodCode);
         $paymentProfileData = $paymentProfile['payment_profile'];
         $paymentProfileModel = $this->paymentProfileFactory->create();
         $paymentProfileModel->setData([
             'payment_profile_id' => $paymentProfileData['id'],
             'vindi_customer_id' => $customerId,
-            'customer_id' => $order->getCustomerId(),
+            'customer_id' => $customerId,
             'customer_email' => $order->getCustomerEmail(),
-            'cc_name' => $payment->getCcOwner(),
+            'holder_name' => $payment->getCcOwner(),
             'cc_type' => $payment->getCcType(),
             'cc_last_4' => $payment->getCcLast4(),
             'status' => $paymentProfileData["status"],
