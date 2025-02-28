@@ -18,7 +18,6 @@
         <!-- ko foreach: getRegion('messages') -->
         <!-- ko template: getTemplate() --><!-- /ko -->
         <!-- /ko-->
-
         <div class="payment-method-billing-address">
             <!-- ko foreach: $parent.getRegion(getBillingAddressFormName()) -->
             <!-- ko template: getTemplate() --><!-- /ko -->
@@ -82,16 +81,16 @@
                             <ul class="credit-card-types">
                                 <!-- ko foreach: {data: getCcAvailableTypesValues(), as: 'item'} -->
                                 <li class="item" data-bind="css: {
-                                    _active: $parent.selectedCardType() == item.value,
-                                    _inactive: $parent.selectedCardType() != null && $parent.selectedCardType() != item.value
-                                }">
+                                        _active: $parent.selectedCardType() == item.value,
+                                        _inactive: $parent.selectedCardType() != null && $parent.selectedCardType() != item.value
+                                    }">
                                     <!-- ko if: $parent.getIcons(item.value) -->
                                     <img data-bind="attr: {
-                                        'src': $parent.getIcons(item.value).url,
-                                        'alt': item.type,
-                                        'width': $parent.getIcons(item.value).width,
-                                        'height': $parent.getIcons(item.value).height
-                                    }">
+                                            'src': $parent.getIcons(item.value).url,
+                                            'alt': item.type,
+                                            'width': $parent.getIcons(item.value).width,
+                                            'height': $parent.getIcons(item.value).height
+                                        }">
                                     <!-- /ko -->
                                 </li>
                                 <!-- /ko -->
@@ -157,8 +156,10 @@
                                    name="payment[cc_exp_date]"
                                    class="input-text-vindi"
                                    value=""
-                                   pattern="[0-9]*"
+                                   pattern="\d{2}\/\d{2}"
+                                   maxlength="5"
                                    inputmode="numeric"
+                                   oninput="this.value = this.value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, '$1/$2').substr(0, 5);"
                                    data-bind="
                                         attr: {
                                             id: getCode() + '_cc_exp_date',
@@ -206,7 +207,10 @@
                                         attr: {
                                             id: getCode() + '_installments',
                                             'data-container': getCode() + '-installments',
-                                            'data-validate': JSON.stringify({required:true, 'validate-cc-exp':'#' + getCode() + '_expiration_yr'})
+                                            'data-validate': JSON.stringify({
+                                                required:true,
+                                                'validate-cc-exp':'#' + getCode() + '_expiration_yr'
+                                            })
                                         },
                                         enable: isActive($parents),
                                         disable: isInstallmentsDisabled,
@@ -358,8 +362,10 @@
                                    name="payment[cc_exp_date2]"
                                    class="input-text-vindi"
                                    value=""
-                                   pattern="[0-9]*"
+                                   pattern="\d{2}\/\d{2}"
+                                   maxlength="5"
                                    inputmode="numeric"
+                                   oninput="this.value = this.value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, '$1/$2').substr(0, 5);"
                                    data-bind="
                                         attr: {
                                             id: getCode() + '_cc_exp_date2',
@@ -373,7 +379,7 @@
                                         valueUpdate: 'keyup'
                                    "/>
                         </span>
-                        <!-- ko if: (hasVerification())-->
+                        <!-- ko if: (hasVerification()) -->
                         <span data-bind="attr: {id: getCode() + '-cc-cvv2'}">
                             <input type="text"
                                    autocomplete="off"
@@ -439,7 +445,8 @@
                             click: placeOrder,
                             attr: {title: $t('Place Order')},
                             css: {disabled: !isPlaceOrderActionAllowed()},
-                            enable: (getCode() == isChecked())"
+                            enable: (getCode() == isChecked())
+                        "
                         disabled>
                     <span data-bind="i18n: 'Place Order'"></span>
                 </button>
