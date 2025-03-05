@@ -78,10 +78,10 @@ class CardCard extends \Magento\Payment\Block\Info
     {
         $payment = $this->getOrder()->getPayment();
         return [
-            'brand' => $payment->getAdditionalInformation('cc_type'),
-            'owner' => $payment->getAdditionalInformation('cc_owner'),
-            'number' => $payment->getAdditionalInformation('cc_number'),
-            'installments' => $payment->getAdditionalInformation('cc_installments1')
+            'brand' => $payment->getData('cc_type') ?: $payment->getAdditionalInformation('cc_type'),
+            'owner' => $payment->getData('cc_owner') ?: $payment->getAdditionalInformation('cc_owner'),
+            'number' => $payment->getData('cc_last_4') ?: $payment->getAdditionalInformation('cc_last_4'),
+            'installments' => $payment->getData('cc_installments1') ?: $payment->getAdditionalInformation('cc_installments1')
         ];
     }
 
@@ -94,10 +94,10 @@ class CardCard extends \Magento\Payment\Block\Info
     {
         $payment = $this->getOrder()->getPayment();
         return [
-            'brand' => $payment->getAdditionalInformation('cc_type2'),
-            'owner' => $payment->getAdditionalInformation('cc_owner2'),
-            'number' => $payment->getAdditionalInformation('cc_number2'),
-            'installments' => $payment->getAdditionalInformation('cc_installments2')
+            'brand' => $payment->getData('cc_type2') ?: $payment->getAdditionalInformation('cc_type2'),
+            'owner' => $payment->getData('cc_owner2') ?: $payment->getAdditionalInformation('cc_owner2'),
+            'number' => $payment->getData('cc_last_4_2') ?: $payment->getAdditionalInformation('cc_last_4_2'),
+            'installments' => $payment->getData('cc_installments2') ?: $payment->getAdditionalInformation('cc_installments2')
         ];
     }
 

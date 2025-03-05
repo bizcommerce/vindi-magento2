@@ -11,7 +11,10 @@ trait InfoTrait
      */
     public function canShowCcInfo()
     {
-        return $this->getOrder()->getPayment()->getMethod() === 'vindi';
+        return $this->getOrder()->getPayment()->getMethod() === 'vindi' ||
+            $this->getOrder()->getPayment()->getMethod() === 'vindi_cardpix' ||
+            $this->getOrder()->getPayment()->getMethod() === 'vindi_cardcard' ||
+            $this->getOrder()->getPayment()->getMethod() === 'vindi_cardbankslippix';
     }
 
     /**

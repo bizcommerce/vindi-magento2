@@ -201,7 +201,12 @@
                         <label>Title</label>
                         <config_path>payment/vindi_cardcard/title</config_path>
                     </field>
-                    <field id="payment_link_instructions" translate="label comment" type="textarea" sortOrder="20200" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <field id="recurring" showInDefault="1" showInStore="1" showInWebsite="1" sortOrder="30" translate="label" type="select">
+                        <label>Can be used for recurring purchases?</label>
+                        <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                        <config_path>payment/vindi_cardcard/recurring</config_path>
+                    </field>
+                    <field id="payment_link_instructions" translate="label comment" type="textarea" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1">
                         <label>Instructions on the payment link success page</label>
                         <config_path>payment/vindi_cardcard/payment_link_instructions</config_path>
                         <comment><![CDATA[Instructions to be shown in payment link success page, it can be HTML]]></comment>

@@ -5,7 +5,7 @@ namespace Vindi\Payment\Model\Payment;
 
 use Magento\Framework\DataObject;
 use Magento\Quote\Api\Data\PaymentInterface;
-use Vindi\Payment\Block\Info\CardPix as InfoBlock;
+use Vindi\Payment\Block\Info\CardBankslipPix as InfoBlock;
 
 /**
  * Class CardBankslipPix

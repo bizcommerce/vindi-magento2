@@ -134,7 +134,9 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
      */
     public function canShowBolepixInfo()
     {
-        $paymentMethod = $this->getOrder()->getPayment()->getMethod() === \Vindi\Payment\Model\Payment\BankSlipPix::CODE;
+        $paymentMethod =
+            $this->getOrder()->getPayment()->getMethod() === \Vindi\Payment\Model\Payment\BankSlipPix::CODE
+            || $this->getOrder()->getPayment()->getMethod() === "vindi_cardbankslippix";
         $daysToPayment = $this->getMaxDaysToPayment();
 
         if (!$daysToPayment) {

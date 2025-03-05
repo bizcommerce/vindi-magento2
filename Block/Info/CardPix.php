@@ -142,7 +142,8 @@ class CardPix extends \Magento\Payment\Block\Info
         $validMethods = [
             \Vindi\Payment\Model\Payment\Pix::CODE,
             PaymentMethod::CARD_PIX,
-            PaymentMethod::CARD_BANKSLIP_PIX
+            PaymentMethod::CARD_BANKSLIP_PIX,
+            "vindi_cardpix"
         ];
 
         $paymentMethod = in_array($method, $validMethods, true);
