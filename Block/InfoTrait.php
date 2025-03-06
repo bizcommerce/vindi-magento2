@@ -11,10 +11,11 @@ trait InfoTrait
      */
     public function canShowCcInfo()
     {
-        return $this->getOrder()->getPayment()->getMethod() === 'vindi' ||
-            $this->getOrder()->getPayment()->getMethod() === 'vindi_cardpix' ||
-            $this->getOrder()->getPayment()->getMethod() === 'vindi_cardcard' ||
-            $this->getOrder()->getPayment()->getMethod() === 'vindi_cardbankslippix';
+        $method = $this->getOrder()->getPayment()->getMethod();
+        return $method === 'vindi' ||
+            $method === 'vindi_cardpix' ||
+            $method === 'vindi_cardcard' ||
+            $method === 'vindi_cardbankslippix';
     }
 
     /**
@@ -24,7 +25,8 @@ trait InfoTrait
      */
     public function getCcOwner()
     {
-        return $this->getOrder()->getPayment()->getCcOwner();
+        $payment = $this->getOrder()->getPayment();
+        return $payment->getData('cc_owner') ?: $payment->getAdditionalInformation('cc_owner');
     }
 
     /**
@@ -34,7 +36,8 @@ trait InfoTrait
      */
     public function getCcInstallments()
     {
-        return $this->getOrder()->getPayment()->getAdditionalInformation('installments');
+        $payment = $this->getOrder()->getPayment();
+        return $payment->getData('cc_installments') ?: $payment->getAdditionalInformation('installments');
     }
 
     /**
@@ -44,7 +47,8 @@ trait InfoTrait
      */
     public function getCcNumber()
     {
-        return $this->getOrder()->getPayment()->getCcLast4();
+        $payment = $this->getOrder()->getPayment();
+        return $payment->getData('cc_last_4') ?: $payment->getAdditionalInformation('cc_last_4');
     }
 
     /**
@@ -72,9 +76,9 @@ trait InfoTrait
      */
     public function getCcBrand()
     {
+        $payment = $this->getOrder()->getPayment();
         $brands = $this->paymentMethod->getCreditCardCodes();
-        $CardCode = $this->getOrder()->getPayment()->getCcType();
-
-        return isset($brands[$CardCode]) ? $brands[$CardCode] : null;
+        $ccType = $payment->getData('cc_type') ?: $payment->getAdditionalInformation('cc_type');
+        return isset($brands[$ccType]) ? $brands[$ccType] : null;
     }
 }

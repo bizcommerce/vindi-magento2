@@ -5,26 +5,25 @@
  * @var \Vindi\Payment\Block\Info\CardCard $block
  */
 ?>
-<div class="card-card-info" style="background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; max-width: 600px; margin: 20px auto; font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+<div class="card-card-info">
     <?php if ($block->canShowCcInfo()) : ?>
-        <dl class="payment-method cc-info" style="margin: 0;">
-            <dt class="title" style="font-size: 20px; margin-bottom: 10px; font-weight: bold;">
+        <dl class="payment-method cc-info">
+            <dt class="title">
                 <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
             </dt>
-            <dd class="content" style="margin: 0; padding: 10px 0; border-top: 1px solid #ccc;">
-                <p style="font-weight: bold; margin-bottom: 5px;"><?php echo __('First Card Details:'); ?></p>
+            <dd class="content">
+                <p><?php echo __('First Card Details:'); ?></p>
                 <?php $first = $block->getFirstCardInfo(); ?>
-                <p style="margin: 2px 0;"><?php echo sprintf(__('Brand: %s'), $first['brand'] ?? ''); ?></p>
-                <p style="margin: 2px 0;"><?php echo sprintf(__('Owner: %s'), $first['owner'] ?? ''); ?></p>
-                <p style="margin: 2px 0;"><?php echo sprintf(__('Number: %s'), $first['number'] ?? ''); ?></p>
-                <p style="margin: 2px 0;"><?php echo sprintf(__('Installments: %s'), $first['installments'] ?? ''); ?></p>
-                <hr style="border: none; border-top: 1px solid #ccc; margin: 15px 0;">
-                <p style="font-weight: bold; margin-bottom: 5px;"><?php echo __('Second Card Details:'); ?></p>
+                <p><?php echo sprintf(__('Brand: %s'), $first['brand'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Owner: %s'), $first['owner'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Number: %s'), $first['number'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Installments: %s'), $first['installments'] ?? ''); ?></p>
+                <p><?php echo __('Second Card Details:'); ?></p>
                 <?php $second = $block->getSecondCardInfo(); ?>
-                <p style="margin: 2px 0;"><?php echo sprintf(__('Brand: %s'), $second['brand'] ?? ''); ?></p>
-                <p style="margin: 2px 0;"><?php echo sprintf(__('Owner: %s'), $second['owner'] ?? ''); ?></p>
-                <p style="margin: 2px 0;"><?php echo sprintf(__('Number: %s'), $second['number'] ?? ''); ?></p>
-                <p style="margin: 2px 0;"><?php echo sprintf(__('Installments: %s'), $second['installments'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Brand: %s'), $second['brand'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Owner: %s'), $second['owner'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Number: %s'), $second['number'] ?? ''); ?></p>
+                <p><?php echo sprintf(__('Installments: %s'), $second['installments'] ?? ''); ?></p>
             </dd>
         </dl>
     <?php else: ?>
