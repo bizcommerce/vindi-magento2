@@ -751,10 +751,30 @@ abstract class AbstractMethod extends OriginAbstractMethod
     }
 
     /**
-     * Handle error during payment processing.
-     *
      * @param Order $order
-     * @return void
+     * @return false|OrderItemInterface|mixed
+     */
+    protected function isSubscriptionOrder(Order $order)
+    {
+        foreach ($order->getItems() as $item) {
+            try {
+                if ($this->helperData->isVindiPlan($item->getProductId())) {
+                    return $item;
+                }
+
+                $options = $item->getProductOptions();
+                if (!empty($options['info_buyRequest']['selected_plan_id'])) {
+                    return $item;
+                }
+            } catch (NoSuchEntityException $e) {
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param Order $order
      * @throws LocalizedException
      */
     protected function handleError(Order $order)
@@ -928,6 +948,8 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'customer_email' => $order->getCustomerEmail(),
             'holder_name' => $payment->getCcOwner(),
             'cc_type' => $payment->getCcType(),
+            'cc_name' => $payment->getCcOwner(),
+            'cc_type' => $this->paymentMethod->convertCcTypeToFullName($payment->getCcType()),
             'cc_last_4' => $payment->getCcLast4(),
             'status' => $paymentProfileData["status"],
             'token' => $paymentProfileData["token"],
