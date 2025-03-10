@@ -1114,27 +1114,4 @@ abstract class AbstractMethod extends OriginAbstractMethod
             $this->psrLogger->error('Error saving subscription to database: ' . $e->getMessage());
         }
     }
-
-    /**
-     * Determine if the order is a subscription.
-     *
-     * @param Order $order
-     * @return mixed
-     */
-    protected function isSubscriptionOrder(Order $order)
-    {
-        foreach ($order->getItems() as $item) {
-            try {
-                if ($this->helperData->isVindiPlan($item->getProductId())) {
-                    return $item;
-                }
-                $options = $item->getProductOptions();
-                if (!empty($options['info_buyRequest']['selected_plan_id'])) {
-                    return $item;
-                }
-            } catch (NoSuchEntityException $e) {
-            }
-        }
-        return false;
-    }
 }
