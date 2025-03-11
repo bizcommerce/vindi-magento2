@@ -118,6 +118,7 @@
                     <item name="formElement" xsi:type="string">select</item>
                     <item name="source" xsi:type="string">payment_method</item>
                     <item name="dataScope" xsi:type="string">payment_method</item>
+                    <item name="notice" xsi:type="string" translate="true">The names displayed in this method are those configured in 'Vindi > Configuração > Vindi Recorrência (VR) > (Payment Method Name) > Title'</item>
                 </item>
             </argument>
         </field>

@@ -774,3 +774,4 @@
 "Cannot delete item. Subscription must have at least one non-shipping item with a price greater than zero.","Não é possível excluir o item. A assinatura deve ter pelo menos um item que não seja de frete com preço maior que zero."
 "Select the payment profile for the customer.","Selecione o perfil de pagamento para o cliente."
 "Percentage","Porcentagem"
+"The names displayed in this method are those configured in 'Vindi > Configuração > Vindi Recorrência (VR) > (Payment Method Name) > Title'","Os nomes exibidos neste método são os configurados em 'Vindi > Configuração > Vindi Recorrência (VR) > (Nome do Método de Pagamento) > Título'"

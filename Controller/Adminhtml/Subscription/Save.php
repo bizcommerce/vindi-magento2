@@ -15,6 +15,8 @@ use Vindi\Payment\Model\Subscription;
 /**
  * Class Save
  *
+ * This controller saves the subscription data.
+ *
  * @package Vindi\Payment\Controller\Adminhtml\Subscription
  */
 class Save extends Action
@@ -30,6 +32,8 @@ class Save extends Action
     private $api;
 
     /**
+     * Constructor
+     *
      * @param Context $context
      * @param DataPersistorInterface $dataPersistor
      * @param Api $api
@@ -103,6 +107,10 @@ class Save extends Action
 
             try {
                 $model->save();
+                $this->_eventManager->dispatch(
+                    'vindi_subscription_update',
+                    ['subscription_id' => $id]
+                );
                 $this->messageManager->addSuccessMessage(__('You saved the subscription.'));
                 $this->dataPersistor->clear('vindi_payment_subscription');
 
