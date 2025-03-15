@@ -191,7 +191,7 @@
                            class="input-text"
                            data-bind="value: pixAmountDisplay, enable: isPixEditable, attr: {placeholder: $t('0,00')}, css: {'error-border': pixInvalid()}" />
                     <!-- ko if: pixInvalid -->
-                    <div class="error-message" data-bind="text: $t('The PIX amount cannot exceed the order total of ') + formattedOrderTotal()"></div>
+                    <div class="error-message" data-bind="text: $t('O valor do PIX não pode exceder o total do pedido de ') + formattedOrderTotal()"></div>
                     <!-- /ko -->
                 </div>
             </div>

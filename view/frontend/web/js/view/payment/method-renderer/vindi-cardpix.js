@@ -306,7 +306,7 @@ define([
             }
 
             if (pix > self.orderTotal) {
-                self.messageContainer.addErrorMessage({'message': $t('The PIX amount cannot exceed the order total of ') + self.formattedOrderTotal()});
+                self.messageContainer.addErrorMessage({'message': $t('O valor do PIX não pode exceder o total do pedido de ') + self.formattedOrderTotal()});
                 return false;
             }
 
