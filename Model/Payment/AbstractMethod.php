@@ -731,7 +731,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
     protected function getMultiPaymentDiscountProductId()
     {
         if (method_exists($this->productManagement, 'findOrCreateProduct')) {
-            return $this->productManagement->findOrCreateProduct('multi_payment_discount', 'Multi Payment Discount');
+            return $this->productManagement->findOrCreateProduct('multi_payment_discount', __('Multi Payment Discount'));
         }
         throw new LocalizedException(__('Multi payment discount product not found.'));
     }

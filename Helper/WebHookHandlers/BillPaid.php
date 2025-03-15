@@ -11,6 +11,7 @@ use Magento\Sales\Model\Order\Invoice;
 use Vindi\Payment\Helper\Data;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Sales\Api\InvoiceRepositoryInterface;
+use Vindi\Payment\Model\PaymentSplitFactory;
 
 /**
  * Class BillPaid
@@ -68,7 +69,24 @@ class BillPaid
     private $helperData;
 
     /**
+     * @var PaymentSplitFactory
+     */
+    private $paymentSplitFactory;
+
+    /**
      * Constructor for initializing class dependencies.
+     *
+     * @param Logger $logger
+     * @param OrderCreator $orderCreator
+     * @param OrderCreationQueueRepositoryInterface $orderCreationQueueRepository
+     * @param OrderCreationQueueFactory $orderCreationQueueFactory
+     * @param OrderRepository $orderRepository
+     * @param EmailSender $emailSender
+     * @param \Magento\Framework\App\ResourceConnection $resourceConnection
+     * @param InvoiceRepositoryInterface $invoiceRepository
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
+     * @param Data $helperData
+     * @param PaymentSplitFactory $paymentSplitFactory
      */
     public function __construct(
         Logger $logger,
@@ -80,7 +98,8 @@ class BillPaid
         \Magento\Framework\App\ResourceConnection $resourceConnection,
         InvoiceRepositoryInterface $invoiceRepository,
         SearchCriteriaBuilder $searchCriteriaBuilder,
-        Data $helperData
+        Data $helperData,
+        PaymentSplitFactory $paymentSplitFactory
     ) {
         $this->logger = $logger;
         $this->orderCreator = $orderCreator;
@@ -92,6 +111,7 @@ class BillPaid
         $this->invoiceRepository = $invoiceRepository;
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
         $this->helperData = $helperData;
+        $this->paymentSplitFactory = $paymentSplitFactory;
     }
 
     /**
@@ -173,6 +193,33 @@ class BillPaid
         if (!$order) {
             $this->logger->error(__('Order not found for bill code: %1', $bill['code']));
             return false;
+        }
+
+        $paymentSplitCollection = $this->paymentSplitFactory->create()->getCollection()
+            ->addFieldToFilter('order_increment_id', $order->getIncrementId());
+
+        if ($paymentSplitCollection->getSize() > 0) {
+            $currentPaymentSplit = $this->paymentSplitFactory->create()->getCollection()
+                ->addFieldToFilter('bill_id', $bill['id'])
+                ->getFirstItem();
+
+            if ($currentPaymentSplit && $currentPaymentSplit->getId()) {
+                $currentPaymentSplit->setStatus('paid');
+                $currentPaymentSplit->save();
+            }
+
+            $allPaid = true;
+            foreach ($paymentSplitCollection as $paymentSplit) {
+                if ($paymentSplit->getStatus() != 'paid') {
+                    $allPaid = false;
+                    break;
+                }
+            }
+
+            if (!$allPaid) {
+                $this->logger->info(__('Not all payment splits for order %1 are paid yet.', $order->getIncrementId()));
+                return true;
+            }
         }
 
         return $this->createInvoice($order);
