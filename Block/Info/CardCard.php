@@ -1,6 +1,4 @@
 <?php
-// File: app/code/Vindi/Payment/Block/Info/CardCard.php
-
 namespace Vindi\Payment\Block\Info;
 
 use Vindi\Payment\Model\Payment\PaymentMethod;

@@ -1,0 +1,77 @@
+<?php
+/**
+ * @var \Vindi\Payment\Block\Info\CardBankslipPix $block
+ */
+?>
+<div class="card-bankslippix-info">
+    <?php if ($block->canShowCcInfo()) : ?>
+        <dl class="payment-method cc-info">
+            <dt class="title">
+                <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
+            </dt>
+            <dd class="content">
+                <p><?php echo sprintf(__('Cc Brand: %s'), $block->getCcBrand()); ?></p>
+                <p><?php echo sprintf(__('Cc Owner: %s'), $block->getCcOwner()); ?></p>
+                <p><?php echo sprintf(__('Cc Number: %s'), $block->getCcNumber()); ?></p>
+                <p><?php echo sprintf(__('Installments: %sx'), $block->getCcInstallments()); ?></p>
+            </dd>
+        </dl>
+    <?php endif; ?>
+
+    <?php if (!$block->hasInvoice() && $block->canShowBolepixInfo()) : ?>
+        <dl class="payment-method bolepix-info">
+            <dt class="title">
+                <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
+            </dt>
+            <?php if ($block->getDaysToKeepWaitingPayment()) : ?>
+                <dd>
+                    <p>
+                        <strong><?php echo sprintf(__('Pay up: %s'), $block->getDaysToKeepWaitingPayment()); ?></strong>
+                    </p>
+                </dd>
+            <?php endif; ?>
+            <dd class="content">
+                <?php if ($block->getQrCodeBolepix()) : ?>
+                    <object data="<?php echo $block->getQrCodeBolepix(); ?>" type="image/svg+xml" class="qr-code" id="qrcode">
+                        <p><?php echo $block->getQrCodeWarningMessage() ?: ''; ?></p>
+                        <button
+                            id="vindi-bolepix-button-open"
+                            type="button"
+                            class="action primary checkout"
+                            title="Open QR Code Bolepix"
+                            onclick="window.open('<?php echo $block->getQrCodeBolepix(); ?>', '_blank')">
+                            <?php echo __('Open QR Code'); ?>
+                        </button>
+                    </object>
+                <?php endif; ?>
+
+                <?php if ($block->getQrcodeOriginalPath()) : ?>
+                    <p style="word-break: break-all;"><?php echo $block->getQrcodeOriginalPath(); ?></p>
+                <?php endif; ?>
+
+                <div data-bind="scope: 'vindiBolepix'">
+                    <!-- ko template: getTemplate() --><!-- /ko -->
+                </div>
+            </dd>
+        </dl>
+
+    <?php if ($block->getQrcodeOriginalPath()) : ?>
+        <script type="text/x-magento-init">
+            {
+                "*": {
+                    "Magento_Ui/js/core/app": {
+                        "components": {
+                            "vindiBolepix": {
+                                "component": "Vindi_Payment/js/view/info/vindi-pix",
+                                "qrCodeKey": <?php echo $block->getQrcodeOriginalPath(); ?>
+            }
+        }
+    }
+}
+}
+        </script>
+    <?php endif; ?>
+    <?php else: ?>
+        <span><?php echo __($block->getPaymentMethodName()); ?></span>
+    <?php endif; ?>
+</div>

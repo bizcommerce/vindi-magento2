@@ -1,5 +1,4 @@
 <?php
-// File: app/code/Vindi/Payment/Model/CardCard/ConfigProvider.php
 namespace Vindi\Payment\Model\CardCard;
 
 use Magento\Checkout\Model\ConfigProviderInterface;

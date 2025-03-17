@@ -1,6 +1,4 @@
 <?php
-// File: app/code/Vindi/Payment/Model/Payment/CardCard.php
-
 namespace Vindi\Payment\Model\Payment;
 
 use Magento\Framework\DataObject;

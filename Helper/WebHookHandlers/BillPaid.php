@@ -187,7 +187,11 @@ class BillPaid
         $order = null;
 
         if (isset($bill['code']) && $bill['code'] != null) {
-            $order = $this->getOrder($bill['code']);
+            $orderCode = $bill['code'];
+            if (substr($orderCode, -3) === '-01' || substr($orderCode, -3) === '-02') {
+                $orderCode = substr($orderCode, 0, -3);
+            }
+            $order = $this->getOrder($orderCode);
         }
 
         if (!$order) {

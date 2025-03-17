@@ -1,4 +1,3 @@
-/* File: app/code/Vindi/Payment/view/frontend/web/js/view/payment/vindi-cardcard.js */
 /*jshint browser:true jquery:true*/
 /*eslint-disable no-alert, no-unused-vars*/
 /*browser:true*/
