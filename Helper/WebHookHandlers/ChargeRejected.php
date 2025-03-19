@@ -6,7 +6,7 @@ use Vindi\Payment\Model\PaymentSplitFactory;
 use Vindi\Payment\Model\Payment\Charge;
 use Magento\Sales\Api\OrderRepositoryInterface;
 use Psr\Log\LoggerInterface;
-use Vindi\Payment\Model\Order;
+use Magento\Framework\Api\SearchCriteriaBuilder;
 
 /**
  * Class ChargeRejected
@@ -19,11 +19,6 @@ class ChargeRejected
      * @var Bill
      */
     private $bill;
-
-    /**
-     * @var Order
-     */
-    private $order;
 
     /**
      * @var LoggerInterface
@@ -46,29 +41,34 @@ class ChargeRejected
     private $orderRepository;
 
     /**
+     * @var SearchCriteriaBuilder
+     */
+    private $searchCriteriaBuilder;
+
+    /**
      * Constructor.
      *
      * @param Bill $bill
-     * @param Order $order
      * @param LoggerInterface $logger
      * @param PaymentSplitFactory $paymentSplitFactory
      * @param Charge $charge
      * @param OrderRepositoryInterface $orderRepository
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
      */
     public function __construct(
         Bill $bill,
-        Order $order,
         LoggerInterface $logger,
         PaymentSplitFactory $paymentSplitFactory,
         Charge $charge,
-        OrderRepositoryInterface $orderRepository
+        OrderRepositoryInterface $orderRepository,
+        SearchCriteriaBuilder $searchCriteriaBuilder
     ) {
         $this->bill = $bill;
-        $this->order = $order;
         $this->logger = $logger;
         $this->paymentSplitFactory = $paymentSplitFactory;
         $this->charge = $charge;
         $this->orderRepository = $orderRepository;
+        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
     }
 
     /**
@@ -161,7 +161,7 @@ class ChargeRejected
      * Retrieve order from bill.
      *
      * @param mixed $billId
-     * @return mixed
+     * @return \Magento\Sales\Model\Order|false
      */
     private function getOrderFromBill($billId)
     {
@@ -169,6 +169,15 @@ class ChargeRejected
         if (!$bill) {
             return false;
         }
-        return $this->order->getOrder(compact('bill'));
+        if (isset($bill['code'])) {
+            $orderCode = $bill['code'];
+            if (substr($orderCode, -3) === '-01' || substr($orderCode, -3) === '-02') {
+                $orderCode = substr($orderCode, 0, -3);
+            }
+            $criteria = $this->searchCriteriaBuilder->addFilter('increment_id', $orderCode, 'eq')->create();
+            $orders = $this->orderRepository->getList($criteria)->getItems();
+            return $orders ? reset($orders) : false;
+        }
+        return false;
     }
 }
