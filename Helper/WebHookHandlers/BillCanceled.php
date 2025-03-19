@@ -84,16 +84,13 @@ class BillCanceled
             ->addFieldToFilter('bill_id', $billId);
 
         if ($paymentSplitCollection->getSize() > 0) {
-
             $paymentSplitItems = $paymentSplitCollection->getItems();
 
             foreach ($paymentSplitItems as $paymentSplit) {
                 if (!$paymentSplit->getIsRefunded()) {
-
                     if (!$chargeId) {
                         break;
                     }
-
                     $refundResult = $this->charge->refund($chargeId, ['amount' => $paymentSplit->getAmount()]);
                     if ($refundResult) {
                         $paymentSplit->setStatus('refunded');
@@ -110,7 +107,6 @@ class BillCanceled
 
             try {
                 $order = $this->orderRepository->get($orderId);
-
                 if ($order->canCancel()) {
                     $order->cancel();
                     $order->addStatusHistoryComment(__('Order canceled due to multi-method payment refund.'));

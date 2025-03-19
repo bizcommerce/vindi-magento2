@@ -1,5 +1,4 @@
 <?php
-
 namespace Vindi\Payment\Controller\Index;
 
 use Magento\Framework\App\Action\Action;
@@ -33,6 +32,7 @@ class Webhook extends Action
 
     /**
      * Webhook constructor.
+     *
      * @param Api $api
      * @param Logger $logger
      * @param WebhookHandler $webhookHandler
@@ -85,7 +85,6 @@ class Webhook extends Action
     {
         $systemKey = $this->helperData->getWebhookKey();
         $requestKey = $this->getRequest()->getParam('key');
-
         return $systemKey === $requestKey;
     }
 }

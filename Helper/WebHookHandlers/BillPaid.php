@@ -1,5 +1,4 @@
 <?php
-
 namespace Vindi\Payment\Helper\WebHookHandlers;
 
 use Vindi\Payment\Api\OrderCreationQueueRepositoryInterface;
@@ -169,7 +168,6 @@ class BillPaid
             } else {
                 $this->logger->info(__('No corresponding order found for subscription ID: %1. Ignoring event.', $subscriptionId));
             }
-
             return true;
         } finally {
             $this->dbAdapter->query("SELECT RELEASE_LOCK(?)", [$lockName]);
@@ -185,7 +183,6 @@ class BillPaid
     private function handleRegularOrderFlow($bill)
     {
         $order = null;
-
         if (isset($bill['code']) && $bill['code'] != null) {
             $orderCode = $bill['code'];
             if (substr($orderCode, -3) === '-01' || substr($orderCode, -3) === '-02') {
@@ -193,7 +190,6 @@ class BillPaid
             }
             $order = $this->getOrder($orderCode);
         }
-
         if (!$order) {
             $this->logger->error(__('Order not found for bill code: %1', $bill['code']));
             return false;
@@ -206,12 +202,10 @@ class BillPaid
             $currentPaymentSplit = $this->paymentSplitFactory->create()->getCollection()
                 ->addFieldToFilter('bill_id', $bill['id'])
                 ->getFirstItem();
-
             if ($currentPaymentSplit && $currentPaymentSplit->getId()) {
                 $currentPaymentSplit->setStatus('paid');
                 $currentPaymentSplit->save();
             }
-
             $allPaid = true;
             foreach ($paymentSplitCollection as $paymentSplit) {
                 if ($paymentSplit->getStatus() != 'paid') {
@@ -219,13 +213,11 @@ class BillPaid
                     break;
                 }
             }
-
             if (!$allPaid) {
                 $this->logger->info(__('Not all payment splits for order %1 are paid yet.', $order->getIncrementId()));
                 return true;
             }
         }
-
         return $this->createInvoice($order);
     }
 
@@ -241,35 +233,27 @@ class BillPaid
         if (!$order->getId()) {
             return false;
         }
-
         $this->logger->info(__('Generating invoice for the order %1.', $order->getId()));
-
         if (!$order->canInvoice()) {
             $this->logger->error(__('Impossible to generate invoice for order %1.', $order->getId()));
             return false;
         }
-
         $invoice = $order->prepareInvoice();
         $invoice->setRequestedCaptureCase(Invoice::CAPTURE_OFFLINE);
         $invoice->register();
         $invoice->pay();
         $invoice->setSendEmail(true);
         $this->invoiceRepository->save($invoice);
-
         $this->logger->info(__('Invoice created successfully.'));
-
         $status = $this->helperData->getStatusToPaidOrder();
         if ($state = $this->helperData->getStatusState($status)) {
             $order->setState($state);
         }
-
         $order->addCommentToStatusHistory(
             __('The payment was confirmed and the order is being processed'),
             $status
         );
-
         $this->orderRepository->save($order);
-
         return true;
     }
 
@@ -284,18 +268,15 @@ class BillPaid
         $searchCriteria = $this->searchCriteriaBuilder
             ->addFilter('increment_id', $incrementId, 'eq')
             ->create();
-
         $orderList = $this->orderRepository
             ->getList($searchCriteria)
             ->getItems();
-
         try {
             return reset($orderList);
         } catch (\Exception $e) {
             $this->logger->error(__('Order #%1 not found', $incrementId));
             $this->logger->error($e->getMessage());
         }
-
         return false;
     }
 }

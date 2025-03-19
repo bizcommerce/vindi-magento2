@@ -759,7 +759,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
                 if ($this->helperData->isVindiPlan($item->getProductId())) {
                     return $item;
                 }
-
                 $options = $item->getProductOptions();
                 if (!empty($options['info_buyRequest']['selected_plan_id'])) {
                     return $item;
@@ -767,7 +766,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
             } catch (NoSuchEntityException $e) {
             }
         }
-
         return false;
     }
 
@@ -781,7 +779,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $message = __('There has been a payment confirmation error. Verify data and try again');
         $order->setState(Order::STATE_CANCELED)
             ->setStatus($order->getConfig()->getStateDefaultStatus(Order::STATE_CANCELED))
-            ->addStatusHistoryComment($message->getText());
+            ->addStatusHistoryComment($message);
         throw new LocalizedException($message);
     }
 
