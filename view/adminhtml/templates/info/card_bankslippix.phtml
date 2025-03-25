@@ -18,7 +18,9 @@
         </dl>
     <?php endif; ?>
 
-    <?php if (!$block->hasInvoice() && $block->canShowBolepixInfo()) : ?>
+    <?php if (!$block->hasInvoice()) : ?>
+        <?php if ($block->isPaymentSplitPending()) : ?>
+        <?php if ($block->canShowBolepixInfo()) : ?>
         <dl class="payment-method bolepix-info">
             <dt class="title">
                 <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
@@ -54,7 +56,6 @@
                 </div>
             </dd>
         </dl>
-
     <?php if ($block->getQrcodeOriginalPath()) : ?>
         <script type="text/x-magento-init">
             {
@@ -70,6 +71,12 @@
 }
 }
         </script>
+    <?php endif; ?>
+    <?php else: ?>
+        <span><?php echo __($block->getPaymentMethodName()); ?></span>
+    <?php endif; ?>
+    <?php else: ?>
+        <span><?php echo __($block->getPaymentMethodName()); ?></span>
     <?php endif; ?>
     <?php else: ?>
         <span><?php echo __($block->getPaymentMethodName()); ?></span>

@@ -1,13 +1,17 @@
 <?php
-namespace Vindi\Payment\Block\Info;
+namespace Vindi\Payment\Block\Info\Frontend;
 
 use Vindi\Payment\Model\Payment\PaymentMethod;
-use Magento\Backend\Block\Template\Context;
+use Magento\Framework\View\Element\Template\Context;
 use Magento\Framework\Pricing\Helper\Data;
 use Vindi\Payment\Api\PixConfigurationInterface;
 use Magento\Framework\Serialize\Serializer\Json;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
+use Vindi\Payment\Model\PaymentSplitFactory;
 
+/**
+ * Block class for displaying information when the payment method is "Card + Bankslip Pix" in frontend
+ */
 class CardBankslipPix extends \Magento\Payment\Block\Info
 {
     use \Vindi\Payment\Block\InfoTrait;
@@ -45,6 +49,11 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     protected $paymentMethod;
 
     /**
+     * @var PaymentSplitFactory
+     */
+    protected $paymentSplitFactory;
+
+    /**
      * CardBankslipPix constructor.
      *
      * @param PaymentMethod $paymentMethod
@@ -53,6 +62,7 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
      * @param PixConfigurationInterface $pixConfiguration
      * @param TimezoneInterface $timezone
      * @param Json $json
+     * @param PaymentSplitFactory $paymentSplitFactory
      * @param array $data
      */
     public function __construct(
@@ -62,14 +72,16 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
         PixConfigurationInterface $pixConfiguration,
         TimezoneInterface $timezone,
         Json $json,
+        PaymentSplitFactory $paymentSplitFactory,
         array $data = []
     ) {
         parent::__construct($context, $data);
-        $this->paymentMethod   = $paymentMethod;
-        $this->currency        = $currency;
-        $this->pixConfiguration  = $pixConfiguration;
-        $this->timezone        = $timezone;
-        $this->json            = $json;
+        $this->paymentMethod       = $paymentMethod;
+        $this->currency            = $currency;
+        $this->pixConfiguration    = $pixConfiguration;
+        $this->timezone            = $timezone;
+        $this->json                = $json;
+        $this->paymentSplitFactory = $paymentSplitFactory;
     }
 
     /**
@@ -133,8 +145,7 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
      */
     public function canShowBolepixInfo()
     {
-        $paymentMethod =
-            $this->getOrder()->getPayment()->getMethod() === \Vindi\Payment\Model\Payment\BankSlipPix::CODE
+        $paymentMethod = $this->getOrder()->getPayment()->getMethod() === \Vindi\Payment\Model\Payment\BankSlipPix::CODE
             || $this->getOrder()->getPayment()->getMethod() === "vindi_cardbankslippix";
         $daysToPayment = $this->getMaxDaysToPayment();
 
@@ -249,5 +260,26 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     public function getDueDate(): string
     {
         return (string) $this->getOrder()->getPayment()->getAdditionalInformation('due_at');
+    }
+
+    /**
+     * Check if the payment split status is pending.
+     *
+     * @return bool
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    public function isPaymentSplitPending()
+    {
+        $billId = $this->getBillId();
+        if (!$billId) {
+            return true;
+        }
+        $paymentSplitCollection = $this->paymentSplitFactory->create()->getCollection()
+            ->addFieldToFilter('bill_id', $billId);
+        $paymentSplit = $paymentSplitCollection->getFirstItem();
+        if ($paymentSplit && $paymentSplit->getId()) {
+            return $paymentSplit->getStatus() === 'pending';
+        }
+        return true;
     }
 }

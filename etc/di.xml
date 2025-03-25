@@ -25,6 +25,15 @@
         </arguments>
     </type>
 
+    <type name="Vindi\Payment\Helper\WebHookHandlers\BillCanceled">
+        <arguments>
+            <argument name="creditmemoFactory" xsi:type="object">Magento\Sales\Model\Order\CreditmemoFactory</argument>
+            <argument name="creditmemoService" xsi:type="object">Magento\Sales\Model\Service\CreditmemoService</argument>
+            <argument name="transaction" xsi:type="object">Magento\Framework\DB\Transaction</argument>
+            <argument name="creditmemoManagement" xsi:type="object">Magento\Sales\Api\CreditmemoManagementInterface</argument>
+        </arguments>
+    </type>
+
     <!-- Subscription-->
     <preference for="Vindi\Payment\Api\Data\SubscriptionInterface" type="Vindi\Payment\Model\Subscription"/>
     <preference for="Vindi\Payment\Api\Data\SubscriptionSearchResultsInterface" type="Vindi\Payment\Model\SubscriptionSearchResult"/>
