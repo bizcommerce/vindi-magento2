@@ -1,13 +1,21 @@
 <?php
 /**
- * @var \Vindi\Payment\Block\Info\Frontend\CardBankslipPix $block
+ * File: app/code/Vindi/Payment/view/frontend/templates/info/card_bankslippix.phtml
+ *
+ * @var \Vindi\Payment\Block\Info\CardBankslipPix $block
  */
 ?>
 <div class="card-bankslippix-info">
+    <dl class="payment-method info">
+        <dt class="title">
+            <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
+        </dt>
+    </dl>
+    <hr>
     <?php if ($block->canShowCcInfo()) : ?>
         <dl class="payment-method cc-info">
             <dt class="title">
-                <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
+                <strong><?php echo $block->escapeHtml(__('Card')); ?></strong>
             </dt>
             <dd class="content">
                 <p><?php echo sprintf(__('Cc Brand: %s'), $block->getCcBrand()); ?></p>
@@ -21,7 +29,7 @@
     <?php if (!$block->hasInvoice() && $block->canShowBolepixInfo() && $block->getQrCodeBolepix() && $block->getQrcodeOriginalPath() && $block->getDaysToKeepWaitingPayment()) : ?>
         <dl class="payment-method bolepix-info">
             <dt class="title">
-                <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
+                <strong><?php echo $block->escapeHtml(__('Bolepix')); ?></strong>
             </dt>
             <?php if ($block->canShowBolepixInfo()) : ?>
                 <?php if ($block->getDaysToKeepWaitingPayment()) : ?>

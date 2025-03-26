@@ -2,11 +2,18 @@
 /* @var \Vindi\Payment\Block\Info\CardPix $block */
 ?>
 <div class="card-pix-info">
+    <dl class="payment-method info">
+        <dt class="title">
+            <strong><?= $block->escapeHtml($block->getMethod()->getTitle()) ?></strong>
+        </dt>
+    </dl>
+    <hr>
     <?php if ($block->canShowCcInfo()) : ?>
         <dl class="payment-method cc-info">
             <dt class="title">
-                <strong><?= $block->escapeHtml($block->getMethod()->getTitle()) ?></strong>
+                <strong><?= $block->escapeHtml(__('Card')) ?></strong>
             </dt>
+            <br>
             <dd class="content">
                 <p><?= sprintf(__('Cc Brand: %s'), $block->getCcBrand()) ?></p>
                 <p><?= sprintf(__('Cc Owner: %s'), $block->getCcOwner()) ?></p>
@@ -14,59 +21,43 @@
                 <p><?= sprintf(__('Installments: %sx'), $block->getCcInstallments()) ?></p>
             </dd>
         </dl>
+    <br>
     <?php endif; ?>
 
     <dl class="payment-method pix-info">
         <dt class="title">
-            <strong><?= $block->escapeHtml($block->getMethod()->getTitle()) ?></strong>
+            <strong><?= $block->escapeHtml(__('Pix')) ?></strong>
         </dt>
         <br>
         <?php if (!$block->hasInvoice()): ?>
-            <?php if ($block->isPaymentSplitPending()) : ?>
-                <?php if ($block->canShowPixInfo()) : ?>
-                    <?php if ($block->getDaysToKeepWaitingPayment()) : ?>
-                        <dd>
-                            <p>
-                                <strong><?= sprintf(__('Pay up: %s'), $block->getDaysToKeepWaitingPayment()) ?></strong>
-                            </p>
-                        </dd>
-                    <?php endif; ?>
-                    <dd class="content">
-                        <?php if ($block->getQrCodePix()) : ?>
-                            <object data="<?= $block->getQrCodePix() ?>" type="image/svg+xml" class="qr-code" id="qrcode" width="200" height="200">
-                                <p><?= $block->getQrCodeWarningMessage() ?: '' ?></p>
-                                <button
-                                    id="vindi-pix-button-open"
-                                    type="button"
-                                    class="action primary checkout"
-                                    title="Open QR Code Pix"
-                                    onclick="window.open('<?= $block->getQrCodePix() ?>', '_blank')">
-                                    <?= __('Open QR Code') ?>
-                                </button>
-                            </object>
-                        <?php endif; ?>
-                        <div data-bind="scope: 'vindiPix'">
-                            <!-- ko template: getTemplate() --><!-- /ko -->
-                        </div>
-                    </dd>
-                <?php else: ?>
-                    <dd class="content">
-                        <strong><?= $block->escapeHtml($block->getMethod()->getTitle()) ?></strong>
-                    </dd>
-                <?php endif; ?>
-            <?php else: ?>
-                <dd class="content">
-                    <strong><?= $block->escapeHtml($block->getMethod()->getTitle()) ?></strong>
-                </dd>
-            <?php endif; ?>
-        <?php else: ?>
+            <?php if ($block->canShowPixInfo()) : ?>
+            <?php if ($block->getDaysToKeepWaitingPayment()) : ?>
             <dd>
-                <strong><?= __('Pix expirado') ?></strong><br>
-                <a href="/vindiPayment/pix/renew?bill=<?= $block->getBillId() ?>&order=<?= $block->getOrder()->getId() ?>">
-                    <button name="renew-pix"><?= __('Atualizar QR Code') ?></button>
-                </a>
+                <p>
+                    <strong><?= sprintf(__('Pay up: %s'), $block->getDaysToKeepWaitingPayment()) ?></strong>
+                </p>
             </dd>
         <?php endif; ?>
+            <dd class="content">
+                <?php if ($block->getQrCodePix()) : ?>
+                    <object data="<?= $block->getQrCodePix() ?>" type="image/svg+xml" class="qr-code" id="qrcode" width="200" height="200">
+                        <p><?= $block->getQrCodeWarningMessage() ?: '' ?></p>
+                        <button
+                            id="vindi-pix-button-open"
+                            type="button"
+                            class="action primary checkout"
+                            title="Open QR Code Pix"
+                            onclick="window.open('<?= $block->getQrCodePix() ?>', '_blank')">
+                            <?= __('Open QR Code') ?>
+                        </button>
+                    </object>
+                <?php endif; ?>
+                <div data-bind="scope: 'vindiPix'">
+                    <!-- ko template: getTemplate() --><!-- /ko -->
+                </div>
+            </dd>
+        <?php endif; ?>
+
         <?php if ($block->getQrcodeOriginalPath()) : ?>
             <script type="text/x-magento-init">
                 {
@@ -82,6 +73,14 @@
     }
 }
             </script>
+        <?php endif; ?>
+        <?php else: ?>
+            <dd>
+                <strong><?= __('Pix expirado') ?></strong><br>
+                <a href="/vindiPayment/pix/renew?bill=<?= $block->getBillId() ?>&order=<?= $block->getOrder()->getId() ?>">
+                    <button name="renew-pix"><?= __('Atualizar QR Code') ?></button>
+                </a>
+            </dd>
         <?php endif; ?>
     </dl>
 </div>

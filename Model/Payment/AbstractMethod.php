@@ -431,6 +431,8 @@ abstract class AbstractMethod extends OriginAbstractMethod
             PaymentMethod::CREDIT_CARD,
             PaymentMethod::PIX
         );
+        $order->getPayment()->setMethod(CardPix::CODE);
+        $this->orderRepository->save($order);
         return $billCredit['id'] . '|' . $billPix['id'];
     }
 
@@ -528,7 +530,8 @@ abstract class AbstractMethod extends OriginAbstractMethod
             PaymentMethod::CREDIT_CARD,
             PaymentMethod::CREDIT_CARD
         );
-
+        $order->getPayment()->setMethod(CardCard::CODE);
+        $this->orderRepository->save($order);
         return $billCard1['id'] . '|' . $billCard2['id'];
     }
 
@@ -614,6 +617,8 @@ abstract class AbstractMethod extends OriginAbstractMethod
             PaymentMethod::CREDIT_CARD,
             PaymentMethod::BANK_SLIP_PIX
         );
+        $order->getPayment()->setMethod(BankSlipPix::CODE);
+        $this->orderRepository->save($order);
         return $billCredit['id'] . '|' . $billBankslipPix['id'];
     }
 

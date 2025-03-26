@@ -1,11 +1,16 @@
 <?php
-/* @var \Vindi\Payment\Block\Info\Frontend\CardPix $block */
+/* @var \Vindi\Payment\Block\Info\CardPix $block */
 ?>
 <div class="card-pix-info">
+    <dl class="payment-method cc-info">
+        <dt class="title">
+            <strong><?= $block->escapeHtml($block->getMethod()->getTitle()) ?></strong>
+        </dt>
+    </dl>
     <?php if ($block->canShowCcInfo()) : ?>
         <dl class="payment-method cc-info">
             <dt class="title">
-                <strong><?= $block->escapeHtml($block->getMethod()->getTitle()) ?></strong>
+                <strong><?= $block->escapeHtml(__('Card')) ?></strong>
             </dt>
             <dd class="content">
                 <p><?= sprintf(__('Cc Brand: %s'), $block->getCcBrand()) ?></p>
@@ -19,7 +24,7 @@
     <?php if (!$block->hasInvoice() && $block->canShowPixInfo() && $block->getQrCodePix() && $block->getQrcodeOriginalPath() && $block->getDaysToKeepWaitingPayment()) : ?>
         <dl class="payment-method pix-info">
             <dt class="title">
-                <strong><?= $block->escapeHtml($block->getMethod()->getTitle()) ?></strong>
+                <strong><?= $block->escapeHtml(__('Pix')) ?></strong>
             </dt>
             <?php if ($block->getDaysToKeepWaitingPayment()) : ?>
                 <dd>

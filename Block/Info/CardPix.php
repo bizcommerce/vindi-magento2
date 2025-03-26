@@ -1,5 +1,5 @@
 <?php
-namespace Vindi\Payment\Block\Info\Frontend;
+namespace Vindi\Payment\Block\Info;
 
 use Vindi\Payment\Model\Payment\PaymentMethod;
 use Magento\Framework\View\Element\Template\Context;

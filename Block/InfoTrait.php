@@ -37,7 +37,7 @@ trait InfoTrait
     public function getCcInstallments()
     {
         $payment = $this->getOrder()->getPayment();
-        return $payment->getData('cc_installments') ?: $payment->getAdditionalInformation('installments');
+        return $payment->getData('cc_installments') ?: $payment->getAdditionalInformation('cc_installments');
     }
 
     /**

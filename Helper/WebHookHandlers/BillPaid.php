@@ -205,8 +205,22 @@ class BillPaid
                 ->addFieldToFilter('bill_id', $bill['id'])
                 ->getFirstItem();
             if ($currentPaymentSplit && $currentPaymentSplit->getId()) {
+                $paymentMethod = $currentPaymentSplit->getData('payment_method');
                 $currentPaymentSplit->setStatus('paid');
                 $currentPaymentSplit->save();
+
+                $orderPayment = $order->getPayment();
+                $additionalInfo = $orderPayment->getAdditionalInformation();
+                if ($paymentMethod == 'pix') {
+                    $additionalInfo['qrcode_original_path'] = '';
+                    $additionalInfo['qrcode_pix'] = '';
+                } elseif ($paymentMethod == 'pix_bank_slip') {
+                    $additionalInfo['qrcode_original_path'] = '';
+                    $additionalInfo['qrcode_pix'] = '';
+                    $additionalInfo['print_url'] = '';
+                    $additionalInfo['due_at'] = '';
+                }
+                $orderPayment->setAdditionalInformation($additionalInfo);
             }
             $allPaid = true;
             foreach ($paymentSplitCollection as $paymentSplit) {
