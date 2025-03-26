@@ -5,6 +5,21 @@ namespace Vindi\Payment\Block;
 trait InfoTrait
 {
     /**
+     * Credit card type codes mapping array
+     *
+     * @var array
+     */
+    protected $methodsCodes = [
+        'mastercard' => 'MC',
+        'visa' => 'VI',
+        'american_express' => 'AE',
+        'elo' => 'ELO',
+        'hipercard' => 'HC',
+        'diners_club' => 'DN',
+        'jcb' => 'JCB',
+    ];
+
+    /**
      * Check if credit card information can be shown
      *
      * @return bool
@@ -79,6 +94,7 @@ trait InfoTrait
         $payment = $this->getOrder()->getPayment();
         $brands = $this->paymentMethod->getCreditCardCodes();
         $ccType = $payment->getData('cc_type') ?: $payment->getAdditionalInformation('cc_type');
+        $ccType = $this->methodsCodes[$ccType] ?? $ccType;
         return isset($brands[$ccType]) ? $brands[$ccType] : null;
     }
 }
