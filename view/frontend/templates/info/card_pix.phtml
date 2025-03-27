@@ -21,7 +21,7 @@
         </dl>
     <?php endif; ?>
 
-    <?php if (!$block->hasInvoice() && $block->canShowPixInfo() && $block->getQrCodePix() && $block->getQrcodeOriginalPath() && $block->getDaysToKeepWaitingPayment()) : ?>
+    <?php if (!$block->hasInvoice() && !$block->isCanceled() && $block->canShowPixInfo() && $block->getQrCodePix() && $block->getQrcodeOriginalPath() && $block->getDaysToKeepWaitingPayment()) : ?>
         <dl class="payment-method pix-info">
             <dt class="title">
                 <strong><?= $block->escapeHtml(__('Pix')) ?></strong>

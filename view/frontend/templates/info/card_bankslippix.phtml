@@ -26,7 +26,7 @@
         </dl>
     <?php endif; ?>
 
-    <?php if (!$block->hasInvoice() && $block->canShowBolepixInfo() && $block->getQrCodeBolepix() && $block->getQrcodeOriginalPath() && $block->getDaysToKeepWaitingPayment()) : ?>
+    <?php if (!$block->hasInvoice() && !$block->isCanceled() && $block->canShowBolepixInfo() && $block->getQrCodeBolepix() && $block->getQrcodeOriginalPath() && $block->getDaysToKeepWaitingPayment()) : ?>
         <dl class="payment-method bolepix-info">
             <dt class="title">
                 <strong><?php echo $block->escapeHtml(__('Bolepix')); ?></strong>
