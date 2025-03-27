@@ -75,12 +75,14 @@
             </script>
         <?php endif; ?>
         <?php else: ?>
-            <dd>
-                <strong><?= __('Pix expirado') ?></strong><br>
-                <a href="/vindiPayment/pix/renew?bill=<?= $block->getBillId() ?>&order=<?= $block->getOrder()->getId() ?>">
-                    <button name="renew-pix"><?= __('Atualizar QR Code') ?></button>
-                </a>
-            </dd>
+            <?php if (!$block->hasInvoice()) : ?>
+                <dd>
+                    <strong><?= __('Pix expirado') ?></strong><br>
+                    <a href="/vindiPayment/pix/renew?bill=<?= $block->getBillId() ?>&order=<?= $block->getOrder()->getId() ?>">
+                        <button name="renew-pix"><?= __('Atualizar QR Code') ?></button>
+                    </a>
+                </dd>
+            <?php endif; ?>
         <?php endif; ?>
     </dl>
 </div>
