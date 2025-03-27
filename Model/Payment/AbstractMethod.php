@@ -617,7 +617,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             PaymentMethod::CREDIT_CARD,
             PaymentMethod::BANK_SLIP_PIX
         );
-        $order->getPayment()->setMethod(BankSlipPix::CODE);
+        $order->getPayment()->setMethod(CardBankslipPix::CODE);
         $this->orderRepository->save($order);
         return $billCredit['id'] . '|' . $billBankslipPix['id'];
     }

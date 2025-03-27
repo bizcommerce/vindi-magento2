@@ -29,7 +29,7 @@
             <strong><?= $block->escapeHtml(__('Pix')) ?></strong>
         </dt>
         <br>
-        <?php if (!$block->hasInvoice()): ?>
+        <?php if (!$block->hasInvoice() && !$block->isCanceled()): ?>
             <?php if ($block->canShowPixInfo()) : ?>
             <?php if ($block->getDaysToKeepWaitingPayment()) : ?>
             <dd>

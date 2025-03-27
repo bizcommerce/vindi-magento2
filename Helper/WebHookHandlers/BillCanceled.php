@@ -1,5 +1,4 @@
 <?php
-// File: app/code/Vindi/Payment/Helper/WebHookHandlers/BillCanceled.php
 namespace Vindi\Payment\Helper\WebHookHandlers;
 
 use Magento\Framework\Exception\LocalizedException;
@@ -11,7 +10,6 @@ use Magento\Sales\Model\Service\CreditmemoService;
 use Magento\Sales\Model\Order\CreditmemoFactory;
 use Magento\Framework\DB\Transaction;
 use Magento\Sales\Api\CreditmemoManagementInterface;
-use Magento\Framework\App\ObjectManager;
 
 /**
  * Class BillCanceled
@@ -20,58 +18,15 @@ use Magento\Framework\App\ObjectManager;
  */
 class BillCanceled
 {
-    /**
-     * @var LoggerInterface
-     */
     protected $logger;
-
-    /**
-     * @var PaymentSplitFactory
-     */
     protected $paymentSplitFactory;
-
-    /**
-     * @var OrderRepositoryInterface
-     */
     protected $orderRepository;
-
-    /**
-     * @var Charge
-     */
     protected $charge;
-
-    /**
-     * @var CreditmemoFactory
-     */
     protected $creditmemoFactory;
-
-    /**
-     * @var CreditmemoService
-     */
     protected $creditmemoService;
-
-    /**
-     * @var Transaction
-     */
     protected $transaction;
-
-    /**
-     * @var CreditmemoManagementInterface
-     */
     protected $creditmemoManagement;
 
-    /**
-     * Constructor.
-     *
-     * @param LoggerInterface $logger
-     * @param PaymentSplitFactory $paymentSplitFactory
-     * @param OrderRepositoryInterface $orderRepository
-     * @param Charge $charge
-     * @param CreditmemoFactory $creditmemoFactory
-     * @param CreditmemoService $creditmemoService
-     * @param Transaction $transaction
-     * @param CreditmemoManagementInterface $creditmemoManagement
-     */
     public function __construct(
         LoggerInterface $logger,
         PaymentSplitFactory $paymentSplitFactory,
@@ -92,28 +47,24 @@ class BillCanceled
         $this->creditmemoManagement = $creditmemoManagement;
     }
 
-    /**
-     * Process bill canceled webhook event.
-     *
-     * @param array $data Webhook event data.
-     * @return bool
-     * @throws LocalizedException
-     */
     public function billCanceled(array $data): bool
     {
         if (!isset($data['bill']) || empty($data['bill'])) {
             throw new LocalizedException(__('Bill data not found in webhook data.'));
         }
+
         $bill = $data['bill'];
 
         if (empty($bill['id'])) {
             throw new LocalizedException(__('Bill ID not found in webhook data.'));
         }
+
         $billId = $bill['id'];
 
         if (empty($bill['charges']) || !isset($bill['charges'][0]['id'])) {
             throw new LocalizedException(__('Charge data not found in webhook data.'));
         }
+
         $chargeId = $bill['charges'][0]['id'];
 
         $paymentSplitCollection = $this->paymentSplitFactory->create()->getCollection()
@@ -121,11 +72,13 @@ class BillCanceled
 
         if ($paymentSplitCollection->getSize() > 0) {
             $paymentSplitItems = $paymentSplitCollection->getItems();
+
             foreach ($paymentSplitItems as $paymentSplit) {
                 if (!$paymentSplit->getIsRefunded()) {
                     if (!$chargeId) {
                         continue;
                     }
+
                     $refundResult = $this->charge->refund($chargeId, ['amount' => $paymentSplit->getAmount()]);
                     if ($refundResult) {
                         $paymentSplit->setStatus('refunded')
@@ -135,20 +88,23 @@ class BillCanceled
                         $paymentSplit->save();
 
                         $order = $this->orderRepository->get($paymentSplit->getOrderId());
+
                         if ($order->canCreditmemo()) {
                             $invoice = $order->getInvoiceCollection()->getFirstItem();
                             if (!$invoice || !$invoice->getId()) {
                                 throw new LocalizedException(__('Invoice not found for credit memo creation.'));
                             }
-                            $creditmemo = $this->creditmemoFactory->createByOrder($order);
-                            $creditmemo->setInvoice($invoice)
-                                ->setBaseShippingAmount(0)
+
+                            $creditmemo = $this->creditmemoFactory->createByInvoice($invoice);
+                            $creditmemo->setBaseShippingAmount(0)
                                 ->setShippingAmount(0)
                                 ->setBaseGrandTotal($paymentSplit->getAmount())
                                 ->setGrandTotal($paymentSplit->getAmount());
+
                             foreach ($creditmemo->getAllItems() as $item) {
                                 $item->setBackToStock(false);
                             }
+
                             $this->creditmemoService->refund($creditmemo);
                         }
                     }
@@ -157,6 +113,7 @@ class BillCanceled
 
             $firstPaymentSplit = reset($paymentSplitItems);
             $orderId = $firstPaymentSplit->getOrderId();
+
             try {
                 $order = $this->orderRepository->get($orderId);
                 if ($order->canCancel()) {
