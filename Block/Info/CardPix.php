@@ -175,6 +175,18 @@ class CardPix extends \Magento\Payment\Block\Info
         return $this->getOrder()->hasInvoices();
     }
 
+
+    /**
+     * Check if the order is canceled
+     *
+     * @return bool
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    public function isCanceled()
+    {
+        return $this->getOrder()->getState() === \Magento\Sales\Model\Order::STATE_CANCELED;
+    }
+
     /**
      * Retrieve QR Code URL for Pix payments
      *

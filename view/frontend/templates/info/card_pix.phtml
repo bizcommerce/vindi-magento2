@@ -76,7 +76,7 @@
         </script>
     <?php endif; ?>
     <?php else: ?>
-        <?php if (!$block->hasInvoice()) : ?>
+        <?php if (!$block->hasInvoice() || $block->isCanceled()) : ?>
             <strong><?= __('Pix expirado') ?></strong></br>
             <a href="/vindiPayment/pix/renew?bill=<?= $block->getBillId() ?>&order=<?= $block->getOrder()->getId() ?>">
                 <button name="renew-pix"><?= __('Atualizar QR Code') ?></button>

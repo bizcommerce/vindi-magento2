@@ -65,7 +65,7 @@
                     </div>
                 </dd>
             <?php else : ?>
-                <?php if (!$block->hasInvoice()) : ?>
+                <?php if (!$block->hasInvoice() || $block->isCanceled()) : ?>
                     <strong><?php echo __('Bolepix expired'); ?></strong></br>
                     <a href="/vindiPayment/bankslippix/renew?bill=<?php echo $block->getBillId(); ?>&order=<?php echo $block->getOrder()->getId(); ?>">
                         <button name="renew-bolepix"><?php echo __('Renew QR Code'); ?></button>
