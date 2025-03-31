@@ -156,6 +156,21 @@ class BillPaid
 
         try {
             $originalOrder = $this->orderCreator->getOrderFromSubscriptionId($subscriptionId);
+            if ($originalOrder && strpos($originalOrder->getVindiBillId(), ',') !== false) {
+                $paymentSplitCollection = $this->paymentSplitFactory->create()->getCollection()
+                    ->addFieldToFilter('order_increment_id', $originalOrder->getIncrementId());
+                $allPaid = true;
+                foreach ($paymentSplitCollection as $paymentSplit) {
+                    if ($paymentSplit->getStatus() != 'paid') {
+                        $allPaid = false;
+                        break;
+                    }
+                }
+                if (!$allPaid) {
+                    $this->logger->info(__('Not all payment splits for subscription order %1 are paid yet.', $originalOrder->getIncrementId()));
+                    return true;
+                }
+            }
             if ($originalOrder) {
                 $queueItem = $this->orderCreationQueueFactory->create();
                 $queueItem->setData([

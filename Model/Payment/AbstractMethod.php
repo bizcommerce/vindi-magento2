@@ -461,7 +461,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'customer_id' => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
             'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-card1'
+            'code' => $order->getIncrementId() . '-01'
         ];
         $bodyCard1['bill_items'][] = [
             'product_id' => $multiPaymentDiscountProductId,
@@ -483,7 +483,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'customer_id' => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
             'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-card2'
+            'code' => $order->getIncrementId() . '-02'
         ];
         $bodyCard2['bill_items'][] = [
             'product_id' => $multiPaymentDiscountProductId,
@@ -712,17 +712,139 @@ abstract class AbstractMethod extends OriginAbstractMethod
     }
 
     /**
-     * Process multi-method subscription payment.
-     * (Placeholder for future "CARD + CARD" subscription logic)
+     * Process multi-method subscription payment using two credit cards.
      *
      * @param InfoInterface $payment
      * @param float $amount
      * @param OrderItemInterface $orderItem
      * @return mixed
+     * @throws LocalizedException
      */
     protected function processMultiMethodSubscriptionPayment(InfoInterface $payment, $amount, OrderItemInterface $orderItem)
     {
-        return $this->handleError($payment->getOrder());
+        $order = $payment->getOrder();
+        $customerId = $this->customer->findOrCreate($order);
+        $productList = $this->productManagement->findOrCreateProductsToSubscription($order);
+
+        $amountCredit = $payment->getAdditionalInformation('amount_credit');
+        $amountSecondCard = $payment->getAdditionalInformation('amount_second_card');
+        if (!$amountCredit || !$amountSecondCard) {
+            return $this->handleError($order);
+        }
+
+        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+
+        $bodyCard1 = [
+            'customer_id' => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-01'
+        ];
+        $bodyCard1['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount' => -((float)$amountSecondCard)
+        ];
+
+        $profileId1 = (int)$payment->getAdditionalInformation('payment_profile');
+        if ($profileId1) {
+            $paymentProfile1 = $this->getPaymentProfile($profileId1);
+        } else {
+            $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+        }
+        $bodyCard1['payment_profile'] = ['id' => $paymentProfile1->getData('payment_profile_id')];
+
+        $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
+        $bodyCard1['installments'] = (int)$installments1;
+
+        $bodyCard2 = [
+            'customer_id' => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-02'
+        ];
+        $bodyCard2['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount' => -((float)$amountCredit)
+        ];
+
+        $profileId2 = (int)$payment->getAdditionalInformation('payment_profile2');
+        if ($profileId2) {
+            $paymentProfile2 = $this->getPaymentProfile($profileId2);
+        } else {
+            $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+        }
+        $bodyCard2['payment_profile'] = ['id' => $paymentProfile2->getData('payment_profile_id')];
+
+        $installments2 = $payment->getAdditionalInformation('cc_installments2') ?: 1;
+        $bodyCard2['installments'] = (int)$installments2;
+
+        $billCard1 = $this->bill->create($bodyCard1);
+        if (!$billCard1 || !$this->successfullyPaid($bodyCard1, $billCard1)) {
+            if ($billCard1 && isset($billCard1['id'])) {
+                $this->bill->delete($billCard1['id']);
+            }
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCard1, $billCard1);
+
+        $billCard2 = $this->bill->create($bodyCard2);
+        if (!$billCard2 || !$this->successfullyPaid($bodyCard2, $billCard2)) {
+            if ($billCard2 && isset($billCard2['id'])) {
+                $this->bill->delete($billCard2['id']);
+            }
+            $this->bill->delete($billCard1['id']);
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCard2, $billCard2);
+
+        $combinedBillId = $billCard1['id'] . ',' . $billCard2['id'];
+
+        $this->savePaymentSplitRecord(
+            $order,
+            $billCard1,
+            $billCard2,
+            $amountCredit,
+            $amountSecondCard,
+            PaymentMethod::CREDIT_CARD,
+            PaymentMethod::CREDIT_CARD
+        );
+
+        $options = $orderItem->getProductOptions();
+        if (!empty($options['info_buyRequest']['selected_plan_id'])) {
+            $planId = $options['info_buyRequest']['selected_plan_id'];
+            $vindiPlan = $this->vindiPlanRepository->getById($planId);
+            $planId = $vindiPlan->getVindiId();
+        } else {
+            $planId = $this->planManagement->create($orderItem->getProductId());
+        }
+
+        $bodySubscription = [
+            'customer_id' => $customerId,
+            'payment_method_code' => PaymentMethod::CARD_CARD,
+            'plan_id' => $planId,
+            'product_items' => $productList,
+            'code' => $order->getIncrementId()
+        ];
+
+        $installments = $payment->getAdditionalInformation('installments');
+        if ($installments) {
+            $bodySubscription['installments'] = (int)$installments;
+        }
+
+        $responseData = $this->subscriptionRepository->create($bodySubscription);
+        if ($responseData) {
+            $bill = isset($responseData['bill']) ? $responseData['bill'] : null;
+            $subscription = isset($responseData['subscription']) ? $responseData['subscription'] : null;
+            if ($subscription) {
+                $this->saveSubscriptionToDatabase($subscription, $order, $combinedBillId);
+                $order->setVindiSubscriptionId($subscription['id']);
+            }
+            $order->setVindiBillId($combinedBillId);
+            $order->getPayment()->setMethod(CardCard::CODE);
+            $this->orderRepository->save($order);
+            return $combinedBillId;
+        }
+        return $this->handleError($order);
     }
 
     /**
