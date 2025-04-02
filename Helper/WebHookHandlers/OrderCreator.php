@@ -61,7 +61,6 @@ class OrderCreator
     }
 
     /**
-     * Create an order from bill data and update payment method
      * Create order from bill data.
      *
      * @param array $billData
