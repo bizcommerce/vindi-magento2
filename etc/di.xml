@@ -224,4 +224,6 @@
             <argument name="resourceModel" xsi:type="string">Vindi\Payment\Model\ResourceModel\VindiSubscriptionItemDiscount</argument>
         </arguments>
     </virtualType>
+
+    <preference for="Magento\Sales\Block\Adminhtml\Order\Create\Search\Grid" type="Vindi\Payment\Block\Adminhtml\Order\Create\Search\Grid" />
 </config>
