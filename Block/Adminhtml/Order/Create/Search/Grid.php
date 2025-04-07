@@ -146,7 +146,7 @@ class Grid extends \Magento\Sales\Block\Adminhtml\Order\Create\Search\Grid
             'plan_id',
             [
                 'header' => __('Planos'),
-                'renderer' => \Vindi\Payment\Block\Adminhtml\Order\Create\Search\Grid\Renderer\Plan::class,
+                'renderer' => \Vindi\Payment\Block\Adminhtml\Order\Create\Search\Renderer\Plan::class,
                 'index' => 'plan_id',
                 'filter' => false,
                 'sortable' => false

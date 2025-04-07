@@ -25,4 +25,7 @@
     <event name="sales_order_invoice_save_after">
         <observer name="vindi_payment_invoice_payment_link_observer" instance="Vindi\Payment\Observer\InvoicePaymentLinkObserver" />
     </event>
+<!--    <event name="sales_quote_item_set_product">-->
+<!--        <observer name="vindi_payment_add_admin_custom_option" instance="Vindi\Payment\Observer\AddAdminCustomOptionToQuoteItem" />-->
+<!--    </event>-->
 </config>
