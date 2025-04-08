@@ -53,7 +53,7 @@ class Plan extends AbstractRenderer
                 $html .= '<option value="">' . __('No recurrence data') . '</option>';
             }
         } else {
-            $html .= '<option value="">' . __('Recurrence disabled') . '</option>';
+            $html .= '<option value="">' . __('') . '</option>';
         }
         $html .= '</select>';
         return $html;
