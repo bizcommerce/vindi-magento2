@@ -5,6 +5,7 @@ use Magento\Framework\Event\ObserverInterface;
 use Magento\Framework\Event\Observer;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Quote\Model\Quote\Item;
+use Magento\Quote\Model\Quote\Item\OptionFactory;
 use Magento\Catalog\Api\ProductRepositoryInterface;
 
 class AddAdminCustomOptionToQuoteItem implements ObserverInterface
@@ -20,15 +21,23 @@ class AddAdminCustomOptionToQuoteItem implements ObserverInterface
     protected $productRepository;
 
     /**
+     * @var OptionFactory
+     */
+    protected $optionFactory;
+
+    /**
      * @param \Magento\Backend\Model\Session\Quote $sessionQuote
      * @param ProductRepositoryInterface $productRepository
+     * @param OptionFactory $optionFactory
      */
     public function __construct(
         \Magento\Backend\Model\Session\Quote $sessionQuote,
-        ProductRepositoryInterface $productRepository
+        ProductRepositoryInterface $productRepository,
+        OptionFactory $optionFactory
     ) {
         $this->sessionQuote = $sessionQuote;
         $this->productRepository = $productRepository;
+        $this->optionFactory = $optionFactory;
     }
 
     /**
@@ -50,6 +59,19 @@ class AddAdminCustomOptionToQuoteItem implements ObserverInterface
             if (empty($selectedPlanId)) {
                 throw new LocalizedException(__('A plan must be selected for this product.'));
             }
+
+            $buyRequestData = [
+                'selected_plan_id' => $selectedPlanId,
+                'selected_plan_price' => $this->sessionQuote->getData('selected_plan_price'),
+                'selected_plan_installments' => $this->sessionQuote->getData('selected_plan_installments')
+            ];
+
+            $option = $this->optionFactory->create();
+            $option->setProductId($productId)
+                ->setCode('info_buyRequest')
+                ->setValue(json_encode($buyRequestData));
+            $quoteItem->addOption($option);
+
             $additionalOptions = [];
             $additionalOptions[] = [
                 'label' => __('Plan ID'),
