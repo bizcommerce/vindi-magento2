@@ -1,9 +1,9 @@
 <?php
 namespace Vindi\Payment\Model\Payment;
 
+use Magento\Framework\Exception\LocalizedException;
 use Vindi\Payment\Helper\Data;
 use Vindi\Payment\Model\Payment\PaymentMethod;
-use Magento\Framework\Exception\LocalizedException;
 
 class Profile
 {
@@ -37,16 +37,12 @@ class Profile
         $paymentProfile = $this->createPaymentProfile($creditCardData);
 
         if ($paymentProfile === false) {
-            throw new LocalizedException(
-                __('Error while informing credit card data. Verify data and try again')
-            );
+            throw new LocalizedException(__('Error while informing credit card data. Verify data and try again'));
         }
 
         $verifyMethod = $this->helperData->getShouldVerifyProfile();
         if ($verifyMethod && !$this->verifyPaymentProfile($paymentProfile['payment_profile']['id'])) {
-            throw new LocalizedException(
-                __('Impossible to validate your credit card')
-            );
+            throw new LocalizedException(__('Impossible to validate your credit card'));
         }
 
         return $paymentProfile;
@@ -67,16 +63,12 @@ class Profile
         $paymentProfile = $this->createPaymentProfileFromCustomerAccount($payment);
 
         if ($paymentProfile === false) {
-            throw new LocalizedException(
-                __('Error while informing credit card data. Verify data and try again')
-            );
+            throw new LocalizedException(__('Error while informing credit card data. Verify data and try again'));
         }
 
         $verifyMethod = $this->helperData->getShouldVerifyProfile();
         if ($verifyMethod && !$this->verifyPaymentProfile($paymentProfile['payment_profile']['id'])) {
-            throw new LocalizedException(
-                __('Impossible to validate your credit card')
-            );
+            throw new LocalizedException(__('Impossible to validate your credit card'));
         }
 
         return $paymentProfile;
@@ -98,21 +90,29 @@ class Profile
             throw new LocalizedException(__('customer_id cannot be blank'));
         }
 
-        if ($whichCard === 'second') {
-            $holder = $payment->getAdditionalInformation('cc_owner2');
-            $month  = $payment->getAdditionalInformation('cc_exp_month2');
-            $year   = $payment->getAdditionalInformation('cc_exp_year2');
-            $number = $payment->getAdditionalInformation('cc_number2');
-            $cvv    = $payment->getAdditionalInformation('cc_cvv2') ?: '';
-            $ccType = $payment->getAdditionalInformation('cc_type2');
-        } else {
-            $holder = $payment->getCcOwner();
-            $month  = $payment->getCcExpMonth();
-            $year   = $payment->getCcExpYear();
-            $number = $payment->getCcNumber();
-            $cvv    = $payment->getCcCid() ?: '';
-            $ccType = $payment->getCcType();
-        }
+        $holder  = $whichCard === 'second'
+            ? ($payment->getAdditionalInformation('cc_owner2')      ?: $payment->getCcOwner())
+            : ($payment->getAdditionalInformation('cc_owner')       ?: $payment->getCcOwner());
+
+        $month   = $whichCard === 'second'
+            ? ($payment->getAdditionalInformation('cc_exp_month2')  ?: $payment->getCcExpMonth())
+            : ($payment->getAdditionalInformation('cc_exp_month')   ?: $payment->getCcExpMonth());
+
+        $year    = $whichCard === 'second'
+            ? ($payment->getAdditionalInformation('cc_exp_year2')   ?: $payment->getCcExpYear())
+            : ($payment->getAdditionalInformation('cc_exp_year')    ?: $payment->getCcExpYear());
+
+        $number  = $whichCard === 'second'
+            ? ($payment->getAdditionalInformation('cc_number2')     ?: $payment->getCcNumber())
+            : ($payment->getAdditionalInformation('cc_number')      ?: $payment->getCcNumber());
+
+        $cvv     = $whichCard === 'second'
+            ? ($payment->getAdditionalInformation('cc_cvv2')        ?: $payment->getCcCid())
+            : ($payment->getAdditionalInformation('cc_cvv')         ?: $payment->getCcCid());
+
+        $ccType  = $whichCard === 'second'
+            ? ($payment->getAdditionalInformation('cc_type2')       ?: $payment->getCcType())
+            : ($payment->getAdditionalInformation('cc_type')        ?: $payment->getCcType());
 
         if (empty($holder)) {
             throw new LocalizedException(__('holder_name cannot be blank'));

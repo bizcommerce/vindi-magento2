@@ -151,13 +151,13 @@ class CardBankslipPix extends AbstractMethod
             $info->setAdditionalInformation('cc_installments', (string) $additionalData->getData("cc_installments"));
         } else {
             $info->addData([
-                'cc_type'           => (string) $this->getCardTypeCode($additionalData->getData("cc_type1")),
-                'cc_owner'          => (string) $additionalData->getData("cc_owner1"),
-                'cc_last_4'         => substr((string) $additionalData->getData("cc_number1"), -4),
-                'cc_number'         => (string) $additionalData->getData("cc_number1"),
-                'cc_cvv'            => (string) $additionalData->getData("cc_cvv1"),
-                'cc_exp_month'      => (string) $additionalData->getData("cc_exp_month1"),
-                'cc_exp_year'       => (string) $additionalData->getData("cc_exp_year1"),
+                'cc_type'           => (string) $this->getCardTypeCode($additionalData->getData("cc_type")),
+                'cc_owner'          => (string) $additionalData->getData("cc_owner"),
+                'cc_last_4'         => substr((string) $additionalData->getData("cc_number"), -4),
+                'cc_number'         => (string) $additionalData->getData("cc_number"),
+                'cc_cvv'            => (string) $additionalData->getData("cc_cvv"),
+                'cc_exp_month'      => (string) $additionalData->getData("cc_exp_month"),
+                'cc_exp_year'       => (string) $additionalData->getData("cc_exp_year"),
                 'cc_installments'   => (string) $additionalData->getData("cc_installments"),
             ]);
             $info->setAdditionalInformation('cc_installments', (string) $additionalData->getData("cc_installments"));

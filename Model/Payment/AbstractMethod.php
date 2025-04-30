@@ -1025,10 +1025,10 @@ abstract class AbstractMethod extends OriginAbstractMethod
     /**
      * Create payment profile.
      *
-     * @param \Magento\Sales\Model\Order       $order
-     * @param InfoInterface                     $payment
-     * @param int                               $customerId
-     * @param string                            $whichCard
+     * @param \Magento\Sales\Model\Order $order
+     * @param InfoInterface             $payment
+     * @param int                       $customerId
+     * @param string                    $whichCard
      * @return \Vindi\Payment\Model\PaymentProfile
      * @throws LocalizedException
      */
@@ -1038,69 +1038,61 @@ abstract class AbstractMethod extends OriginAbstractMethod
             throw new LocalizedException(__('Vindi customer_id cannot be blank.'));
         }
 
-        $ccOwnerField = ($whichCard === 'second') ? 'cc_owner2' : 'cc_owner';
-        $holder = $payment->getAdditionalInformation($ccOwnerField);
+        $ccOwnerField     = ($whichCard === 'second') ? 'cc_owner2'      : 'cc_owner';
+        $ccTypeField      = ($whichCard === 'second') ? 'cc_type2'       : 'cc_type';
+        $ccNumberField    = ($whichCard === 'second') ? 'cc_number2'     : 'cc_number';
+        $ccExpMonthField  = ($whichCard === 'second') ? 'cc_exp_month2'  : 'cc_exp_month';
+        $ccExpYearField   = ($whichCard === 'second') ? 'cc_exp_year2'   : 'cc_exp_year';
+        $ccCvvField       = ($whichCard === 'second') ? 'cc_cvv2'        : 'cc_cvv';
+
+        $holder = $payment->getAdditionalInformation($ccOwnerField)
+            ?: $payment->getData($ccOwnerField);
         if (empty($holder)) {
             throw new LocalizedException(__('Vindi holder_name cannot be blank.'));
         }
+
+        $type     = $payment->getAdditionalInformation($ccTypeField)      ?: $payment->getData($ccTypeField);
+        $number   = $payment->getAdditionalInformation($ccNumberField)    ?: $payment->getData($ccNumberField);
+        $month    = $payment->getAdditionalInformation($ccExpMonthField)  ?: $payment->getData($ccExpMonthField);
+        $year     = $payment->getAdditionalInformation($ccExpYearField)   ?: $payment->getData($ccExpYearField);
+        $cvv      = $payment->getAdditionalInformation($ccCvvField)       ?: $payment->getData($ccCvvField) ?: '';
 
         $payment->setAdditionalInformation('customer_id', $customerId);
         $payment->setAdditionalInformation('holder_name', $holder);
         $payment->setData('customer_id', $customerId);
         $payment->setData('holder_name', $holder);
 
-        $ccTypeField     = ($whichCard === 'second') ? 'cc_type2'     : 'cc_type';
-        $ccNumberField   = ($whichCard === 'second') ? 'cc_number2'   : 'cc_number';
-        $ccExpMonthField = ($whichCard === 'second') ? 'cc_exp_month2': 'cc_exp_month';
-        $ccExpYearField  = ($whichCard === 'second') ? 'cc_exp_year2' : 'cc_exp_year';
-        $ccCvvField      = ($whichCard === 'second') ? 'cc_cvv2'      : 'cc_cvv';
-
-        $value = $payment->getAdditionalInformation($ccTypeField);
-        if (!empty($value)) {
-            $payment->setCcType($value);
-        }
-        $value = $payment->getAdditionalInformation($ccNumberField);
-        if (!empty($value)) {
-            $payment->setCcNumberEnc($value);
-        }
         $payment->setCcOwner($holder);
-        $value = $payment->getAdditionalInformation($ccExpMonthField);
-        if (!empty($value)) {
-            $payment->setCcExpMonth($value);
-        }
-        $value = $payment->getAdditionalInformation($ccExpYearField);
-        if (!empty($value)) {
-            $payment->setCcExpYear($value);
-        }
-        $value = $payment->getAdditionalInformation($ccCvvField);
-        if (!empty($value)) {
-            $payment->setCcCid($value);
-        }
+        $payment->setCcType($type);
+        $payment->setCcNumberEnc($number);
+        $payment->setCcExpMonth($month);
+        $payment->setCcExpYear($year);
+        $payment->setCcCid($cvv);
 
         $methodCode = $this->getPaymentMethodCode();
         if ($this->helperData->isMultiMethod($methodCode)) {
             $methodCode = PaymentMethod::CREDIT_CARD;
         }
 
-        $paymentProfile = $this->profile->create($payment, $customerId, $this->getPaymentMethodCode(), $whichCard);
+        $paymentProfile = $this->profile->create($payment, $customerId, $methodCode, $whichCard);
 
-        $paymentProfileData   = $paymentProfile['payment_profile'];
-        $paymentProfileModel  = $this->paymentProfileFactory->create();
-        $paymentProfileModel->setData([
-            'payment_profile_id' => $paymentProfileData['id'],
+        $data   = $paymentProfile['payment_profile'];
+        $model  = $this->paymentProfileFactory->create();
+        $model->setData([
+            'payment_profile_id' => $data['id'],
             'vindi_customer_id'  => $customerId,
             'customer_id'        => $customerId,
             'customer_email'     => $order->getCustomerEmail(),
             'holder_name'        => $holder,
             'cc_type'            => $this->paymentMethod->convertCcTypeToFullName($payment->getCcType()),
             'cc_last_4'          => $payment->getCcLast4(),
-            'status'             => $paymentProfileData['status'],
-            'token'              => $paymentProfileData['token'],
-            'type'               => $paymentProfileData['type'],
+            'status'             => $data['status'],
+            'token'              => $data['token'],
+            'type'               => $data['type'],
         ]);
-        $this->paymentProfileRepository->save($paymentProfileModel);
+        $this->paymentProfileRepository->save($model);
 
-        return $paymentProfileModel;
+        return $model;
     }
 
     /**
