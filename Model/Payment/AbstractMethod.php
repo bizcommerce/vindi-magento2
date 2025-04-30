@@ -246,13 +246,21 @@ abstract class AbstractMethod extends OriginAbstractMethod
      * Process the payment through external API calls.
      *
      * @param InfoInterface $payment
-     * @param float $amount
+     * @param float         $amount
      * @return mixed
      * @throws LocalizedException
      */
     protected function processPayment(InfoInterface $payment, $amount)
     {
         $order = $payment->getOrder();
+
+        $customerId = $this->customer->findOrCreate($order);
+        if (!$customerId) {
+            throw new LocalizedException(__('Vindi customer_id cannot be blank.'));
+        }
+
+        $payment->setAdditionalInformation('customer_id', $customerId);
+
         $paymentMethodCode = $this->getPaymentMethodCode();
         $plan = $this->isSubscriptionOrder($order);
 
@@ -1017,20 +1025,35 @@ abstract class AbstractMethod extends OriginAbstractMethod
     /**
      * Create payment profile.
      *
-     * @param Order $order
-     * @param InfoInterface $payment
-     * @param int $customerId
-     * @param string $whichCard
-     * @return PaymentProfile
+     * @param \Magento\Sales\Model\Order       $order
+     * @param InfoInterface                     $payment
+     * @param int                               $customerId
+     * @param string                            $whichCard
+     * @return \Vindi\Payment\Model\PaymentProfile
+     * @throws LocalizedException
      */
-    public function createPaymentProfile(Order $order, InfoInterface $payment, $customerId, $whichCard = 'first')
+    public function createPaymentProfile($order, InfoInterface $payment, $customerId, $whichCard = 'first')
     {
-        $ccTypeField = ($whichCard === 'second') ? 'cc_type2' : 'cc_type';
-        $ccNumberField = ($whichCard === 'second') ? 'cc_number2' : 'cc_number';
+        if (!$customerId) {
+            throw new LocalizedException(__('Vindi customer_id cannot be blank.'));
+        }
+
         $ccOwnerField = ($whichCard === 'second') ? 'cc_owner2' : 'cc_owner';
-        $ccExpMonthField = ($whichCard === 'second') ? 'cc_exp_month2' : 'cc_exp_month';
-        $ccExpYearField = ($whichCard === 'second') ? 'cc_exp_year2' : 'cc_exp_year';
-        $ccCvvField = ($whichCard === 'second') ? 'cc_cvv2' : 'cc_cvv';
+        $holder = $payment->getAdditionalInformation($ccOwnerField);
+        if (empty($holder)) {
+            throw new LocalizedException(__('Vindi holder_name cannot be blank.'));
+        }
+
+        $payment->setAdditionalInformation('customer_id', $customerId);
+        $payment->setAdditionalInformation('holder_name', $holder);
+        $payment->setData('customer_id', $customerId);
+        $payment->setData('holder_name', $holder);
+
+        $ccTypeField     = ($whichCard === 'second') ? 'cc_type2'     : 'cc_type';
+        $ccNumberField   = ($whichCard === 'second') ? 'cc_number2'   : 'cc_number';
+        $ccExpMonthField = ($whichCard === 'second') ? 'cc_exp_month2': 'cc_exp_month';
+        $ccExpYearField  = ($whichCard === 'second') ? 'cc_exp_year2' : 'cc_exp_year';
+        $ccCvvField      = ($whichCard === 'second') ? 'cc_cvv2'      : 'cc_cvv';
 
         $value = $payment->getAdditionalInformation($ccTypeField);
         if (!empty($value)) {
@@ -1040,10 +1063,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         if (!empty($value)) {
             $payment->setCcNumberEnc($value);
         }
-        $value = $payment->getAdditionalInformation($ccOwnerField);
-        if (!empty($value)) {
-            $payment->setCcOwner($value);
-        }
+        $payment->setCcOwner($holder);
         $value = $payment->getAdditionalInformation($ccExpMonthField);
         if (!empty($value)) {
             $payment->setCcExpMonth($value);
@@ -1061,22 +1081,22 @@ abstract class AbstractMethod extends OriginAbstractMethod
         if ($this->helperData->isMultiMethod($methodCode)) {
             $methodCode = PaymentMethod::CREDIT_CARD;
         }
-        $paymentProfile = $this->profile->create($payment, $customerId, $methodCode);
-        $paymentProfileData = $paymentProfile['payment_profile'];
-        $paymentProfileModel = $this->paymentProfileFactory->create();
+
+        $paymentProfile = $this->profile->create($payment, $customerId, $this->getPaymentMethodCode(), $whichCard);
+
+        $paymentProfileData   = $paymentProfile['payment_profile'];
+        $paymentProfileModel  = $this->paymentProfileFactory->create();
         $paymentProfileModel->setData([
             'payment_profile_id' => $paymentProfileData['id'],
-            'vindi_customer_id' => $customerId,
-            'customer_id' => $customerId,
-            'customer_email' => $order->getCustomerEmail(),
-            'holder_name' => $payment->getCcOwner(),
-            'cc_type' => $payment->getCcType(),
-            'cc_name' => $payment->getCcOwner(),
-            'cc_type' => $this->paymentMethod->convertCcTypeToFullName($payment->getCcType()),
-            'cc_last_4' => $payment->getCcLast4(),
-            'status' => $paymentProfileData["status"],
-            'token' => $paymentProfileData["token"],
-            'type' => $paymentProfileData["type"],
+            'vindi_customer_id'  => $customerId,
+            'customer_id'        => $customerId,
+            'customer_email'     => $order->getCustomerEmail(),
+            'holder_name'        => $holder,
+            'cc_type'            => $this->paymentMethod->convertCcTypeToFullName($payment->getCcType()),
+            'cc_last_4'          => $payment->getCcLast4(),
+            'status'             => $paymentProfileData['status'],
+            'token'              => $paymentProfileData['token'],
+            'type'               => $paymentProfileData['type'],
         ]);
         $this->paymentProfileRepository->save($paymentProfileModel);
 
