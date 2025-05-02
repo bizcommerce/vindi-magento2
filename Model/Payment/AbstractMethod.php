@@ -828,7 +828,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
         $bodySubscription = [
             'customer_id' => $customerId,
-            'payment_method_code' => PaymentMethod::CARD_CARD,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
             'plan_id' => $planId,
             'product_items' => $productList,
             'code' => $order->getIncrementId()
