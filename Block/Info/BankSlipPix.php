@@ -14,10 +14,11 @@ use Vindi\Payment\Model\Payment\PaymentMethod;
  * Class BankSlipPix
  *
  * @package Vindi\Payment\Block\Info
+ *
+ * @method $this setCacheLifetime(false|int $lifetime)
  */
 class BankSlipPix extends Info
 {
-
     /**
      * @var string
      */
@@ -33,7 +34,9 @@ class BankSlipPix extends Info
      */
     protected $pixConfiguration;
 
-    /** @var TimezoneInterface */
+    /**
+     * @var TimezoneInterface
+     */
     protected $timezone;
 
     /**
@@ -41,16 +44,21 @@ class BankSlipPix extends Info
      */
     protected $json;
 
+    /**
+     * @var PaymentMethod
+     */
     protected $paymentMethod;
 
     /**
-     * @param PaymentMethod $paymentMethod
-     * @param Data $currency
-     * @param Context $context
+     * BankSlipPix constructor.
+     *
+     * @param PaymentMethod             $paymentMethod
+     * @param Data                      $currency
+     * @param Context                   $context
      * @param PixConfigurationInterface $pixConfiguration
-     * @param Json $json
-     * @param TimezoneInterface $timezone
-     * @param array $data
+     * @param Json                      $json
+     * @param TimezoneInterface         $timezone
+     * @param array                     $data
      */
     public function __construct(
         PaymentMethod             $paymentMethod,
@@ -60,14 +68,13 @@ class BankSlipPix extends Info
         Json                      $json,
         TimezoneInterface         $timezone,
         array                     $data = []
-    )
-    {
+    ) {
         parent::__construct($context, $data);
-        $this->paymentMethod = $paymentMethod;
-        $this->currency = $currency;
+        $this->paymentMethod    = $paymentMethod;
+        $this->currency         = $currency;
         $this->pixConfiguration = $pixConfiguration;
-        $this->timezone = $timezone;
-        $this->json = $json;
+        $this->timezone         = $timezone;
+        $this->json             = $json;
     }
 
     /**
@@ -80,7 +87,9 @@ class BankSlipPix extends Info
     }
 
     /**
-     * @return string
+     * Retrieve bill ID for the order
+     *
+     * @return string|null
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function getBillId()
@@ -90,8 +99,9 @@ class BankSlipPix extends Info
     }
 
     /**
-     * @return mixed
-     * @throws \Magento\Framework\Exception\LocalizedException
+     * Retrieve order instance
+     *
+     * @return \Magento\Sales\Model\Order
      */
     public function getOrder()
     {
@@ -101,7 +111,6 @@ class BankSlipPix extends Info
     /**
      * Get reorder URL
      *
-     * @param object $order
      * @return string
      */
     public function getReorderUrl()
@@ -111,7 +120,9 @@ class BankSlipPix extends Info
     }
 
     /**
-     * @return mixed
+     * Check if the order has any invoices
+     *
+     * @return bool
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function hasInvoice()
@@ -130,6 +141,8 @@ class BankSlipPix extends Info
     }
 
     /**
+     * Determine if BankSlipPix info can be shown
+     *
      * @return bool
      * @throws \Magento\Framework\Exception\LocalizedException
      */
@@ -143,11 +156,12 @@ class BankSlipPix extends Info
         }
 
         $timestampMaxDays = strtotime($daysToPayment);
-
         return $paymentMethod && $this->isValidToPayment($timestampMaxDays);
     }
 
     /**
+     * Retrieve QR code path for Pix
+     *
      * @return mixed
      * @throws \Magento\Framework\Exception\LocalizedException
      */
@@ -157,6 +171,8 @@ class BankSlipPix extends Info
     }
 
     /**
+     * Get QR code warning message
+     *
      * @return string
      */
     public function getQrCodeWarningMessage()
@@ -165,37 +181,40 @@ class BankSlipPix extends Info
     }
 
     /**
+     * Retrieve the original QR code path and serialize it
+     *
      * @return string
-     * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function getQrcodeOriginalPath(): string
     {
         try {
-            $qrcodeOriginalPath = (string)$this->getOrder()->getPayment()->getAdditionalInformation('qrcode_original_path');
-            return $this->json->serialize($qrcodeOriginalPath);
+            $path = (string)$this->getOrder()->getPayment()->getAdditionalInformation('qrcode_original_path');
+            return $this->json->serialize($path);
         } catch (\Exception $e) {
             return '';
         }
     }
 
     /**
-     * @return mixed
-     * @throws \Magento\Framework\Exception\LocalizedException
+     * Retrieve formatted due date
+     *
+     * @return string
      */
     public function getDaysToKeepWaitingPayment()
     {
-        $daysToPayment = $this->getMaxDaysToPayment();
-        if (!$daysToPayment) {
+        $days = $this->getMaxDaysToPayment();
+        if (!$days) {
             return '';
         }
 
-        $timestampMaxDays = strtotime($daysToPayment);
-        return date('d/m/Y H:m:s', $timestampMaxDays);
+        $timestamp = strtotime($days);
+        return date('d/m/Y H:i:s', $timestamp);
     }
 
     /**
-     * @param $timestampMaxDays
+     * Validate timestamp against current store time
      *
+     * @param int $timestampMaxDays
      * @return bool
      */
     protected function isValidToPayment($timestampMaxDays)
@@ -203,26 +222,36 @@ class BankSlipPix extends Info
         if (!$timestampMaxDays) {
             return false;
         }
-
         return $timestampMaxDays >= $this->timezone->scopeTimeStamp();
     }
 
     /**
+     * Retrieve max days to payment information
+     *
      * @return string
-     * @throws \Magento\Framework\Exception\LocalizedException
      */
     protected function getMaxDaysToPayment(): string
     {
-        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('max_days_to_keep_waiting_payment');
+        return (string)$this->getOrder()->getPayment()->getAdditionalInformation('max_days_to_keep_waiting_payment');
     }
 
+    /**
+     * Get print URL
+     *
+     * @return string
+     */
     public function getPrintUrl(): string
     {
-        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('print_url');
+        return (string)$this->getOrder()->getPayment()->getAdditionalInformation('print_url');
     }
 
+    /**
+     * Get due date
+     *
+     * @return string
+     */
     public function getDueDate(): string
     {
-        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('due_at');
+        return (string)$this->getOrder()->getPayment()->getAdditionalInformation('due_at');
     }
 }

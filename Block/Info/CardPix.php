@@ -1,4 +1,5 @@
 <?php
+
 namespace Vindi\Payment\Block\Info;
 
 use Vindi\Payment\Model\Payment\PaymentMethod;
@@ -11,14 +12,14 @@ use Vindi\Payment\Model\PaymentSplitFactory;
 
 /**
  * Block class for displaying information when the payment method is "Card + Pix" in frontend
+ *
+ * @method $this setCacheLifetime(false|int $lifetime)
  */
 class CardPix extends \Magento\Payment\Block\Info
 {
     use \Vindi\Payment\Block\InfoTrait;
 
     /**
-     * Template file for CardPix block
-     *
      * @var string
      */
     protected $_template = 'Vindi_Payment::info/card_pix.phtml';
@@ -56,24 +57,24 @@ class CardPix extends \Magento\Payment\Block\Info
     /**
      * CardPix constructor.
      *
-     * @param PaymentMethod $paymentMethod
-     * @param Data $currency
-     * @param Context $context
+     * @param PaymentMethod             $paymentMethod
+     * @param Data                      $currency
+     * @param Context                   $context
      * @param PixConfigurationInterface $pixConfiguration
-     * @param TimezoneInterface $timezone
-     * @param Json $json
-     * @param PaymentSplitFactory $paymentSplitFactory
-     * @param array $data
+     * @param TimezoneInterface         $timezone
+     * @param Json                      $json
+     * @param PaymentSplitFactory       $paymentSplitFactory
+     * @param array                     $data
      */
     public function __construct(
-        PaymentMethod $paymentMethod,
-        Data $currency,
-        Context $context,
+        PaymentMethod             $paymentMethod,
+        Data                      $currency,
+        Context                   $context,
         PixConfigurationInterface $pixConfiguration,
-        TimezoneInterface $timezone,
-        Json $json,
-        PaymentSplitFactory $paymentSplitFactory,
-        array $data = []
+        TimezoneInterface         $timezone,
+        Json                      $json,
+        PaymentSplitFactory       $paymentSplitFactory,
+        array                     $data = []
     ) {
         parent::__construct($context, $data);
         $this->paymentMethod       = $paymentMethod;
@@ -112,8 +113,7 @@ class CardPix extends \Magento\Payment\Block\Info
     public function getBillId()
     {
         $order = $this->getOrder();
-        $billId = $order->getVindiBillId() ?? null;
-        return $billId;
+        return $order->getVindiBillId() ?? null;
     }
 
     /**
@@ -150,7 +150,7 @@ class CardPix extends \Magento\Payment\Block\Info
             \Vindi\Payment\Model\Payment\Pix::CODE,
             PaymentMethod::CARD_PIX,
             PaymentMethod::CARD_BANKSLIP_PIX,
-            "vindi_cardpix"
+            'vindi_cardpix'
         ];
 
         $paymentMethod = in_array($method, $validMethods, true);
@@ -165,7 +165,7 @@ class CardPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Check if the order has any invoice
+     * Check if the order has any invoices
      *
      * @return bool
      * @throws \Magento\Framework\Exception\LocalizedException
@@ -174,7 +174,6 @@ class CardPix extends \Magento\Payment\Block\Info
     {
         return $this->getOrder()->hasInvoices();
     }
-
 
     /**
      * Check if the order is canceled
@@ -188,7 +187,7 @@ class CardPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Retrieve QR Code URL for Pix payments
+     * Retrieve QR code URL for Pix payments
      *
      * @return mixed
      * @throws \Magento\Framework\Exception\LocalizedException
@@ -199,7 +198,7 @@ class CardPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Get warning message for QR Code display
+     * Get warning message for QR code display
      *
      * @return string
      */
@@ -209,31 +208,32 @@ class CardPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Retrieve original QR Code path for Pix payments
+     * Retrieve original QR code path for Pix payments
      *
      * @return bool|string
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function getQrcodeOriginalPath()
     {
-        $qrcodeOriginalPath = $this->getOrder()->getPayment()->getAdditionalInformation('qrcode_original_path');
-        return $this->json->serialize($qrcodeOriginalPath);
+        $path = $this->getOrder()->getPayment()->getAdditionalInformation('qrcode_original_path');
+        return $this->json->serialize($path);
     }
 
     /**
-     * Get the formatted date/time until which Pix payment is valid
+     * Get formatted date/time until which Pix payment is valid
      *
-     * @return mixed
+     * @return string|null
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function getDaysToKeepWaitingPayment()
     {
-        $daysToPayment = $this->getMaxDaysToPayment();
-        if (!$daysToPayment) {
+        $days = $this->getMaxDaysToPayment();
+        if (!$days) {
             return null;
         }
-        $timestampMaxDays = strtotime($daysToPayment);
-        return date('d/m/Y H:i:s', $timestampMaxDays);
+
+        $timestamp = strtotime($days);
+        return date('d/m/Y H:i:s', $timestamp);
     }
 
     /**
@@ -258,11 +258,11 @@ class CardPix extends \Magento\Payment\Block\Info
      */
     protected function getMaxDaysToPayment(): string
     {
-        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('max_days_to_keep_waiting_payment');
+        return (string)$this->getOrder()->getPayment()->getAdditionalInformation('max_days_to_keep_waiting_payment');
     }
 
     /**
-     * Check if the payment split status is pending.
+     * Check if the payment split status is pending
      *
      * @return bool
      * @throws \Magento\Framework\Exception\LocalizedException
@@ -273,12 +273,9 @@ class CardPix extends \Magento\Payment\Block\Info
         if (!$billId) {
             return true;
         }
-        $paymentSplitCollection = $this->paymentSplitFactory->create()->getCollection()
+        $collection = $this->paymentSplitFactory->create()->getCollection()
             ->addFieldToFilter('bill_id', $billId);
-        $paymentSplit = $paymentSplitCollection->getFirstItem();
-        if ($paymentSplit && $paymentSplit->getId()) {
-            return $paymentSplit->getStatus() === 'pending';
-        }
-        return true;
+        $item = $collection->getFirstItem();
+        return !$item->getId() || $item->getStatus() === 'pending';
     }
 }

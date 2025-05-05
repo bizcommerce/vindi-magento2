@@ -14,6 +14,8 @@ use Vindi\Payment\Model\Payment\PaymentMethod;
  * Class Pix
  *
  * @package Vindi\Payment\Block\Info
+ *
+ * @method $this setCacheLifetime(false|int $lifetime)
  */
 class Pix extends Info
 {
@@ -32,7 +34,9 @@ class Pix extends Info
      */
     protected $pixConfiguration;
 
-    /** @var TimezoneInterface */
+    /**
+     * @var TimezoneInterface
+     */
     protected $timezone;
 
     /**
@@ -40,33 +44,37 @@ class Pix extends Info
      */
     protected $json;
 
+    /**
+     * @var PaymentMethod
+     */
     protected $paymentMethod;
 
     /**
      * Pix constructor.
-     * @param PaymentMethod $paymentMethod
-     * @param Data $currency
-     * @param Context $context
+     *
+     * @param PaymentMethod             $paymentMethod
+     * @param Data                      $currency
+     * @param Context                   $context
      * @param PixConfigurationInterface $pixConfiguration
-     * @param TimezoneInterface $timezone
-     * @param Json $json
-     * @param array $data
+     * @param TimezoneInterface         $timezone
+     * @param Json                      $json
+     * @param array                     $data
      */
     public function __construct(
-        PaymentMethod $paymentMethod,
-        Data $currency,
-        Context $context,
+        PaymentMethod             $paymentMethod,
+        Data                      $currency,
+        Context                   $context,
         PixConfigurationInterface $pixConfiguration,
-        TimezoneInterface $timezone,
-        Json $json,
-        array $data = []
+        TimezoneInterface         $timezone,
+        Json                      $json,
+        array                     $data = []
     ) {
         parent::__construct($context, $data);
-        $this->paymentMethod = $paymentMethod;
-        $this->currency = $currency;
+        $this->paymentMethod    = $paymentMethod;
+        $this->currency         = $currency;
         $this->pixConfiguration = $pixConfiguration;
-        $this->timezone = $timezone;
-        $this->json = $json;
+        $this->timezone         = $timezone;
+        $this->json             = $json;
     }
 
     /**
@@ -79,19 +87,21 @@ class Pix extends Info
     }
 
     /**
-     * @return string
+     * Retrieve bill ID for Pix payments
+     *
+     * @return string|null
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function getBillId()
     {
         $order = $this->getOrder();
-        $billId = $order->getVindiBillId() ?? null;
-
-        return $billId;
+        return $order->getVindiBillId() ?? null;
     }
 
     /**
-     * @return mixed
+     * Retrieve order instance
+     *
+     * @return \Magento\Sales\Model\Order
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function getOrder()
@@ -112,7 +122,6 @@ class Pix extends Info
     /**
      * Get reorder URL
      *
-     * @param object $order
      * @return string
      */
     public function getReorderUrl()
@@ -122,6 +131,8 @@ class Pix extends Info
     }
 
     /**
+     * Determine if Pix information can be shown
+     *
      * @return bool
      * @throws \Magento\Framework\Exception\LocalizedException
      */
@@ -135,11 +146,12 @@ class Pix extends Info
         }
 
         $timestampMaxDays = strtotime($daysToPayment);
-
         return $paymentMethod && $this->isValidToPayment($timestampMaxDays);
     }
 
     /**
+     * Check if the order has any invoices
+     *
      * @return bool
      * @throws \Magento\Framework\Exception\LocalizedException
      */
@@ -149,6 +161,8 @@ class Pix extends Info
     }
 
     /**
+     * Retrieve QR code URL for Pix payments
+     *
      * @return mixed
      * @throws \Magento\Framework\Exception\LocalizedException
      */
@@ -158,6 +172,8 @@ class Pix extends Info
     }
 
     /**
+     * Get QR code warning message
+     *
      * @return string
      */
     public function getQrCodeWarningMessage()
@@ -166,33 +182,32 @@ class Pix extends Info
     }
 
     /**
+     * Retrieve original QR code path for Pix payments
+     *
      * @return bool|string
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function getQrcodeOriginalPath()
     {
-        $qrcodeOriginalPath = $this->getOrder()->getPayment()->getAdditionalInformation('qrcode_original_path');
-        return $this->json->serialize($qrcodeOriginalPath);
+        $path = $this->getOrder()->getPayment()->getAdditionalInformation('qrcode_original_path');
+        return $this->json->serialize($path);
     }
 
     /**
-     * @return mixed
+     * Retrieve max days to keep waiting for Pix payment
+     *
+     * @return string
      * @throws \Magento\Framework\Exception\LocalizedException
      */
-    public function getDaysToKeepWaitingPayment()
+    protected function getMaxDaysToPayment(): string
     {
-        $daysToPayment = $this->getMaxDaysToPayment();
-        if (!$daysToPayment) {
-            return null;
-        }
-
-        $timestampMaxDays = strtotime($daysToPayment);
-        return date('d/m/Y H:m:s', $timestampMaxDays);
+        return (string)$this->getOrder()->getPayment()->getAdditionalInformation('max_days_to_keep_waiting_payment');
     }
 
     /**
-     * @param $timestampMaxDays
+     * Validate timestamp against current store time
      *
+     * @param int $timestampMaxDays
      * @return bool
      */
     protected function isValidToPayment($timestampMaxDays)
@@ -200,16 +215,6 @@ class Pix extends Info
         if (!$timestampMaxDays) {
             return false;
         }
-
         return $timestampMaxDays >= $this->timezone->scopeTimeStamp();
-    }
-
-    /**
-     * @return string
-     * @throws \Magento\Framework\Exception\LocalizedException
-     */
-    protected function getMaxDaysToPayment(): string
-    {
-        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('max_days_to_keep_waiting_payment');
     }
 }

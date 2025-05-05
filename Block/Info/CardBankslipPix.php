@@ -1,4 +1,5 @@
 <?php
+
 namespace Vindi\Payment\Block\Info;
 
 use Vindi\Payment\Model\Payment\PaymentMethod;
@@ -11,6 +12,8 @@ use Vindi\Payment\Model\PaymentSplitFactory;
 
 /**
  * Block class for displaying information when the payment method is "Card + Bankslip Pix" in frontend
+ *
+ * @method $this setCacheLifetime(false|int $lifetime)
  */
 class CardBankslipPix extends \Magento\Payment\Block\Info
 {
@@ -56,24 +59,24 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     /**
      * CardBankslipPix constructor.
      *
-     * @param PaymentMethod $paymentMethod
-     * @param Data $currency
-     * @param Context $context
+     * @param PaymentMethod             $paymentMethod
+     * @param Data                      $currency
+     * @param Context                   $context
      * @param PixConfigurationInterface $pixConfiguration
-     * @param TimezoneInterface $timezone
-     * @param Json $json
-     * @param PaymentSplitFactory $paymentSplitFactory
-     * @param array $data
+     * @param TimezoneInterface         $timezone
+     * @param Json                      $json
+     * @param PaymentSplitFactory       $paymentSplitFactory
+     * @param array                     $data
      */
     public function __construct(
-        PaymentMethod $paymentMethod,
-        Data $currency,
-        Context $context,
+        PaymentMethod             $paymentMethod,
+        Data                      $currency,
+        Context                   $context,
         PixConfigurationInterface $pixConfiguration,
-        TimezoneInterface $timezone,
-        Json $json,
-        PaymentSplitFactory $paymentSplitFactory,
-        array $data = []
+        TimezoneInterface         $timezone,
+        Json                      $json,
+        PaymentSplitFactory       $paymentSplitFactory,
+        array                     $data = []
     ) {
         parent::__construct($context, $data);
         $this->paymentMethod       = $paymentMethod;
@@ -104,7 +107,7 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Retrieve bill id for Bolepix payments
+     * Retrieve bill id for Bankslip Pix payments
      *
      * @return string|null
      * @throws \Magento\Framework\Exception\LocalizedException
@@ -112,8 +115,7 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     public function getBillId()
     {
         $order = $this->getOrder();
-        $billId = $order->getVindiBillId() ?? null;
-        return $billId;
+        return $order->getVindiBillId() ?? null;
     }
 
     /**
@@ -138,15 +140,16 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Determine if Bolepix information can be shown
+     * Determine if Bankslip Pix information can be shown
      *
      * @return bool
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function canShowBolepixInfo()
     {
-        $paymentMethod = $this->getOrder()->getPayment()->getMethod() === \Vindi\Payment\Model\Payment\BankSlipPix::CODE
-            || $this->getOrder()->getPayment()->getMethod() === "vindi_cardbankslippix";
+        $method = $this->getOrder()->getPayment()->getMethod();
+        $isValidMethod = $method === \Vindi\Payment\Model\Payment\BankSlipPix::CODE
+            || $method === 'vindi_cardbankslippix';
         $daysToPayment = $this->getMaxDaysToPayment();
 
         if (!$daysToPayment) {
@@ -154,11 +157,11 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
         }
 
         $timestampMaxDays = strtotime($daysToPayment);
-        return $paymentMethod && $this->isValidToPayment($timestampMaxDays);
+        return $isValidMethod && $this->isValidToPayment($timestampMaxDays);
     }
 
     /**
-     * Check if the order has any invoice
+     * Check if the order has any invoices
      *
      * @return bool
      * @throws \Magento\Framework\Exception\LocalizedException
@@ -180,7 +183,7 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Retrieve QR Code URL for Bolepix payments
+     * Retrieve QR code URL for Pix payments
      *
      * @return mixed
      * @throws \Magento\Framework\Exception\LocalizedException
@@ -191,7 +194,7 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Get warning message for QR Code display
+     * Get warning message for QR code display
      *
      * @return string
      */
@@ -201,35 +204,35 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Retrieve original QR Code path for Bolepix payments
+     * Retrieve original QR code path for Pix payments
      *
-     * @return bool|string
-     * @throws \Magento\Framework\Exception\LocalizedException
+     * @return string
      */
     public function getQrcodeOriginalPath()
     {
-        $qrcodeOriginalPath = $this->getOrder()->getPayment()->getAdditionalInformation('qrcode_original_path');
-        return $this->json->serialize($qrcodeOriginalPath);
+        $path = $this->getOrder()->getPayment()->getAdditionalInformation('qrcode_original_path');
+        return $this->json->serialize($path);
     }
 
     /**
-     * Get the formatted date/time until which Bolepix payment is valid
+     * Get formatted date/time until which Pix payment is valid
      *
-     * @return mixed
+     * @return string|null
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function getDaysToKeepWaitingPayment()
     {
-        $daysToPayment = $this->getMaxDaysToPayment();
-        if (!$daysToPayment) {
+        $days = $this->getMaxDaysToPayment();
+        if (!$days) {
             return null;
         }
-        $timestampMaxDays = strtotime($daysToPayment);
-        return date('d/m/Y H:i:s', $timestampMaxDays);
+
+        $timestamp = strtotime($days);
+        return date('d/m/Y H:i:s', $timestamp);
     }
 
     /**
-     * Validate if Bolepix payment is still valid
+     * Validate if Pix payment is still valid
      *
      * @param int $timestampMaxDays
      * @return bool
@@ -243,38 +246,18 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     }
 
     /**
-     * Retrieve maximum days to keep waiting for Bolepix payment
+     * Retrieve maximum days to keep waiting for Pix payment
      *
      * @return string
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     protected function getMaxDaysToPayment(): string
     {
-        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('max_days_to_keep_waiting_payment');
+        return (string)$this->getOrder()->getPayment()->getAdditionalInformation('max_days_to_keep_waiting_payment');
     }
 
     /**
-     * Get print URL for Bolepix payments
-     *
-     * @return string
-     */
-    public function getPrintUrl(): string
-    {
-        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('print_url');
-    }
-
-    /**
-     * Get due date for Bolepix payments
-     *
-     * @return string
-     */
-    public function getDueDate(): string
-    {
-        return (string) $this->getOrder()->getPayment()->getAdditionalInformation('due_at');
-    }
-
-    /**
-     * Check if the payment split status is pending.
+     * Check if the payment split status is pending
      *
      * @return bool
      * @throws \Magento\Framework\Exception\LocalizedException
@@ -285,12 +268,9 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
         if (!$billId) {
             return true;
         }
-        $paymentSplitCollection = $this->paymentSplitFactory->create()->getCollection()
+        $collection = $this->paymentSplitFactory->create()->getCollection()
             ->addFieldToFilter('bill_id', $billId);
-        $paymentSplit = $paymentSplitCollection->getFirstItem();
-        if ($paymentSplit && $paymentSplit->getId()) {
-            return $paymentSplit->getStatus() === 'pending';
-        }
-        return true;
+        $item = $collection->getFirstItem();
+        return !$item->getId() || $item->getStatus() === 'pending';
     }
 }
