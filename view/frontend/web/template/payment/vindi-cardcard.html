@@ -428,6 +428,41 @@
                     <!-- /ko -->
                 </fieldset>
             </form>
+            <!-- ko if: isActiveDocument() -->
+            <br>
+            <form class="form">
+                <fieldset data-bind="attr: {class: 'fieldset payment items ' + getCode(), id: 'payment_form_pix_' + getCode()}">
+                    <div class="field number required" data-bind="attr: {id: getCode() + '_document'}">
+                        <label data-bind="attr: {for: getCode() + '_document'}" class="label">
+                            <span><!-- ko i18n: 'CPF/CNPJ'--><!-- /ko --></span>
+                        </label>
+                        <div class="control">
+                            <div class="fields group group-3">
+                                <div class="field no-label number">
+                                    <div class="control">
+                                        <input type="text"
+                                               name="payment[_document]"
+                                               class="input-text"
+                                               data-bind="attr: {
+                                                       autocomplete: on,
+                                                       id: getCode() + '_document',
+                                                       title: $t('CPF'),
+                                                       'data-container': getCode() + '-cpf',
+                                                       'data-validate': JSON.stringify({'required-number': true}),
+                                                       'maxlength': 18
+                                                   },
+                                                   value: taxvat.value,
+                                                   valueUpdate: 'keyup',
+                                                   event: { keyup: checkCpf }" />
+                                        <span id="cpfResponse"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
+            </form>
+            <!-- /ko -->
         </div>
 
         <div class="checkout-agreements-block">

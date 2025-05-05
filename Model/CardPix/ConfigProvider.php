@@ -74,6 +74,12 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
      */
     public function getConfig()
     {
+        $customerTaxvat = '';
+        $customer = $this->customerSession->getCustomer();
+        if ($customer && $customer->getTaxvat()) {
+            $customerTaxvat = $customer->getTaxvat();
+        }
+
         return [
             'payment' => [
                 'vindi_cardpix' => [
@@ -86,7 +92,9 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
                     'minInstallmentsValue' => (int) $this->helperData->getMinInstallmentsValue(),
                     'saved_cards' => $this->getPaymentProfiles(),
                     'credit_card_images' => $this->getCreditCardImages(),
-                    'pix_enabled' => true
+                    'pix_enabled' => true,
+                    'enabledDocument' => true,
+                    'customer_taxvat' => $customerTaxvat
                 ]
             ]
         ];

@@ -4,6 +4,8 @@ namespace Vindi\Payment\Model\Payment;
 use Magento\Framework\DataObject;
 use Magento\Quote\Api\Data\PaymentInterface;
 use Vindi\Payment\Block\Info\CardBankslipPix as InfoBlock;
+use Magento\Checkout\Model\Session as CheckoutSession;
+use Magento\Catalog\Api\ProductRepositoryInterface;
 
 /**
  * Class CardBankslipPix
@@ -198,5 +200,26 @@ class CardBankslipPix extends AbstractMethod
     protected function getPaymentMethodCode()
     {
         return PaymentMethod::CARD_BANKSLIP_PIX;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isAvailable(\Magento\Quote\Api\Data\CartInterface $quote = null)
+    {
+        if ($quote === null) {
+            $quote = \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(CheckoutSession::class)
+                ->getQuote();
+        }
+        foreach ($quote->getAllVisibleItems() as $item) {
+            $product = \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(ProductRepositoryInterface::class)
+                ->getById($item->getProduct()->getId());
+            if ($product->getData('vindi_enable_recurrence') == '1') {
+                return false;
+            }
+        }
+        return parent::isAvailable($quote);
     }
 }

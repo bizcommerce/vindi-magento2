@@ -140,8 +140,6 @@ define(['vindi-card-mask'], function () {
 
         });
 
-
-        // CREDIT CARD IMAGE JS
         document.querySelector('.vindi-preload').classList.remove('vindi-preload');
         document.getElementById('vindi-svgexpire').innerHTML = '01/' + nextYear;
         document.querySelector('.vindi-creditcard').addEventListener('click', function () {

@@ -34,14 +34,6 @@ class Actions extends Column
                     'href' => $this->urlBuilder->getUrl(self::URL_PATH_EDIT, ['entity_id' => $item['entity_id']]),
                     'label' => __('View')
                 ];
-//                $item[$this->getData('name')]['delete'] = [
-//                    'href' => $this->urlBuilder->getUrl(self::URL_PATH_DELETE, ['entity_id' => $item['entity_id']]),
-//                    'label' => __('Delete'),
-//                    'confirm' => [
-//                        'title' => __('Delete ${ $.$data.entity_id }'),
-//                        'message' => __('Are you sure you want to delete a ${ $.$data.entity_id } record?')
-//                    ]
-//                ];
             }
         }
         return $dataSource;

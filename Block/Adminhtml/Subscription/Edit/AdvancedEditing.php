@@ -35,7 +35,7 @@ class AdvancedEditing extends GenericButton implements ButtonProviderInterface
         Registry $registry,
         Data $helperData
     ) {
-        parent::__construct($context, $registry);  // Passing both context and registry to the parent constructor
+        parent::__construct($context, $registry);
         $this->helperData = $helperData;
         $this->registry = $registry;
     }
