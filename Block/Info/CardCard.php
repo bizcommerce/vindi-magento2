@@ -5,6 +5,7 @@ namespace Vindi\Payment\Block\Info;
 use Vindi\Payment\Model\Payment\PaymentMethod;
 use Magento\Backend\Block\Template\Context;
 use Magento\Framework\Pricing\Helper\Data;
+use Vindi\Payment\Helper\BrandNormalizer;
 
 /**
  * Class CardCard
@@ -33,31 +34,30 @@ class CardCard extends \Magento\Payment\Block\Info
     protected $paymentMethod;
 
     /**
+     * @var BrandNormalizer
+     */
+    protected $brandNormalizer;
+
+    /**
      * CardCard constructor.
      *
-     * @param PaymentMethod $paymentMethod
-     * @param Data          $currency
-     * @param Context       $context
-     * @param array         $data
+     * @param PaymentMethod   $paymentMethod
+     * @param Data            $currency
+     * @param BrandNormalizer $brandNormalizer
+     * @param Context         $context
+     * @param array           $data
      */
     public function __construct(
         PaymentMethod $paymentMethod,
         Data $currency,
+        BrandNormalizer $brandNormalizer,
         Context $context,
         array $data = []
     ) {
         parent::__construct($context, $data);
-        $this->paymentMethod = $paymentMethod;
-        $this->currency      = $currency;
-    }
-
-    /**
-     * Disable block cache
-     */
-    protected function _construct()
-    {
-        parent::_construct();
-        $this->setCacheLifetime(false);
+        $this->paymentMethod   = $paymentMethod;
+        $this->currency        = $currency;
+        $this->brandNormalizer = $brandNormalizer;
     }
 
     /**
@@ -78,11 +78,12 @@ class CardCard extends \Magento\Payment\Block\Info
     public function getFirstCardInfo()
     {
         $payment = $this->getOrder()->getPayment();
+        $rawBrand = $payment->getAdditionalInformation('cc_type') ?: $payment->getData('cc_type');
         return [
-            'brand'        => $payment->getData('cc_type') ?: $payment->getAdditionalInformation('cc_type'),
-            'owner'        => $payment->getData('cc_owner') ?: $payment->getAdditionalInformation('cc_owner'),
-            'number'       => $payment->getData('cc_last_4') ?: $payment->getAdditionalInformation('cc_last_4'),
-            'installments' => $payment->getData('cc_installments1') ?: $payment->getAdditionalInformation('cc_installments1')
+            'brand'        => $this->brandNormalizer->normalize($rawBrand),
+            'owner'        => $payment->getAdditionalInformation('cc_owner')    ?: $payment->getData('cc_owner'),
+            'number'       => $payment->getAdditionalInformation('cc_last_4')   ?: $payment->getData('cc_last_4'),
+            'installments' => $payment->getAdditionalInformation('cc_installments') ?: $payment->getData('cc_installments')
         ];
     }
 
@@ -94,16 +95,17 @@ class CardCard extends \Magento\Payment\Block\Info
     public function getSecondCardInfo()
     {
         $payment = $this->getOrder()->getPayment();
+        $rawBrand = $payment->getAdditionalInformation('cc_type2') ?: $payment->getData('cc_type2');
         return [
-            'brand'        => $payment->getData('cc_type2') ?: $payment->getAdditionalInformation('cc_type2'),
-            'owner'        => $payment->getData('cc_owner2') ?: $payment->getAdditionalInformation('cc_owner2'),
-            'number'       => $payment->getData('cc_last_4_2') ?: $payment->getAdditionalInformation('cc_last_4_2'),
-            'installments' => $payment->getData('cc_installments2') ?: $payment->getAdditionalInformation('cc_installments2')
+            'brand'        => $this->brandNormalizer->normalize($rawBrand),
+            'owner'        => $payment->getAdditionalInformation('cc_owner2')    ?: $payment->getData('cc_owner2'),
+            'number'       => $payment->getAdditionalInformation('cc_last_4_2')  ?: $payment->getData('cc_last_4_2'),
+            'installments' => $payment->getAdditionalInformation('cc_installments2') ?: $payment->getData('cc_installments2')
         ];
     }
 
     /**
-     * Get payment method name
+     * Get payment method name.
      *
      * @return string
      */
