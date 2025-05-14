@@ -777,3 +777,8 @@
 "A plan must be selected for this product.","Um plano deve ser selecionado para este produto."
 "Recurrence data invalid","Dados de recorrência inválidos"
 "No recurrence data",""Sem dados de recorrência"
+"You cannot add a subscription product when there are non-subscription products in the order. Please remove them first.","Você não pode adicionar um produto de assinatura quando há produtos que não são de assinatura no pedido. Por favor, remova-os primeiro."
+"You can only add one unit of a subscription product per order. Please adjust the quantity.","Você só pode adicionar uma unidade de um produto de assinatura por pedido. Por favor, ajuste a quantidade."
+"You cannot add additional products when a subscription product already exists in the order. Remove it first.","Você não pode adicionar produtos adicionais quando um produto de assinatura já existe no pedido. Remova-o primeiro."
+"You cannot add a subscription product when non-subscription products exist in the order. Please remove them first.","Você não pode adicionar um produto de assinatura quando produtos que não são de assinatura existem no pedido. Por favor, remova-os primeiro."
+"You can only add one subscription product per order. Please add them one at a time.","You can only add one subscription product per order. Please add them one at a time."

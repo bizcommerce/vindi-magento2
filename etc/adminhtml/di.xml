@@ -47,4 +47,10 @@
             <argument name="templateCollectionFactory" xsi:type="object">Magento\Email\Model\ResourceModel\Template\CollectionFactory</argument>
         </arguments>
     </type>
+    <type name="Magento\Sales\Model\AdminOrder\Create">
+        <plugin
+            name="vindi_recurrence_prevent_add_product_with_recurrence_admin"
+            type="Vindi\Payment\Plugin\AdminPreventAddProduct"
+            sortOrder="1" />
+    </type>
 </config>
