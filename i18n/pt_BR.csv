@@ -782,3 +782,4 @@
 "You cannot add additional products when a subscription product already exists in the order. Remove it first.","Você não pode adicionar produtos adicionais quando um produto de assinatura já existe no pedido. Remova-o primeiro."
 "You cannot add a subscription product when non-subscription products exist in the order. Please remove them first.","Você não pode adicionar um produto de assinatura quando produtos que não são de assinatura existem no pedido. Por favor, remova-os primeiro."
 "You can only add one subscription product per order. Please add them one at a time.","You can only add one subscription product per order. Please add them one at a time."
+"You can only set quantity to one for a subscription product in admin order.","Você só pode definir a quantidade como um para um produto de assinatura no pedido do admin."

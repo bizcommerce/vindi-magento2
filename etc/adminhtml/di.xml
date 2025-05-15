@@ -52,5 +52,9 @@
             name="vindi_recurrence_prevent_add_product_with_recurrence_admin"
             type="Vindi\Payment\Plugin\AdminPreventAddProduct"
             sortOrder="1" />
+        <plugin
+            name="vindi_recurrence_restrict_quantity_update_for_recurrence_product_admin"
+            type="Vindi\Payment\Plugin\AdminRestrictQuantityUpdate"
+            sortOrder="2" />
     </type>
 </config>
