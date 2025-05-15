@@ -303,4 +303,16 @@ class PaymentLink extends Template
         $imageUrl = $this->_storeManager->getStore()->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_MEDIA) . 'catalog/product' . $product->getImage();
         return $imageUrl;
     }
+
+    /**
+     * Check if current order is a subscription (recurrence) order
+     *
+     * @return bool
+     * @throws NoSuchEntityException
+     */
+    public function isSubscriptionOrder(): bool
+    {
+        $order = $this->getOrder();
+        return (bool) $this->helper->isSubscriptionOrder($order);
+    }
 }
