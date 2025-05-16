@@ -371,7 +371,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
 
         $amountCredit = $payment->getAdditionalInformation('amount_credit');
-        $amountPix = $payment->getAdditionalInformation('amount_pix');
+        $amountPix    = $payment->getAdditionalInformation('amount_pix');
         if (!$amountCredit || !$amountPix) {
             return $this->handleError($order);
         }
@@ -379,22 +379,25 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
 
         $bodyCredit = [
-            'customer_id' => $customerId,
+            'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
-            'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-01'
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-01',
         ];
         $bodyCredit['bill_items'][] = [
             'product_id' => $multiPaymentDiscountProductId,
-            'amount' => -((float)$amountPix)
+            'amount'     => -((float)$amountPix),
         ];
 
-        $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
+        $paymentProfile = $payment->getAdditionalInformation('payment_profile')
             ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
             : $this->createPaymentProfile($order, $payment, $customerId);
 
         $bodyCredit['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
-        $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
+
+        $installments = $payment->getAdditionalInformation('cc_installments')
+            ?: $payment->getAdditionalInformation('installments')
+                ?: $payment->getInstallments();
         if ($installments) {
             $bodyCredit['installments'] = (int)$installments;
         }
@@ -409,14 +412,14 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
 
         $bodyPix = [
-            'customer_id' => $customerId,
+            'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::PIX,
-            'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-02'
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-02',
         ];
         $bodyPix['bill_items'][] = [
             'product_id' => $multiPaymentDiscountProductId,
-            'amount' => -((float)$amountCredit)
+            'amount'     => -((float)$amountCredit),
         ];
 
         $billPix = $this->bill->create($bodyPix);
@@ -441,6 +444,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         );
         $order->getPayment()->setMethod(CardPix::CODE);
         $this->orderRepository->save($order);
+
         return $billCredit['id'] . '|' . $billPix['id'];
     }
 
@@ -553,10 +557,10 @@ abstract class AbstractMethod extends OriginAbstractMethod
      */
     protected function processCardBankslipPix(InfoInterface $payment, Order $order)
     {
-        $customerId = $this->customer->findOrCreate($order);
-        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+        $customerId   = $this->customer->findOrCreate($order);
+        $productList  = $this->productManagement->findOrCreateProductsFromOrder($order);
 
-        $amountCredit = $payment->getAdditionalInformation('amount_credit');
+        $amountCredit      = $payment->getAdditionalInformation('amount_credit');
         $amountBankslipPix = $payment->getAdditionalInformation('amount_bankslippix');
         if (!$amountCredit || !$amountBankslipPix) {
             return $this->handleError($order);
@@ -565,22 +569,25 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
 
         $bodyCredit = [
-            'customer_id' => $customerId,
+            'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
-            'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-01'
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-01',
         ];
         $bodyCredit['bill_items'][] = [
             'product_id' => $multiPaymentDiscountProductId,
-            'amount' => -((float)$amountBankslipPix)
+            'amount'     => -((float)$amountBankslipPix),
         ];
 
-        $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
+        $paymentProfile = $payment->getAdditionalInformation('payment_profile')
             ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
             : $this->createPaymentProfile($order, $payment, $customerId);
 
         $bodyCredit['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
-        $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
+
+        $installments = $payment->getAdditionalInformation('cc_installments')
+            ?: $payment->getAdditionalInformation('installments')
+                ?: $payment->getInstallments();
         if ($installments) {
             $bodyCredit['installments'] = (int)$installments;
         }
@@ -595,14 +602,14 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
 
         $bodyBankslipPix = [
-            'customer_id' => $customerId,
+            'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::BANK_SLIP_PIX,
-            'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-02'
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-02',
         ];
         $bodyBankslipPix['bill_items'][] = [
             'product_id' => $multiPaymentDiscountProductId,
-            'amount' => -((float)$amountCredit)
+            'amount'     => -((float)$amountCredit),
         ];
 
         $billBankslipPix = $this->bill->create($bodyBankslipPix);
@@ -627,6 +634,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         );
         $order->getPayment()->setMethod(CardBankslipPix::CODE);
         $this->orderRepository->save($order);
+
         return $billCredit['id'] . '|' . $billBankslipPix['id'];
     }
 
