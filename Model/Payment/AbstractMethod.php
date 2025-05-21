@@ -733,7 +733,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
      * @param InfoInterface $payment
      * @param float $amount
      * @param OrderItemInterface $orderItem
-     * @return mixed
+     * @return string|false
      * @throws LocalizedException
      */
     protected function processMultiMethodSubscriptionPayment(InfoInterface $payment, $amount, OrderItemInterface $orderItem)
@@ -751,49 +751,12 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
 
         $bodyCard1 = [
-            'customer_id' => $customerId,
-            'payment_method_code' => PaymentMethod::CREDIT_CARD,
-            'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-01'
+            'customer_id'        => $customerId,
+            'payment_method_code'=> PaymentMethod::CREDIT_CARD,
+            'bill_items'         => $productList,
+            'code'               => $order->getIncrementId() . '-01'
         ];
-        $bodyCard1['bill_items'][] = [
-            'product_id' => $multiPaymentDiscountProductId,
-            'amount' => -((float)$amountSecondCard)
-        ];
-
-        $profileId1 = (int)$payment->getAdditionalInformation('payment_profile');
-        if ($profileId1) {
-            $paymentProfile1 = $this->getPaymentProfile($profileId1);
-        } else {
-            $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
-        }
-        $bodyCard1['payment_profile'] = ['id' => $paymentProfile1->getData('payment_profile_id')];
-
-        $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
-        $bodyCard1['installments'] = (int)$installments1;
-
-        $bodyCard2 = [
-            'customer_id' => $customerId,
-            'payment_method_code' => PaymentMethod::CREDIT_CARD,
-            'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-02'
-        ];
-        $bodyCard2['bill_items'][] = [
-            'product_id' => $multiPaymentDiscountProductId,
-            'amount' => -((float)$amountCredit)
-        ];
-
-        $profileId2 = (int)$payment->getAdditionalInformation('payment_profile2');
-        if ($profileId2) {
-            $paymentProfile2 = $this->getPaymentProfile($profileId2);
-        } else {
-            $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
-        }
-        $bodyCard2['payment_profile'] = ['id' => $paymentProfile2->getData('payment_profile_id')];
-
-        $installments2 = $payment->getAdditionalInformation('cc_installments2') ?: 1;
-        $bodyCard2['installments'] = (int)$installments2;
-
+        $bodyCard1['amount'] = $amountCredit;
         $billCard1 = $this->bill->create($bodyCard1);
         if (!$billCard1 || !$this->successfullyPaid($bodyCard1, $billCard1)) {
             if ($billCard1 && isset($billCard1['id'])) {
@@ -803,6 +766,13 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
         $this->handleBankSplitAdditionalInformation($payment, $bodyCard1, $billCard1);
 
+        $bodyCard2 = [
+            'customer_id'        => $customerId,
+            'payment_method_code'=> PaymentMethod::CREDIT_CARD,
+            'bill_items'         => $productList,
+            'code'               => $order->getIncrementId() . '-02'
+        ];
+        $bodyCard2['amount'] = $amountSecondCard;
         $billCard2 = $this->bill->create($bodyCard2);
         if (!$billCard2 || !$this->successfullyPaid($bodyCard2, $billCard2)) {
             if ($billCard2 && isset($billCard2['id'])) {
@@ -814,7 +784,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $this->handleBankSplitAdditionalInformation($payment, $bodyCard2, $billCard2);
 
         $combinedBillId = $billCard1['id'] . ',' . $billCard2['id'];
-
         $this->savePaymentSplitRecord(
             $order,
             $billCard1,
@@ -835,13 +804,12 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
 
         $bodySubscription = [
-            'customer_id' => $customerId,
+            'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
-            'plan_id' => $planId,
-            'product_items' => $productList,
-            'code' => $order->getIncrementId()
+            'plan_id'             => $planId,
+            'product_items'       => $productList,
+            'code'                => $order->getIncrementId()
         ];
-
         $installments = $payment->getAdditionalInformation('installments');
         if ($installments) {
             $bodySubscription['installments'] = (int)$installments;
@@ -849,17 +817,23 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
         $responseData = $this->subscriptionRepository->create($bodySubscription);
         if ($responseData) {
-            $bill = isset($responseData['bill']) ? $responseData['bill'] : null;
-            $subscription = isset($responseData['subscription']) ? $responseData['subscription'] : null;
+            $subscription = $responseData['subscription'] ?? null;
+
             if ($subscription) {
                 $this->saveSubscriptionToDatabase($subscription, $order, $combinedBillId);
                 $order->setVindiSubscriptionId($subscription['id']);
             }
+
             $order->setVindiBillId($combinedBillId);
             $order->getPayment()->setMethod(CardCard::CODE);
+
+            $this->saveOrderToSubscriptionOrdersTable($order);
+
             $this->orderRepository->save($order);
+
             return $combinedBillId;
         }
+
         return $this->handleError($order);
     }
 
