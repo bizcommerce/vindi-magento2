@@ -14,7 +14,7 @@ interface LogInterface
     const DESCRIPTION = 'description';
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';
-    const ORIGIN = 'origin'; // Added constant for the 'origin' field
+    const ORIGIN = 'origin';
 
     /**
      * Get ID

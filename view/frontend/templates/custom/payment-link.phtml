@@ -158,17 +158,19 @@ $paymentLink = $block->getPaymentLink();
                             function populateInstallments(selectId, maxInstallmentsOverride) {
                                 const selectInstallments = document.getElementById(selectId);
                                 const grandTotal = <?= $order->getGrandTotal() ?>;
+
                                 const minInstallmentsValue = 10;
+                                const defaultMaxInstallments = 12;
                                 const maxInstallments = typeof maxInstallmentsOverride === 'number'
                                     ? maxInstallmentsOverride
-                                    : 12;
+                                    : defaultMaxInstallments;
 
                                 if (selectInstallments) {
                                     selectInstallments.innerHTML = '<option value="" disabled selected><?= $block->getTranslation("Installments") ?></option>';
 
                                     for (let i = 1; i <= maxInstallments; i++) {
                                         let installmentValue = (grandTotal / i).toFixed(2).replace('.', ',');
-                                        if (installmentValue < minInstallmentsValue) break;
+                                        if (i > 1 && (grandTotal / i) < minInstallmentsValue) break;
                                         let option = document.createElement('option');
                                         option.value = i;
                                         option.text = `${i}x <?= $block->getCurrencySymbol() ?> ${installmentValue}`;
@@ -178,13 +180,21 @@ $paymentLink = $block->getPaymentLink();
                             }
 
                             function fetchPlanInstallments() {
+                                const isSubscription = <?= $isSubscription ? 'true' : 'false' ?>;
+
+                                if (!isSubscription) {
+                                    populateInstallments('cc_installments');
+                                    populateInstallments('cc_installments_saved');
+                                    return;
+                                }
+
                                 const xhrPlan = new XMLHttpRequest();
                                 xhrPlan.open('GET', '<?= $block->escapeUrl($block->getUrl('vindi_vr/plan/get')) ?>', true);
                                 xhrPlan.onreadystatechange = function () {
                                     if (xhrPlan.readyState === 4) {
                                         if (xhrPlan.status === 200) {
                                             const response = JSON.parse(xhrPlan.responseText);
-                                            if (response.installments) {
+                                            if (response && response.installments) {
                                                 populateInstallments('cc_installments', response.installments);
                                                 populateInstallments('cc_installments_saved', response.installments);
                                             } else {
@@ -199,6 +209,15 @@ $paymentLink = $block->getPaymentLink();
                                 };
                                 xhrPlan.send();
                             }
+
+                            document.addEventListener("DOMContentLoaded", function() {
+                                if (<?= $isSubscription ? 'true' : 'false' ?>) {
+                                    fetchPlanInstallments();
+                                } else {
+                                    populateInstallments('cc_installments');
+                                    populateInstallments('cc_installments_saved');
+                                }
+                            });
                         </script>
                     <?php endif; ?>
                 </div>
@@ -473,13 +492,6 @@ $paymentLink = $block->getPaymentLink();
                         ccCvv.placeholder = '<?= $block->getTranslation("CVV") ?>';
                     }
                 }
-            }
-
-            if (<?= $isSubscription ? 'true' : 'false' ?>) {
-                fetchPlanInstallments();
-            } else {
-                populateInstallments('cc_installments');
-                populateInstallments('cc_installments_saved');
             }
         });
 

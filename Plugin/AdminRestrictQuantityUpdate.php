@@ -1,5 +1,4 @@
 <?php
-// File: app/code/Vindi/Payment/Plugin/AdminRestrictQuantityUpdate.php
 namespace Vindi\Payment\Plugin;
 
 use Magento\Sales\Model\AdminOrder\Create;

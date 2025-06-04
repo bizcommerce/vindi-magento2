@@ -54,7 +54,6 @@ class Installments extends AbstractHelper
 
     public function getAllInstallments(float $total = 0, string $ccType = '', int $storeId = 0): array
     {
-        // Fixed installment data
         $installments = [
             [
                 'installments' => 1,
@@ -124,13 +123,11 @@ class Installments extends AbstractHelper
 
     protected function handleResponse(array $paymentMethods, string $ccType): array
     {
-        // This method is no longer needed as we use fixed installment data
         return [];
     }
 
     protected function validate(array $installment): bool
     {
-        // This method is no longer needed as we use fixed installment data
         return true;
     }
 

@@ -1,4 +1,3 @@
-// File: app/code/Vindi/Payment/view/adminhtml/web/js/order/set-plan.js
 define(['jquery'], function ($) {
     'use strict';
     return function (config, element) {
