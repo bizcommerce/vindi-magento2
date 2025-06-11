@@ -13,6 +13,7 @@ interface PaymentSplitInterface
     const STATUS = 'status';
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';
+    const BILL_ID = 'bill_id';
 
     /**
      * Get entity ID.
@@ -148,4 +149,19 @@ interface PaymentSplitInterface
      * @return $this
      */
     public function setUpdatedAt($updatedAt);
+
+    /**
+     * Get bill id.
+     *
+     * @return mixed
+     */
+    public function getBillId();
+
+    /**
+     * Set bill id.
+     *
+     * @param mixed $billId
+     * @return $this
+     */
+    public function setBillId($billId);
 }

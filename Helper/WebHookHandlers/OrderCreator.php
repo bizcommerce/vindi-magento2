@@ -13,6 +13,9 @@ use Vindi\Payment\Model\SubscriptionOrderRepository;
 use Vindi\Payment\Model\SubscriptionOrderFactory;
 use Vindi\Payment\Model\Payment\Bill as PaymentBill;
 use Vindi\Payment\Helper\Data;
+use Vindi\Payment\Model\PaymentSplitFactory;
+use Vindi\Payment\Api\ProductManagementInterface;
+use Magento\Framework\Phrase;
 
 /**
  * Class OrderCreator
@@ -61,6 +64,16 @@ class OrderCreator
     private $orderItemFactory;
 
     /**
+     * @var PaymentSplitFactory
+     */
+    protected $paymentSplitFactory;
+
+    /**
+     * @var ProductManagementInterface
+     */
+    protected $productManagement;
+
+    /**
      * OrderCreator constructor.
      * @param OrderFactory $orderFactory
      * @param SubscriptionOrderRepository $subscriptionOrderRepository
@@ -70,6 +83,8 @@ class OrderCreator
      * @param OrderRepository $orderRepository
      * @param ProductFactory $productFactory
      * @param OrderItemInterfaceFactory $orderItemFactory
+     * @param PaymentSplitFactory $paymentSplitFactory
+     * @param ProductManagementInterface $productManagement
      */
     public function __construct(
         OrderFactory $orderFactory,
@@ -79,7 +94,9 @@ class OrderCreator
         PaymentBill $paymentBill,
         OrderRepository $orderRepository,
         ProductFactory $productFactory,
-        OrderItemInterfaceFactory $orderItemFactory
+        OrderItemInterfaceFactory $orderItemFactory,
+        PaymentSplitFactory $paymentSplitFactory,
+        ProductManagementInterface $productManagement
     ) {
         $this->orderFactory = $orderFactory;
         $this->subscriptionOrderRepository = $subscriptionOrderRepository;
@@ -89,6 +106,8 @@ class OrderCreator
         $this->orderRepository = $orderRepository;
         $this->productFactory = $productFactory;
         $this->orderItemFactory = $orderItemFactory;
+        $this->paymentSplitFactory = $paymentSplitFactory;
+        $this->productManagement = $productManagement;
     }
 
     /**
@@ -370,5 +389,128 @@ class OrderCreator
 
         $order->getPayment()->setAdditionalInformation($additionalInformation);
         $this->orderRepository->save($order);
+    }
+
+    /**
+     * Cancela uma bill na Vindi usando o helper Api
+     * @param string|int $billId
+     * @return bool
+     */
+    public function cancelVindiBill($billId)
+    {
+        try {
+            /** @var \Vindi\Payment\Helper\Api $apiHelper */
+            $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+            $apiHelper = $objectManager->get(\Vindi\Payment\Helper\Api::class);
+            return $apiHelper->cancelVindiBill($billId);
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Enfileira ou executa a criação das duas bills manuais para recorrência multimeios
+     * @param \Magento\Sales\Model\Order $originalOrder
+     * @param string|int $subscriptionId
+     * @param array $billData
+     * @return void
+     */
+    public function enqueueManualBillsForMultiMeios($originalOrder, $subscriptionId, $billData)
+    {
+        $payment = $originalOrder->getPayment();
+        $amountCredit = $payment->getAdditionalInformation('amount_credit');
+        $amountSecondCard = $payment->getAdditionalInformation('amount_second_card');
+        $profileId1 = $payment->getAdditionalInformation('payment_profile');
+        $profileId2 = $payment->getAdditionalInformation('payment_profile2');
+        $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
+        $installments2 = $payment->getAdditionalInformation('cc_installments2') ?: 1;
+        $customerId = $originalOrder->getData('vindi_customer_id');
+        $cycle = isset($billData['period']['cycle']) ? $billData['period']['cycle'] : '01';
+        $incrementId = $originalOrder->getIncrementId();
+
+        $productList = $this->productManagement->findOrCreateProductsToSubscription($originalOrder);
+
+        $multiPaymentDiscountProductId = null;
+        if (method_exists($this->productManagement, 'findOrCreateProduct')) {
+            $multiPaymentDiscountProductId = $this->productManagement->findOrCreateProduct('multi_payment_discount', __('Multi Payment Discount'));
+        }
+
+        $billItemsCard1 = $productList;
+        $billItemsCard2 = $productList;
+        if ($multiPaymentDiscountProductId) {
+            $billItemsCard1[] = [
+                'product_id' => $multiPaymentDiscountProductId,
+                'amount' => -((float)$amountSecondCard)
+            ];
+            $billItemsCard2[] = [
+                'product_id' => $multiPaymentDiscountProductId,
+                'amount' => -((float)$amountCredit)
+            ];
+        }
+
+        $bodyCard1 = [
+            'customer_id' => $customerId,
+            'subscription_id' => $subscriptionId,
+            'payment_method_code' => 'credit_card',
+            'payment_profile' => ['id' => $profileId1],
+            'bill_items' => $billItemsCard1,
+            'installments' => (int)$installments1,
+            'code' => $incrementId . '-' . $cycle . '-01',
+        ];
+        $bodyCard2 = [
+            'customer_id' => $customerId,
+            'subscription_id' => $subscriptionId,
+            'payment_method_code' => 'credit_card',
+            'payment_profile' => ['id' => $profileId2],
+            'bill_items' => $billItemsCard2,
+            'installments' => (int)$installments2,
+            'code' => $incrementId . '-' . $cycle . '-02',
+        ];
+
+        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+        /** @var \Vindi\Payment\Helper\Api $apiHelper */
+        $apiHelper = $objectManager->get(\Vindi\Payment\Helper\Api::class);
+        $result1 = $apiHelper->request('bills', 'POST', $bodyCard1);
+        $result2 = $apiHelper->request('bills', 'POST', $bodyCard2);
+
+        if ($result1 && isset($result1['bill']['id']) && $result2 && isset($result2['bill']['id'])) {
+            $billCard1 = $result1['bill'];
+            $billCard2 = $result2['bill'];
+            if (!$originalOrder->getId()) {
+                $originalOrder = $this->orderRepository->save($originalOrder);
+            }
+            $dataFirst = [
+                'order_id' => $originalOrder->getId(),
+                'order_increment_id' => $originalOrder->getIncrementId(),
+                'payment_method' => 'credit_card',
+                'amount' => $amountCredit,
+                'total_amount' => $amountCredit,
+                'bill_id' => $billCard1['id'],
+                'status' => $billCard1['status'] ?? '',
+                'additional_data' => json_encode($billCard1),
+                'is_refunded' => 0,
+                'refund_amount' => 0
+            ];
+            $split1 = $this->paymentSplitFactory->create();
+            $split1->setData($dataFirst);
+            $split1->save();
+            $dataSecond = [
+                'order_id' => $originalOrder->getId(),
+                'order_increment_id' => $originalOrder->getIncrementId(),
+                'payment_method' => 'credit_card',
+                'amount' => $amountSecondCard,
+                'total_amount' => $amountSecondCard,
+                'bill_id' => $billCard2['id'],
+                'status' => $billCard2['status'] ?? '',
+                'additional_data' => json_encode($billCard2),
+                'is_refunded' => 0,
+                'refund_amount' => 0
+            ];
+            $split2 = $this->paymentSplitFactory->create();
+            $split2->setData($dataSecond);
+            $split2->save();
+            $originalOrder->setVindiBillId($billCard1['id'] . ',' . $billCard2['id']);
+            $this->orderRepository->save($originalOrder);
+        }
     }
 }

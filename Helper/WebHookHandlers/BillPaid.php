@@ -85,26 +85,29 @@ class BillPaid
             $originalOrder = $this->orderCreator->getOrderFromSubscriptionId($subscriptionId);
 
             if ($originalOrder) {
-                // somente procesa multi-meio se houver dois splits
                 $vindiBillId = $originalOrder->getVindiBillId();
-                if (strpos($vindiBillId, ',') !== false) {
-                    $splits = $this->paymentSplitFactory->create()
-                        ->getCollection()
-                        ->addFieldToFilter('order_increment_id', $originalOrder->getIncrementId());
-
-                    $allPaid = true;
-                    foreach ($splits as $split) {
-                        if ($split->getStatus() !== 'paid') {
-                            $allPaid = false;
-                            break;
-                        }
-                    }
-                    if (!$allPaid) {
-                        $this->logger->info(__('Not all payment splits for subscription order %1 are paid yet.', $originalOrder->getIncrementId()));
-                        return true;
+                $billIds = array_map('trim', explode(',', $vindiBillId));
+                $currentSplit = $this->paymentSplitFactory->create()
+                    ->getCollection()
+                    ->addFieldToFilter('bill_id', $bill['id'])
+                    ->getFirstItem();
+                if ($currentSplit && $currentSplit->getId()) {
+                    $currentSplit->setStatus('paid')->save();
+                }
+                $splits = $this->paymentSplitFactory->create()
+                    ->getCollection()
+                    ->addFieldToFilter('bill_id', ['in' => $billIds]);
+                $allPaid = true;
+                foreach ($splits as $split) {
+                    if ($split->getStatus() !== 'paid') {
+                        $allPaid = false;
+                        break;
                     }
                 }
-
+                if (!$allPaid) {
+                    $this->logger->info(__('Not all payment splits for subscription order %1 are paid yet.', $originalOrder->getIncrementId()));
+                    return true;
+                }
                 $queueItem = $this->orderCreationQueueFactory->create();
                 $queueItem->setData([
                     'bill_data' => json_encode($data),
@@ -146,7 +149,6 @@ class BillPaid
             ->addFieldToFilter('order_increment_id', $order->getIncrementId());
 
         if ($splits->getSize() > 0) {
-            // marca pagamento atual como paid
             $current = $this->paymentSplitFactory->create()
                 ->getCollection()
                 ->addFieldToFilter('bill_id', $bill['id'])
@@ -155,12 +157,10 @@ class BillPaid
                 $current->setStatus('paid')->save();
                 $pi = $order->getPayment()->getAdditionalInformation();
                 if ($current->getPaymentMethod() === 'pix' || $current->getPaymentMethod() === 'pix_bank_slip') {
-                    // limpa infos de pix se necessário
                     $pi['qrcode_path'] = $pi['print_url'] = $pi['due_at'] = null;
                     $order->getPayment()->setAdditionalInformation($pi)->save();
                 }
             }
-            // só gera fatura se todos os splits estiverem pagos
             foreach ($splits as $split) {
                 if ($split->getStatus() !== 'paid') {
                     $this->logger->info(__('Not all payment splits for order %1 are paid yet.', $order->getIncrementId()));

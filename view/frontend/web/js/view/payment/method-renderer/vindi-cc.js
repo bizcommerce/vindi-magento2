@@ -189,7 +189,6 @@ define([
 
             self.updateInstallments();
 
-            // Set credit card number to credit card data object
             this.creditCardNumber.subscribe(function (value) {
                 var result;
 
@@ -212,17 +211,14 @@ define([
                 creditCardData.creditCardOwner = value;
             });
 
-            // Set expiration year to credit card data object
             this.creditCardExpYear.subscribe(function (value) {
                 creditCardData.expirationYear = value;
             });
 
-            // Set expiration month to credit card data object
             this.creditCardExpMonth.subscribe(function (value) {
                 creditCardData.expirationYear = value;
             });
 
-            // Set cvv code to credit card data object
             this.creditCardVerificationNumber.subscribe(function (value) {
                 creditCardData.cvvCode = value;
             });

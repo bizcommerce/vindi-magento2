@@ -61,40 +61,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
     abstract protected function getPaymentMethodCode();
 
-    /**
-     * Constructor.
-     *
-     * @param Context $context
-     * @param Registry $registry
-     * @param ExtensionAttributesFactory $extensionFactory
-     * @param AttributeValueFactory $customAttributeFactory
-     * @param PaymentDataHelper $paymentData
-     * @param ScopeConfigInterface $scopeConfig
-     * @param Logger $logger
-     * @param Api $api
-     * @param InvoiceService $invoiceService
-     * @param Customer $customer
-     * @param ProductManagementInterface $productManagement
-     * @param PlanManagementInterface $planManagement
-     * @param SubscriptionInterface $subscriptionRepository
-     * @param VindiPlanRepository $vindiPlanRepository
-     * @param PaymentProfileFactory $paymentProfileFactory
-     * @param PaymentProfileRepository $paymentProfileRepository
-     * @param ResourceConnection $resourceConnection
-     * @param Bill $bill
-     * @param Profile $profile
-     * @param PaymentMethod $paymentMethod
-     * @param LoggerInterface $psrLogger
-     * @param TimezoneInterface $date
-     * @param \Vindi\Payment\Helper\Data $helperData
-     * @param SubscriptionRepository $subscriptionRepositoryModel
-     * @param SubscriptionCollection $subscriptionCollection
-     * @param PaymentSplitFactory $paymentSplitFactory
-     * @param OrderRepositoryInterface $orderRepository
-     * @param AbstractResource|null $resource
-     * @param AbstractDb|null $resourceCollection
-     * @param array $data
-     */
     public function __construct(
         Context $context,
         Registry $registry,
@@ -162,12 +128,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $this->orderRepository = $orderRepository;
     }
 
-    /**
-     * Check if payment method is available.
-     *
-     * @param \Magento\Quote\Api\Data\CartInterface|null $quote
-     * @return bool
-     */
     public function isAvailable(\Magento\Quote\Api\Data\CartInterface $quote = null)
     {
         if (
@@ -193,63 +153,30 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return parent::isAvailable($quote);
     }
 
-    /**
-     * Assign data to payment method.
-     *
-     * @param DataObject $data
-     * @return $this
-     */
     public function assignData(DataObject $data)
     {
         parent::assignData($data);
         return $this;
     }
 
-    /**
-     * Validate payment method.
-     *
-     * @return $this
-     */
     public function validate()
     {
         parent::validate();
         return $this;
     }
 
-    /**
-     * Authorize payment.
-     *
-     * @param InfoInterface $payment
-     * @param float $amount
-     * @return mixed
-     */
     public function authorize(InfoInterface $payment, $amount)
     {
         parent::authorize($payment, $amount);
         return $this->processPayment($payment, $amount);
     }
 
-    /**
-     * Capture payment.
-     *
-     * @param InfoInterface $payment
-     * @param float $amount
-     * @return mixed
-     */
     public function capture(InfoInterface $payment, $amount)
     {
         parent::capture($payment, $amount);
         return $this->processPayment($payment, $amount);
     }
 
-    /**
-     * Process the payment through external API calls.
-     *
-     * @param InfoInterface $payment
-     * @param float         $amount
-     * @return mixed
-     * @throws LocalizedException
-     */
     protected function processPayment(InfoInterface $payment, $amount)
     {
         $order = $payment->getOrder();
@@ -282,14 +209,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
     }
 
-    /**
-     * Process single-method invoice payment.
-     *
-     * @param InfoInterface $payment
-     * @param float $amount
-     * @return mixed
-     * @throws LocalizedException
-     */
     protected function processSingleMethodInvoicePayment(InfoInterface $payment, $amount)
     {
         $order = $payment->getOrder();
@@ -329,14 +248,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return $this->handleError($order);
     }
 
-    /**
-     * Process multi-method invoice payment.
-     *
-     * @param InfoInterface $payment
-     * @param float $amount
-     * @return mixed
-     * @throws LocalizedException
-     */
     protected function processMultiMethodInvoicePayment(InfoInterface $payment, $amount)
     {
         $order = $payment->getOrder();
@@ -357,14 +268,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return $this->handleError($order);
     }
 
-    /**
-     * Process "Card + Pix"
-     *
-     * @param InfoInterface $payment
-     * @param Order $order
-     * @return mixed
-     * @throws LocalizedException
-     */
     protected function processCardPix(InfoInterface $payment, Order $order)
     {
         $customerId = $this->customer->findOrCreate($order);
@@ -448,14 +351,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return $billCredit['id'] . '|' . $billPix['id'];
     }
 
-    /**
-     * Process "Card + Card"
-     *
-     * @param InfoInterface $payment
-     * @param Order $order
-     * @return mixed
-     * @throws LocalizedException
-     */
     protected function processTwoCards(InfoInterface $payment, Order $order)
     {
         $customerId = $this->customer->findOrCreate($order);
@@ -547,14 +442,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return $billCard1['id'] . '|' . $billCard2['id'];
     }
 
-    /**
-     * Process "Card + Bankslip with PIX"
-     *
-     * @param InfoInterface $payment
-     * @param Order $order
-     * @return mixed
-     * @throws LocalizedException
-     */
     protected function processCardBankslipPix(InfoInterface $payment, Order $order)
     {
         $customerId   = $this->customer->findOrCreate($order);
@@ -638,13 +525,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return $billCredit['id'] . '|' . $billBankslipPix['id'];
     }
 
-    /**
-     * Process single-method subscription payment.
-     *
-     * @param InfoInterface $payment
-     * @param OrderItemInterface $orderItem
-     * @return mixed
-     */
     protected function processSingleMethodSubscriptionPayment(InfoInterface $payment, OrderItemInterface $orderItem)
     {
         try {
@@ -665,7 +545,8 @@ abstract class AbstractMethod extends OriginAbstractMethod
                 'payment_method_code' => $this->getPaymentMethodCode(),
                 'plan_id' => $planId,
                 'product_items' => $productItems,
-                'code' => $order->getIncrementId()
+                'code' => $order->getIncrementId(),
+                'bill_items' => []
             ];
             $installments = $payment->getAdditionalInformation('installments');
             if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
@@ -727,15 +608,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return $this->handleError($order);
     }
 
-    /**
-     * Process multi-method subscription payment using two credit cards.
-     *
-     * @param InfoInterface $payment
-     * @param float $amount
-     * @param OrderItemInterface $orderItem
-     * @return string|false
-     * @throws LocalizedException
-     */
     protected function processMultiMethodSubscriptionPayment(InfoInterface $payment, $amount, OrderItemInterface $orderItem)
     {
         $order = $payment->getOrder();
@@ -838,308 +710,42 @@ abstract class AbstractMethod extends OriginAbstractMethod
     }
 
     /**
-     * Retrieve discount product ID for multi-payment scenarios.
+     * Obtém o(s) bill_id(s) associado(s) ao pedido (split multimeios).
+     * Retorna string com IDs separados por vírgula, ou array se solicitado.
      *
-     * @return int
-     * @throws LocalizedException
+     * @param object $order Instância de Magento\Sales\Model\Order
+     * @param bool $asArray
+     * @return string|array|null
      */
-    protected function getMultiPaymentDiscountProductId()
+    public function getSplitBillIds($order, $asArray = false)
     {
-        if (method_exists($this->productManagement, 'findOrCreateProduct')) {
-            return $this->productManagement->findOrCreateProduct('multi_payment_discount', __('Multi Payment Discount'));
+        $billIds = $order->getVindiBillId();
+        if (!$billIds) {
+            return $asArray ? [] : null;
         }
-        throw new LocalizedException(__('Multi payment discount product not found.'));
+        return $asArray ? explode(',', $billIds) : $billIds;
     }
 
     /**
-     * Retrieve discount product ID for single discount (if needed).
+     * Define o(s) bill_id(s) do split multimeios no pedido.
      *
-     * @return int
-     * @throws LocalizedException
-     */
-    protected function getDiscountProductId()
-    {
-        if (method_exists($this->productManagement, 'findOrCreateProduct')) {
-            return $this->productManagement->findOrCreateProduct('cupom', 'Cupom de Desconto');
-        }
-        throw new LocalizedException(__('Discount product not found.'));
-    }
-
-    /**
-     * @param Order $order
-     * @return false|OrderItemInterface|mixed
-     */
-    protected function isSubscriptionOrder(Order $order)
-    {
-        foreach ($order->getItems() as $item) {
-            try {
-                if ($this->helperData->isVindiPlan($item->getProductId())) {
-                    return $item;
-                }
-                $options = $item->getProductOptions();
-                if (!empty($options['info_buyRequest']['selected_plan_id'])) {
-                    return $item;
-                }
-            } catch (NoSuchEntityException $e) {
-            }
-        }
-        return false;
-    }
-
-    /**
-     * @param Order $order
-     * @throws LocalizedException
-     */
-    protected function handleError(Order $order)
-    {
-        $this->psrLogger->error(__('Error on order payment %1.', $order->getId()));
-        $message = __('There has been a payment confirmation error. Verify data and try again');
-        $order->setState(Order::STATE_CANCELED)
-            ->setStatus($order->getConfig()->getStateDefaultStatus(Order::STATE_CANCELED))
-            ->addStatusHistoryComment($message);
-        throw new LocalizedException($message);
-    }
-
-    /**
-     * Handle additional information for bank split payments.
-     *
-     * @param InfoInterface $payment
-     * @param array $body
-     * @param mixed $bill
+     * @param object $order Instância de Magento\Sales\Model\Order
+     * @param string|array $billIds
      * @return void
      */
-    protected function handleBankSplitAdditionalInformation(InfoInterface $payment, array $body, $bill)
+    public function setSplitBillIds($order, $billIds)
     {
-        if (
-            $body['payment_method_code'] === PaymentMethod::BANK_SLIP
-            || $body['payment_method_code'] === PaymentMethod::BANK_SLIP_PIX
-        ) {
-            $payment->setAdditionalInformation('print_url', $bill['charges'][0]['print_url']);
-            $payment->setAdditionalInformation('due_at', $bill['charges'][0]['due_at']);
+        if (is_array($billIds)) {
+            $billIds = implode(',', $billIds);
         }
-        $isValidPix = isset($bill['charges'][0]['last_transaction']['gateway_response_fields']['qrcode_original_path']);
-        if (
-            $isValidPix
-            && (
-                $body['payment_method_code'] === PaymentMethod::PIX
-                || $body['payment_method_code'] === PaymentMethod::BANK_SLIP_PIX
-            )
-        ) {
-            foreach ($bill['charges'][0]['last_transaction']['gateway_response_fields'] as $key => $value) {
-                $payment->setAdditionalInformation($key, $value);
-            }
-        }
+        $order->setVindiBillId($billIds);
     }
 
     /**
-     * Check if the payment was successful.
+     * Salva o registro de split de pagamento para conciliação multimeios.
+     * Cada split é salvo individualmente, permitindo rastreabilidade e reembolso parcial.
      *
-     * @param array $body
-     * @param mixed $bill
-     * @param array $subscription
-     * @return bool
-     */
-    protected function successfullyPaid(array $body, $bill, array $subscription = [])
-    {
-        if (!$bill) {
-            $billingType = $subscription['billing_trigger_type'] ?? null;
-            if ($billingType != 'day_of_month') {
-                return true;
-            } elseif ($subscription['id'] && $subscription['status'] == 'active') {
-                return true;
-            }
-        }
-        return $this->isValidPaymentMethodCode($body['payment_method_code'])
-            || $this->isValidStatus($bill)
-            || $this->isWaitingPaymentMethodResponse($bill);
-    }
-
-    /**
-     * Check if the payment method code is valid.
-     *
-     * @param string $paymentMethodCode
-     * @return bool
-     */
-    protected function isValidPaymentMethodCode($paymentMethodCode)
-    {
-        $paymentMethodsCode = [
-            PaymentMethod::BANK_SLIP,
-            PaymentMethod::DEBIT_CARD,
-            PaymentMethod::PIX,
-            PaymentMethod::BANK_SLIP_PIX
-        ];
-        return in_array($paymentMethodCode, $paymentMethodsCode);
-    }
-
-    /**
-     * Check if the payment is waiting for a response.
-     *
-     * @param mixed $bill
-     * @return bool
-     */
-    protected function isWaitingPaymentMethodResponse($bill)
-    {
-        if (!$bill) {
-            return false;
-        }
-        return reset($bill['charges'])['last_transaction']['status'] === Bill::WAITING_STATUS;
-    }
-
-    /**
-     * Check if the bill status is valid.
-     *
-     * @param mixed $bill
-     * @return bool
-     */
-    protected function isValidStatus($bill)
-    {
-        if (!$bill) {
-            return false;
-        }
-        $billStatus = [
-            Bill::PAID_STATUS,
-            Bill::REVIEW_STATUS
-        ];
-        $chargeStatus = reset($bill['charges'])['status'] === Bill::FRAUD_REVIEW_STATUS;
-        return in_array($bill['status'], $billStatus) || $chargeStatus;
-    }
-
-    /**
-     * Create payment profile.
-     *
-     * @param \Magento\Sales\Model\Order $order
-     * @param InfoInterface             $payment
-     * @param int                       $customerId
-     * @param string                    $whichCard
-     * @return \Vindi\Payment\Model\PaymentProfile
-     * @throws LocalizedException
-     */
-    public function createPaymentProfile($order, InfoInterface $payment, $customerId, $whichCard = 'first')
-    {
-        if (!$customerId) {
-            throw new LocalizedException(__('Vindi customer_id cannot be blank.'));
-        }
-
-        $ccOwnerField     = ($whichCard === 'second') ? 'cc_owner2'      : 'cc_owner';
-        $ccTypeField      = ($whichCard === 'second') ? 'cc_type2'       : 'cc_type';
-        $ccNumberField    = ($whichCard === 'second') ? 'cc_number2'     : 'cc_number';
-        $ccExpMonthField  = ($whichCard === 'second') ? 'cc_exp_month2'  : 'cc_exp_month';
-        $ccExpYearField   = ($whichCard === 'second') ? 'cc_exp_year2'   : 'cc_exp_year';
-        $ccCvvField       = ($whichCard === 'second') ? 'cc_cvv2'        : 'cc_cvv';
-
-        $holder = $payment->getAdditionalInformation($ccOwnerField)
-            ?: $payment->getData($ccOwnerField);
-        if (empty($holder)) {
-            throw new LocalizedException(__('Vindi holder_name cannot be blank.'));
-        }
-
-        $type     = $payment->getAdditionalInformation($ccTypeField)      ?: $payment->getData($ccTypeField);
-        $number   = $payment->getAdditionalInformation($ccNumberField)    ?: $payment->getData($ccNumberField);
-        $month    = $payment->getAdditionalInformation($ccExpMonthField)  ?: $payment->getData($ccExpMonthField);
-        $year     = $payment->getAdditionalInformation($ccExpYearField)   ?: $payment->getData($ccExpYearField);
-        $cvv      = $payment->getAdditionalInformation($ccCvvField)       ?: $payment->getData($ccCvvField) ?: '';
-
-        $payment->setAdditionalInformation('customer_id', $customerId);
-        $payment->setAdditionalInformation('holder_name', $holder);
-        $payment->setData('customer_id', $customerId);
-        $payment->setData('holder_name', $holder);
-
-        $payment->setCcOwner($holder);
-        $payment->setCcType($type);
-        $payment->setCcNumberEnc($number);
-        $payment->setCcExpMonth($month);
-        $payment->setCcExpYear($year);
-        $payment->setCcCid($cvv);
-
-        $methodCode = $this->getPaymentMethodCode();
-        if ($this->helperData->isMultiMethod($methodCode)) {
-            $methodCode = PaymentMethod::CREDIT_CARD;
-        }
-
-        $paymentProfile = $this->profile->create($payment, $customerId, $methodCode, $whichCard);
-
-        $data   = $paymentProfile['payment_profile'];
-        $model  = $this->paymentProfileFactory->create();
-        $model->setData([
-            'payment_profile_id' => $data['id'],
-            'vindi_customer_id'  => $customerId,
-            'customer_id'        => $customerId,
-            'customer_email'     => $order->getCustomerEmail(),
-            'holder_name'        => $holder,
-            'cc_type'            => $this->paymentMethod->convertCcTypeToFullName($payment->getCcType()),
-            'cc_last_4'          => $payment->getCcLast4(),
-            'status'             => $data['status'],
-            'token'              => $data['token'],
-            'type'               => $data['type'],
-        ]);
-        $this->paymentProfileRepository->save($model);
-
-        return $model;
-    }
-
-    /**
-     * Save order to subscription orders table.
-     *
-     * @param Order $order
-     * @return void
-     */
-    private function saveOrderToSubscriptionOrdersTable(Order $order)
-    {
-        $tableName = $this->resourceConnection->getTableName('vindi_subscription_orders');
-        $data = [
-            'increment_id'    => $order->getIncrementId(),
-            'subscription_id' => $order->getVindiSubscriptionId(),
-            'created_at'      => $this->date->date()->format('Y-m-d H:i:s'),
-            'total'           => $order->getGrandTotal()
-        ];
-        try {
-            $this->connection->insert($tableName, $data);
-        } catch (\Exception $e) {
-            $this->psrLogger->error('Error saving order to subscription orders table: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Retrieve payment profile.
-     *
-     * @param int $paymentProfileId
-     * @return PaymentProfile
-     */
-    protected function getPaymentProfile(int $paymentProfileId): PaymentProfile
-    {
-        return $this->paymentProfileRepository->getById($paymentProfileId);
-    }
-
-    /**
-     * Recursively masks sensitive data in an array.
-     *
-     * @param mixed $data
-     * @return mixed
-     */
-    protected function maskSensitiveData($data)
-    {
-        if (is_array($data)) {
-            foreach ($data as $key => $value) {
-                if (is_array($value)) {
-                    $data[$key] = $this->maskSensitiveData($value);
-                } else {
-                    $lowerKey = strtolower($key);
-                    if (strpos($lowerKey, 'cvv') !== false ||
-                        strpos($lowerKey, 'token') !== false ||
-                        strpos($lowerKey, 'authorization') !== false
-                    ) {
-                        $data[$key] = '***';
-                    }
-                }
-            }
-        }
-        return $data;
-    }
-
-    /**
-     * Save payment split record.
-     *
-     * @param Order $order
+     * @param object $order Instância de Magento\Sales\Model\Order
      * @param mixed $billFirst
      * @param mixed $billSecond
      * @param float $amountFirst
@@ -1148,7 +754,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
      * @param string $paymentMethodSecond
      * @return void
      */
-    protected function savePaymentSplitRecord(Order $order, $billFirst, $billSecond, $amountFirst, $amountSecond, $paymentMethodFirst, $paymentMethodSecond)
+    protected function savePaymentSplitRecord($order, $billFirst, $billSecond, $amountFirst, $amountSecond, $paymentMethodFirst, $paymentMethodSecond)
     {
         if (!$order->getId()) {
             $order = $this->orderRepository->save($order);

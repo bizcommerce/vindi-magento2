@@ -59,7 +59,6 @@ class RecurrencePlan extends AbstractRenderer
                         return isset($data['price']) && is_numeric($data['price']) && $data['price'] > 0;
                     });
 
-                    // Generate the HTML for the select dropdown
                     $html = '<select name="product[' . $productId . '][selected_plan_id]" class="input-select admin__control-select selected_plan_id">';
                     $html .= '<option value="">' . __('-- Select --') . '</option>';
                     foreach ($recurrenceData as $data) {

@@ -100,6 +100,25 @@ class BillCreated
 
         try {
             $originalOrder = $this->orderCreator->getOrderFromSubscriptionId($subscriptionId);
+            $isMultiMeios = false;
+            if ($originalOrder) {
+                $payment = $originalOrder->getPayment();
+                if ($payment && $payment->getMethod() === 'vindi_cardcard') {
+                    $isMultiMeios = true;
+                }
+            }
+            if ($isMultiMeios) {
+                try {
+                    $this->logger->info('Cancelando bill automática da Vindi para assinatura multimeios. Bill ID: ' . $bill['id']);
+                    $this->orderCreator->cancelVindiBill($bill['id']);
+                } catch (\Exception $e) {
+                    $this->logger->error('Erro ao cancelar bill automática: ' . $e->getMessage());
+                }
+                $this->logger->info('Preparar criação das duas bills manuais para assinatura multimeios. Subscription ID: ' . $subscriptionId);
+                $this->orderCreator->enqueueManualBillsForMultiMeios($originalOrder, $subscriptionId, $bill);
+                return true;
+            }
+
             if ($originalOrder && $originalOrder->getData('vindi_subscription_can_create_new_order') == true) {
                 $originalOrder->setData('vindi_subscription_can_create_new_order', false);
                 $originalOrder->setData('vindi_bill_id', $bill['id']);
@@ -113,7 +132,7 @@ class BillCreated
             }
 
             if ($originalOrder) {
-                if (isset($bill['period']) && isset($bill['period']['cycle']) && $bill['period']['cycle'] != 1) {
+                if (isset($bill['period']) && isset($bill['period']['cycle'])) {
                     $queueItem = $this->orderCreationQueueFactory->create();
                     $queueItem->setData([
                         'bill_data' => json_encode($data),

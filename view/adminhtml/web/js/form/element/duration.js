@@ -42,7 +42,6 @@ define([
                 billing_cycles.hide();
             }
 
-            // Call method to handle billing_trigger_type field changes
             this.handleBillingTriggerType();
         },
 

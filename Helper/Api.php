@@ -263,5 +263,26 @@ class Api extends AbstractHelper
         ]);
         $this->logResource->save($log);
     }
+
+    /**
+     * Cancela uma bill na Vindi via API
+     * @param string|int $billId
+     * @return bool|mixed
+     */
+    public function cancelVindiBill($billId)
+    {
+        if (!$billId) {
+            $this->logger->error(__('Bill ID não informado para cancelamento.'));
+            return false;
+        }
+        $endpoint = 'bills/' . $billId . '/cancel';
+        $result = $this->request($endpoint, 'PUT');
+        if ($result && isset($result['bill']) && $result['bill']['status'] === 'canceled') {
+            $this->logger->info(__('Bill %1 cancelada com sucesso na Vindi.', $billId));
+            return true;
+        }
+        $this->logger->error(__('Falha ao cancelar bill %1 na Vindi.', $billId));
+        return false;
+    }
 }
 

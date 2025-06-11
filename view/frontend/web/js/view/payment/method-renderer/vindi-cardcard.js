@@ -370,6 +370,13 @@ define([
 
             this.taxvat.value(window?.checkoutConfig?.payment?.vindi_cardcard?.customer_taxvat);
 
+            if (!this.hasPaymentProfiles()) {
+                this.selectedPaymentProfile(null);
+            }
+            if (!this.hasPaymentProfiles2()) {
+                this.selectedPaymentProfile2(null);
+            }
+
             self.updateInstallments();
             self.updateInstallments2();
 

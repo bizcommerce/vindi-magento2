@@ -206,4 +206,25 @@ class PaymentSplit extends AbstractModel implements PaymentSplitInterface
     {
         return $this->setData(self::UPDATED_AT, $updatedAt);
     }
+
+    /**
+     * Get bill id.
+     *
+     * @return mixed
+     */
+    public function getBillId()
+    {
+        return $this->getData(self::BILL_ID);
+    }
+
+    /**
+     * Set bill id.
+     *
+     * @param mixed $billId
+     * @return $this
+     */
+    public function setBillId($billId)
+    {
+        return $this->setData(self::BILL_ID, $billId);
+    }
 }
