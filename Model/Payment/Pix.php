@@ -94,11 +94,18 @@ class Pix extends AbstractMethod
      */
     public function assignData(DataObject $data)
     {
-        $info = $this->getInfoInstance();
-        $info->setAdditionalInformation('installments', 1);
-        $info->save();
-
         parent::assignData($data);
+
+        $info = $this->getInfoInstance();
+        
+        // Ensure additional_information is array
+        $additionalInfo = $info->getAdditionalInformation();
+        if (!is_array($additionalInfo)) {
+            $additionalInfo = [];
+        }
+        
+        $additionalInfo['installments'] = 1;
+        $info->setAdditionalInformation($additionalInfo);
 
         return $this;
     }

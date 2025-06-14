@@ -189,7 +189,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $payment->setAdditionalInformation('customer_id', $customerId);
 
         $paymentMethodCode = $this->getPaymentMethodCode();
-        $plan = $this->isSubscriptionOrder($order);
+        $plan = $this->helperData->isSubscriptionOrder($order);
 
         if ($plan) {
             if ($this->helperData->isMultiMethod($paymentMethodCode)) {
@@ -228,7 +228,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
                 ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
                 : $this->createPaymentProfile($order, $payment, $customerId);
 
-            $body['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
+            $body['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
         }
 
         $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
@@ -296,7 +296,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
             : $this->createPaymentProfile($order, $payment, $customerId);
 
-        $bodyCredit['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
+        $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
 
         $installments = $payment->getAdditionalInformation('cc_installments')
             ?: $payment->getAdditionalInformation('installments')
@@ -381,7 +381,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         } else {
             $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
         }
-        $bodyCard1['payment_profile'] = ['id' => $paymentProfile1->getData('payment_profile_id')];
+        $bodyCard1['payment_profile'] = ['id' => $paymentProfile1['id'] ?? null];
 
         $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
         $bodyCard1['installments'] = (int)$installments1;
@@ -403,7 +403,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         } else {
             $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
         }
-        $bodyCard2['payment_profile'] = ['id' => $paymentProfile2->getData('payment_profile_id')];
+        $bodyCard2['payment_profile'] = ['id' => $paymentProfile2['id'] ?? null];
 
         $installments2 = $payment->getAdditionalInformation('cc_installments2') ?: 1;
         $bodyCard2['installments'] = (int)$installments2;
@@ -470,7 +470,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
             : $this->createPaymentProfile($order, $payment, $customerId);
 
-        $bodyCredit['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
+        $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
 
         $installments = $payment->getAdditionalInformation('cc_installments')
             ?: $payment->getAdditionalInformation('installments')
@@ -555,7 +555,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
                     : $this->createPaymentProfile($order, $payment, $customerId);
 
                 if ($paymentProfile) {
-                    $body['payment_profile'] = ['id' => $paymentProfile->getData('payment_profile_id')];
+                    $body['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
                 }
                 if ($vindiPlan && $vindiPlan->getInstallments() != null) {
                     if ((int)$installments > (int)$vindiPlan->getInstallments()) {
@@ -835,6 +835,226 @@ abstract class AbstractMethod extends OriginAbstractMethod
             $this->connection->insert($tableName, $data);
         } catch (\Exception $e) {
             $this->psrLogger->error('Error saving subscription to database: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Handle bank split additional information for payment processing.
+     *
+     * @param InfoInterface $payment
+     * @param array $body
+     * @param array $bill
+     * @return void
+     */
+    protected function handleBankSplitAdditionalInformation($payment, $body, $bill)
+    {
+        if (!$payment || !$bill) {
+            return;
+        }
+
+        try {
+            // Get existing additional information and ensure it's an array
+            $additionalInfo = $payment->getAdditionalInformation();
+            if (!is_array($additionalInfo)) {
+                $additionalInfo = [];
+            }
+            
+            // Store bill information in payment additional information
+            $additionalInfo['vindi_bill_id'] = $bill['id'] ?? null;
+            $additionalInfo['vindi_bill_status'] = $bill['status'] ?? null;
+            
+            // Store payment method information if available
+            if (isset($body['payment_method_code'])) {
+                $additionalInfo['vindi_payment_method'] = $body['payment_method_code'];
+            }
+            
+            // Store amount information
+            if (isset($bill['amount'])) {
+                $additionalInfo['vindi_bill_amount'] = $bill['amount'];
+            }
+            
+            // Store charges information if available
+            if (isset($bill['charges']) && is_array($bill['charges'])) {
+                foreach ($bill['charges'] as $index => $charge) {
+                    $additionalInfo["vindi_charge_{$index}_id"] = $charge['id'] ?? null;
+                    $additionalInfo["vindi_charge_{$index}_status"] = $charge['status'] ?? null;
+                    
+                    // Store payment information if available
+                    if (isset($charge['last_transaction'])) {
+                        $transaction = $charge['last_transaction'];
+                        $additionalInfo["vindi_transaction_{$index}_id"] = $transaction['id'] ?? null;
+                        $additionalInfo["vindi_transaction_{$index}_status"] = $transaction['status'] ?? null;
+                        
+                        // Store bank slip or PIX specific information
+                        if (isset($transaction['payment_profile'])) {
+                            $paymentProfile = $transaction['payment_profile'];
+                            if (isset($paymentProfile['bank_slip_url'])) {
+                                $additionalInfo["vindi_bank_slip_url_{$index}"] = $paymentProfile['bank_slip_url'];
+                            }
+                            if (isset($paymentProfile['pix_qr_code'])) {
+                                $additionalInfo["vindi_pix_qr_code_{$index}"] = $paymentProfile['pix_qr_code'];
+                            }
+                            if (isset($paymentProfile['pix_code'])) {
+                                $additionalInfo["vindi_pix_code_{$index}"] = $paymentProfile['pix_code'];
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Set all additional information at once
+            $payment->setAdditionalInformation($additionalInfo);
+            
+            // Don't save the payment here - let the parent process handle it
+            // This prevents foreign key constraint violations
+            
+        } catch (\Exception $e) {
+            $this->psrLogger->error('Error handling bank split additional information: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Check if payment was successfully processed.
+     *
+     * @param array $body
+     * @param array $bill
+     * @param array $subscription
+     * @return bool
+     */
+    protected function successfullyPaid($body, $bill, $subscription = null)
+    {
+        if (!$bill || !isset($bill['id'])) {
+            return false;
+        }
+
+        // Check if bill was created successfully
+        if (!isset($bill['status'])) {
+            return false;
+        }
+
+        // Consider these statuses as successful
+        $successStatuses = ['paid', 'pending', 'review'];
+        
+        if (in_array($bill['status'], $successStatuses)) {
+            return true;
+        }
+
+        // For subscription payments, also check charges
+        if (isset($bill['charges']) && is_array($bill['charges'])) {
+            foreach ($bill['charges'] as $charge) {
+                if (isset($charge['status']) && in_array($charge['status'], $successStatuses)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Handle payment errors and set appropriate order status.
+     *
+     * @param Order $order
+     * @return $this
+     */
+    protected function handleError($order)
+    {
+        try {
+            if ($order && $order->getId()) {
+                // Set order status to payment failed or cancelled
+                $order->setState(Order::STATE_CANCELED);
+                $order->setStatus(Order::STATE_CANCELED);
+                $order->addCommentToStatusHistory(
+                    __('Payment failed or was cancelled by Vindi.'),
+                    false
+                );
+                
+                // Save the order
+                $this->orderRepository->save($order);
+                
+                $this->psrLogger->error('Payment failed for order: ' . $order->getIncrementId());
+            }
+        } catch (\Exception $e) {
+            $this->psrLogger->error('Error handling payment error: ' . $e->getMessage());
+        }
+        
+        return $this;
+    }
+
+    /**
+     * Get payment profile by ID.
+     *
+     * @param int $profileId
+     * @return array|null
+     */
+    protected function getPaymentProfile($profileId)
+    {
+        if (!$profileId) {
+            return null;
+        }
+
+        try {
+            $response = $this->profile->getPaymentProfileById($profileId);
+            if ($response && isset($response['payment_profile'])) {
+                return ['id' => $response['payment_profile']['id']];
+            }
+            return null;
+        } catch (\Exception $e) {
+            $this->psrLogger->error('Error getting payment profile: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Create payment profile for the order.
+     *
+     * @param Order $order
+     * @param InfoInterface $payment
+     * @param int $customerId
+     * @param string $suffix
+     * @return array|null
+     */
+    protected function createPaymentProfile($order, $payment, $customerId, $suffix = '')
+    {
+        if (!$customerId) {
+            return null;
+        }
+
+        try {
+            $paymentMethodCode = $this->getPaymentMethodCode();
+            $response = $this->profile->create($payment, $customerId, $paymentMethodCode);
+            if ($response && isset($response['payment_profile'])) {
+                return ['id' => $response['payment_profile']['id']];
+            }
+            return null;
+        } catch (\Exception $e) {
+            $this->psrLogger->error('Error creating payment profile: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Get multi payment discount product ID.
+     *
+     * @return int|null
+     */
+    protected function getMultiPaymentDiscountProductId()
+    {
+        try {
+            // Get the discount product ID from configuration or predefined value
+            $discountProductId = $this->helperData->getConfig('general', 'discount_product_id');
+            
+            if ($discountProductId) {
+                return (int) $discountProductId;
+            }
+            
+            // Return a fixed ID for discount product or null if not found
+            // This prevents errors during development
+            return 1; // You should configure this in admin panel
+            
+        } catch (\Exception $e) {
+            $this->psrLogger->error('Error getting multi payment discount product ID: ' . $e->getMessage());
+            return 1; // Fallback to a default product ID
         }
     }
 }

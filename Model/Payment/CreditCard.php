@@ -93,11 +93,18 @@ class CreditCard extends AbstractMethod
      */
     public function assignData(DataObject $data)
     {
-        $info = $this->getInfoInstance();
-        $info->setAdditionalInformation('installments', $data->getAdditionalData('installments'));
-        $info->save();
-
         parent::assignData($data);
+
+        $info = $this->getInfoInstance();
+        
+        // Ensure additional_information is array
+        $additionalInfo = $info->getAdditionalInformation();
+        if (!is_array($additionalInfo)) {
+            $additionalInfo = [];
+        }
+        
+        $additionalInfo['installments'] = $data->getAdditionalData('installments');
+        $info->setAdditionalInformation($additionalInfo);
 
         return $this;
     }

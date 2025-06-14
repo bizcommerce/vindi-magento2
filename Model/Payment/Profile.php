@@ -226,4 +226,15 @@ class Profile
             'GET'
         );
     }
+
+    /**
+     * Get payment profile by ID.
+     *
+     * @param int $paymentProfileId
+     * @return bool|mixed
+     */
+    public function getPaymentProfileById($paymentProfileId)
+    {
+        return $this->api->request("payment_profiles/{$paymentProfileId}", 'GET');
+    }
 }
