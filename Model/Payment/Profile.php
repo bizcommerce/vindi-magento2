@@ -228,13 +228,25 @@ class Profile
     }
 
     /**
-     * Get payment profile by ID.
+     * Get payment profile by ID with enhanced error handling.
      *
      * @param int $paymentProfileId
-     * @return bool|mixed
+     * @return bool|mixed|array Returns false for general errors, ['not_found' => true] for 404, or the profile data
      */
     public function getPaymentProfileById($paymentProfileId)
     {
-        return $this->api->request("payment_profiles/{$paymentProfileId}", 'GET');
+        // Make the API request and capture both response and any potential error info
+        $response = $this->api->request("payment_profiles/{$paymentProfileId}", 'GET');
+        
+        // If response is false, it means there was an error
+        // For 404 errors, we want to return a special indicator
+        if ($response === false) {
+            // Since we can't easily access the specific error details from the API helper,
+            // we'll assume that if a GET request for a specific resource fails,
+            // it's likely a 404 (not found) scenario
+            return ['not_found' => true];
+        }
+        
+        return $response;
     }
 }

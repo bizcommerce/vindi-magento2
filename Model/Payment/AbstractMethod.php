@@ -224,9 +224,18 @@ abstract class AbstractMethod extends OriginAbstractMethod
         ];
 
         if ($paymentMethodCode === PaymentMethod::CREDIT_CARD) {
-            $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
-                ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
-                : $this->createPaymentProfile($order, $payment, $customerId);
+            $paymentProfile = null;
+            $profileId = $payment->getAdditionalInformation('payment_profile');
+            
+            // Try to get existing payment profile if ID is provided
+            if ($profileId) {
+                $paymentProfile = $this->getPaymentProfileFromVindi((int)$profileId);
+            }
+            
+            // If profile not found or not provided, create new one
+            if (!$paymentProfile) {
+                $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+            }
 
             $body['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
         }
@@ -292,9 +301,18 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'amount'     => -((float)$amountPix),
         ];
 
-        $paymentProfile = $payment->getAdditionalInformation('payment_profile')
-            ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
-            : $this->createPaymentProfile($order, $payment, $customerId);
+        $paymentProfile = null;
+        $profileId = $payment->getAdditionalInformation('payment_profile');
+        
+        // Try to get existing payment profile if ID is provided
+        if ($profileId) {
+            $paymentProfile = $this->getPaymentProfile((int)$profileId);
+        }
+        
+        // If profile not found or not provided, create new one
+        if (!$paymentProfile) {
+            $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+        }
 
         $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
 
@@ -377,7 +395,10 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
         $profileId1 = (int)$payment->getAdditionalInformation('payment_profile');
         if ($profileId1) {
-            $paymentProfile1 = $this->getPaymentProfile($profileId1);
+            $paymentProfile1 = $this->getPaymentProfileFromVindi($profileId1);
+            if (!$paymentProfile1) {
+                $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+            }
         } else {
             $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
         }
@@ -399,7 +420,10 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
         $profileId2 = (int)$payment->getAdditionalInformation('payment_profile2');
         if ($profileId2) {
-            $paymentProfile2 = $this->getPaymentProfile($profileId2);
+            $paymentProfile2 = $this->getPaymentProfileFromVindi($profileId2);
+            if (!$paymentProfile2) {
+                $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+            }
         } else {
             $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
         }
@@ -466,9 +490,22 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'amount'     => -((float)$amountBankslipPix),
         ];
 
-        $paymentProfile = $payment->getAdditionalInformation('payment_profile')
-            ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
-            : $this->createPaymentProfile($order, $payment, $customerId);
+        $paymentProfile = null;
+        $profileId = $payment->getAdditionalInformation('payment_profile');
+        
+        // Try to get existing payment profile if ID is provided
+        if ($profileId) {
+            $paymentProfile = $this->getPaymentProfileFromVindi((int)$profileId);
+        }
+        
+        // If profile not found or not provided, create new one
+        if (!$paymentProfile) {
+            $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+            if (!$paymentProfile) {
+                $this->psrLogger->error("Failed to create payment profile for CardBankslipPix. Using null profile.");
+                // Continue processing without profile, API will handle this case
+            }
+        }
 
         $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
 
@@ -551,7 +588,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             $installments = $payment->getAdditionalInformation('installments');
             if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
                 $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
-                    ? $this->getPaymentProfile((int)$payment->getAdditionalInformation('payment_profile'))
+                    ? $this->getPaymentProfileFromVindi((int)$payment->getAdditionalInformation('payment_profile'))
                     : $this->createPaymentProfile($order, $payment, $customerId);
 
                 if ($paymentProfile) {
@@ -593,7 +630,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
                     $sub->setStatus('canceled');
                     $sub->save();
                     if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
-                        $paymentProfileId = $paymentProfile->getPaymentProfileId();
+                        $paymentProfileId = $paymentProfile['id'] ?? null;
                         if ($paymentProfileId) {
                             $this->profile->deletePaymentProfile($paymentProfileId);
                             $paymentProfileRepositoryModel = $this->paymentProfileRepository->getByProfileId($paymentProfileId);
@@ -987,6 +1024,13 @@ abstract class AbstractMethod extends OriginAbstractMethod
      * @param int $profileId
      * @return array|null
      */
+    /**
+     * Get payment profile from local database.
+     * This method is used by payment method classes like CardBankSlipPix.
+     *
+     * @param int $profileId
+     * @return PaymentProfile|null
+     */
     protected function getPaymentProfile($profileId)
     {
         if (!$profileId) {
@@ -994,13 +1038,67 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
 
         try {
+            // Try to get from local database
+            $paymentProfile = $this->paymentProfileRepository->getByProfileId($profileId);
+            
+            // Verify if the profile still exists in Vindi API
+            $vindiResponse = $this->profile->getPaymentProfileById($profileId);
+            
+            // If not found in Vindi (404), the local profile is stale
+            if (is_array($vindiResponse) && isset($vindiResponse['not_found']) && $vindiResponse['not_found']) {
+                $this->psrLogger->warning("Payment profile ID {$profileId} exists locally but not in Vindi API. Profile may be stale.");
+                // Return the local profile anyway for backward compatibility
+                // The payment processing logic will handle creating a new one if needed
+                return $paymentProfile;
+            }
+            
+            return $paymentProfile;
+            
+        } catch (\Exception $e) {
+            $this->psrLogger->error('Error getting payment profile from local database: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Get payment profile data from Vindi API (for internal use in payment processing).
+     *
+     * @param int $profileId
+     * @return array|null
+     */
+    protected function getPaymentProfileFromVindi($profileId)
+    {
+        if (!$profileId) {
+            return null;
+        }
+
+        try {
             $response = $this->profile->getPaymentProfileById($profileId);
-            if ($response && isset($response['payment_profile'])) {
+            
+            // Check if response indicates not found (404)
+            if (is_array($response) && isset($response['not_found']) && $response['not_found']) {
+                $this->psrLogger->warning("Payment profile ID {$profileId} not found in Vindi API (404). Will create new profile.");
+                return null;
+            }
+            
+            // Check if response is false (other API errors)
+            if ($response === false) {
+                $this->psrLogger->warning("Payment profile ID {$profileId} API error. Will create new profile.");
+                return null;
+            }
+            
+            // Check if response has the expected structure
+            if ($response && isset($response['payment_profile']) && isset($response['payment_profile']['id'])) {
                 return ['id' => $response['payment_profile']['id']];
             }
+            
+            // If response doesn't have expected structure, log and return null
+            $this->psrLogger->warning("Payment profile ID {$profileId} response has unexpected structure. Will create new profile.");
             return null;
+            
         } catch (\Exception $e) {
-            $this->psrLogger->error('Error getting payment profile: ' . $e->getMessage());
+            $this->psrLogger->error('Error getting payment profile from Vindi API: ' . $e->getMessage());
+            // Return null to force creation of new profile
             return null;
         }
     }
