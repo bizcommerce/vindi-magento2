@@ -13,6 +13,7 @@
     <preference for="Vindi\Payment\Api\Data\PaymentLinkInterface" type="Vindi\Payment\Model\PaymentLink"/>
     <preference for="Vindi\Payment\Api\PaymentLinkRepositoryInterface" type="Vindi\Payment\Model\ResourceModel\PaymentLinkRepository"/>
 
+    <!-- Console Commands -->
     <type name="Magento\Framework\Console\CommandList">
         <arguments>
             <argument name="commands" xsi:type="array">
@@ -21,6 +22,7 @@
                 <item name="vindi:payment:update-expired-links" xsi:type="object">Vindi\Payment\Console\Command\RunUpdateExpiredLinks</item>
                 <item name="vindi_subscription_update_command" xsi:type="object">Vindi\Payment\Console\Command\UpdateSubscriptionCommand</item>
                 <item name="vindi:payment:cancel-orders-with-expired-links" xsi:type="object">Vindi\Payment\Console\Command\RunCancelOrdersWithExpiredLinks</item>
+                <item name="vindi_diagnose_multi_payments" xsi:type="object">Vindi\Payment\Console\Command\DiagnoseMultiPayments</item>
             </argument>
         </arguments>
     </type>
@@ -223,4 +225,13 @@
             <argument name="resourceModel" xsi:type="string">Vindi\Payment\Model\ResourceModel\PaymentSplit</argument>
         </arguments>
     </virtualType>
+
+    <!-- Console Commands -->
+    <type name="Magento\Framework\Console\CommandList">
+        <arguments>
+            <argument name="commands" xsi:type="array">
+                <item name="vindi_diagnose_multipayment_bills" xsi:type="object">Vindi\Payment\Console\Command\DiagnoseMultiPaymentBills</item>
+            </argument>
+        </arguments>
+    </type>
 </config>

@@ -167,8 +167,8 @@ class OrderCreator
         $newOrder = clone $originalOrder;
         $newOrder->setId(null);
         $newOrder->setIncrementId(null);
-        $newOrder->setVindiBillId($billData['id']);
-        $newOrder->setVindiSubscriptionId($billData['subscription']['id']);
+        $newOrder->setData('vindi_bill_id', $billData['id']);
+        $newOrder->setData('vindi_subscription_id', $billData['subscription']['id']);
         $newOrder->setCreatedAt(null);
         $newOrder->setState(Order::STATE_NEW);
         $newOrder->setStatus('pending');
@@ -430,9 +430,12 @@ class OrderCreator
 
         $productList = $this->productManagement->findOrCreateProductsToSubscription($originalOrder);
 
-        $multiPaymentDiscountProductId = null;
-        if (method_exists($this->productManagement, 'findOrCreateProduct')) {
-            $multiPaymentDiscountProductId = $this->productManagement->findOrCreateProduct('multi_payment_discount', __('Multi Payment Discount'));
+        // Usar método centralizado para obter/criar produto de desconto
+        try {
+            $multiPaymentDiscountProductId = $this->getOrCreateDiscountProduct();
+        } catch (\Exception $e) {
+            error_log("VINDI_MULTIMEIOS: Erro ao obter produto de desconto: " . $e->getMessage());
+            $multiPaymentDiscountProductId = null;
         }
 
         $billItemsCard1 = $productList;
@@ -470,47 +473,229 @@ class OrderCreator
         $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
         /** @var \Vindi\Payment\Helper\Api $apiHelper */
         $apiHelper = $objectManager->get(\Vindi\Payment\Helper\Api::class);
-        $result1 = $apiHelper->request('bills', 'POST', $bodyCard1);
-        $result2 = $apiHelper->request('bills', 'POST', $bodyCard2);
 
-        if ($result1 && isset($result1['bill']['id']) && $result2 && isset($result2['bill']['id'])) {
-            $billCard1 = $result1['bill'];
-            $billCard2 = $result2['bill'];
-            if (!$originalOrder->getId()) {
-                $originalOrder = $this->orderRepository->save($originalOrder);
-            }
-            $dataFirst = [
-                'order_id' => $originalOrder->getId(),
-                'order_increment_id' => $originalOrder->getIncrementId(),
-                'payment_method' => 'credit_card',
-                'amount' => $amountCredit,
-                'total_amount' => $amountCredit,
-                'bill_id' => $billCard1['id'],
-                'status' => $billCard1['status'] ?? '',
-                'additional_data' => json_encode($billCard1),
-                'is_refunded' => 0,
-                'refund_amount' => 0
-            ];
-            $split1 = $this->paymentSplitFactory->create();
-            $split1->setData($dataFirst);
-            $split1->save();
-            $dataSecond = [
-                'order_id' => $originalOrder->getId(),
-                'order_increment_id' => $originalOrder->getIncrementId(),
-                'payment_method' => 'credit_card',
-                'amount' => $amountSecondCard,
-                'total_amount' => $amountSecondCard,
-                'bill_id' => $billCard2['id'],
-                'status' => $billCard2['status'] ?? '',
-                'additional_data' => json_encode($billCard2),
-                'is_refunded' => 0,
-                'refund_amount' => 0
-            ];
-            $split2 = $this->paymentSplitFactory->create();
-            $split2->setData($dataSecond);
-            $split2->save();
-            $originalOrder->setVindiBillId($billCard1['id'] . ',' . $billCard2['id']);
-            $this->orderRepository->save($originalOrder);
+        try {
+            // Validar se os payment profiles existem na Vindi
+            $this->validatePaymentProfiles($originalOrder, $profileId1, $profileId2);
+        } catch (\Exception $e) {
+            error_log("VINDI_MULTIMEIOS: " . $e->getMessage());
+            return;
         }
+
+        // Tentar criar as bills com rollback automático em caso de falha
+        try {
+            $billsResult = $this->createBillsWithRollback($bodyCard1, $bodyCard2);
+
+            // Atualizar pedido e splits após criação bem-sucedida das bills
+            $this->updateOrderAndSplits($originalOrder, $billsResult, $amountCredit, $amountSecondCard);
+        } catch (\Exception $e) {
+            error_log("VINDI_MULTIMEIOS: Erro ao criar bills manuais - " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Valida se os payment profiles existem na Vindi antes de criar as bills
+     * @param \Magento\Sales\Model\Order $originalOrder
+     * @param string|int $profileId1
+     * @param string|int $profileId2
+     * @return array
+     * @throws \Exception
+     */
+    protected function validatePaymentProfiles($originalOrder, $profileId1, $profileId2)
+    {
+        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+        $profileHelper = $objectManager->get(\Vindi\Payment\Model\Payment\Profile::class);
+
+        // Validar profile 1
+        try {
+            $profile1Valid = $profileHelper->getPaymentProfileById($profileId1);
+            if (!$profile1Valid || (isset($profile1Valid['not_found']) && $profile1Valid['not_found'])) {
+                throw new \Exception("Payment Profile 1 (ID: {$profileId1}) não encontrado na Vindi");
+            }
+        } catch (\Exception $e) {
+            throw new \Exception("Erro ao validar Payment Profile 1 (ID: {$profileId1}): " . $e->getMessage());
+        }
+
+        // Validar profile 2
+        try {
+            $profile2Valid = $profileHelper->getPaymentProfileById($profileId2);
+            if (!$profile2Valid || (isset($profile2Valid['not_found']) && $profile2Valid['not_found'])) {
+                throw new \Exception("Payment Profile 2 (ID: {$profileId2}) não encontrado na Vindi");
+            }
+        } catch (\Exception $e) {
+            throw new \Exception("Erro ao validar Payment Profile 2 (ID: {$profileId2}): " . $e->getMessage());
+        }
+
+        return [$profile1Valid, $profile2Valid];
+    }
+
+    /**
+     * Obtém ou cria produto de desconto para multimeios de forma consistente
+     * @return int
+     * @throws \Exception
+     */
+    protected function getOrCreateDiscountProduct()
+    {
+        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+        $helperData = $objectManager->get(\Vindi\Payment\Helper\Data::class);
+
+        // Tentar pegar da configuração primeiro
+        $discountProductId = $helperData->getConfig('general', 'discount_product_id');
+        if ($discountProductId && is_numeric($discountProductId)) {
+            return (int) $discountProductId;
+        }
+
+        // Criar automaticamente se não existir
+        $apiHelper = $objectManager->get(\Vindi\Payment\Helper\Api::class);
+        $response = $apiHelper->request('products', 'POST', [
+            'name' => 'Desconto Multimeios de Pagamento',
+            'code' => 'discount_multipayment_' . time(),
+            'status' => 'active',
+            'pricing_schema' => ['price' => 0.00]
+        ]);
+
+        if ($response && isset($response['product']['id'])) {
+            $productId = $response['product']['id'];
+            // TODO: Implementar salvamento na configuração para uso futuro
+            return $productId;
+        }
+
+        throw new \Exception('Não foi possível criar produto de desconto na Vindi');
+    }
+
+    /**
+     * Cria as bills com sistema de rollback automático
+     * @param array $billData1
+     * @param array $billData2
+     * @return array
+     * @throws \Exception
+     */
+    protected function createBillsWithRollback($billData1, $billData2)
+    {
+        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+        $apiHelper = $objectManager->get(\Vindi\Payment\Helper\Api::class);
+        $createdBills = [];
+
+        try {
+            // Criar primeira bill
+            $result1 = $apiHelper->request('bills', 'POST', $billData1);
+            if (!$result1 || !isset($result1['bill']['id'])) {
+                throw new \Exception('Falha ao criar primeira bill para multimeios: ' . json_encode($result1));
+            }
+            $createdBills[] = $result1['bill']['id'];
+
+            // Criar segunda bill
+            $result2 = $apiHelper->request('bills', 'POST', $billData2);
+            if (!$result2 || !isset($result2['bill']['id'])) {
+                throw new \Exception('Falha ao criar segunda bill para multimeios: ' . json_encode($result2));
+            }
+            $createdBills[] = $result2['bill']['id'];
+
+            return ['bill1' => $result1['bill'], 'bill2' => $result2['bill']];
+
+        } catch (\Exception $e) {
+            // Rollback: cancelar bills criadas em caso de falha
+            foreach ($createdBills as $billId) {
+                try {
+                    $apiHelper->cancelVindiBill($billId);
+                    error_log("VINDI_MULTIMEIOS: Bill {$billId} cancelada durante rollback");
+                } catch (\Exception $rollbackError) {
+                    error_log("VINDI_MULTIMEIOS: Erro no rollback da bill {$billId}: " . $rollbackError->getMessage());
+                }
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Atualiza o pedido e os registros de payment split após criação bem-sucedida das bills
+     * @param \Magento\Sales\Model\Order $originalOrder
+     * @param array $billsResult
+     * @param float $amountCredit
+     * @param float $amountSecondCard
+     * @return void
+     */
+    protected function updateOrderAndSplits($originalOrder, $billsResult, $amountCredit, $amountSecondCard)
+    {
+        $billCard1 = $billsResult['bill1'];
+        $billCard2 = $billsResult['bill2'];
+
+        // Salvar o pedido se necessário
+        if (!$originalOrder->getId()) {
+            $originalOrder = $this->orderRepository->save($originalOrder);
+        }
+
+        // Criar payment splits
+        $dataFirst = [
+            'order_id' => $originalOrder->getId(),
+            'order_increment_id' => $originalOrder->getIncrementId(),
+            'payment_method' => 'credit_card',
+            'amount' => $amountCredit,
+            'total_amount' => $amountCredit,
+            'bill_id' => $billCard1['id'],
+            'status' => $billCard1['status'] ?? 'pending',
+            'additional_data' => json_encode($this->maskSensitiveDataForSplit($billCard1)),
+            'is_refunded' => 0,
+            'refund_amount' => 0
+        ];
+
+        $split1 = $this->paymentSplitFactory->create();
+        $split1->setData($dataFirst);
+        $split1->save();
+
+        $dataSecond = [
+            'order_id' => $originalOrder->getId(),
+            'order_increment_id' => $originalOrder->getIncrementId(),
+            'payment_method' => 'credit_card',
+            'amount' => $amountSecondCard,
+            'total_amount' => $amountSecondCard,
+            'bill_id' => $billCard2['id'],
+            'status' => $billCard2['status'] ?? 'pending',
+            'additional_data' => json_encode($this->maskSensitiveDataForSplit($billCard2)),
+            'is_refunded' => 0,
+            'refund_amount' => 0
+        ];
+
+        $split2 = $this->paymentSplitFactory->create();
+        $split2->setData($dataSecond);
+        $split2->save();
+
+        // Atualizar vindi_bill_id no pedido com as novas bills
+        $originalOrder->setData('vindi_bill_id', $billCard1['id'] . ',' . $billCard2['id']);
+        $this->orderRepository->save($originalOrder);
+    }
+
+    /**
+     * Remove dados sensíveis das informações de bill antes de salvar no split
+     * @param array $billData
+     * @return array
+     */
+    protected function maskSensitiveDataForSplit($billData)
+    {
+        if (!is_array($billData)) {
+            return $billData;
+        }
+
+        $masked = $billData;
+
+        // Remover informações sensíveis comuns
+        $sensitiveFields = ['payment_profile', 'charges'];
+        foreach ($sensitiveFields as $field) {
+            if (isset($masked[$field])) {
+                if ($field === 'payment_profile' && is_array($masked[$field])) {
+                    // Manter apenas ID do profile
+                    $masked[$field] = ['id' => $masked[$field]['id'] ?? null];
+                } elseif ($field === 'charges' && is_array($masked[$field])) {
+                    // Remover dados sensíveis dos charges
+                    foreach ($masked[$field] as &$charge) {
+                        if (isset($charge['payment_method'])) {
+                            unset($charge['payment_method']);
+                        }
+                    }
+                }
+            }
+        }
+
+        return $masked;
     }
 }

@@ -397,7 +397,23 @@ class View extends Container
         $collection = $this->subscriptionsOrderCollectionFactory->create();
         $collection->addFieldToFilter('subscription_id', $subscriptionId);
 
-        return $collection->getItems();
+        // Debug logging
+        $items = $collection->getItems();
+        $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/vindi_subscription_orders_debug.log');
+        $logger = new \Zend_Log();
+        $logger->addWriter($writer);
+        
+        $logger->info('getLinkedOrders() - Admin Block Debug:');
+        $logger->info('  Subscription ID: ' . $subscriptionId);
+        $logger->info('  Collection size: ' . $collection->getSize());
+        $logger->info('  Collection SQL: ' . $collection->getSelectSql());
+        $logger->info('  Items count: ' . count($items));
+        
+        foreach ($items as $item) {
+            $logger->info('  Item data: ' . json_encode($item->getData()));
+        }
+
+        return $items;
     }
 
     /**
@@ -464,19 +480,31 @@ class View extends Container
     {
         if ($this->subscriptions === null) {
             $id = $this->registry->registry('vindi_payment_subscription_id');
+            
+            // Debug logging
+            $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/vindi_subscription_orders_debug.log');
+            $logger = new \Zend_Log();
+            $logger->addWriter($writer);
+            $logger->info('getSubscriptionData() - Admin Debug:');
+            $logger->info('  ID from registry: ' . $id);
+            
             $subscriptionModel = $this->subscriptionFactory->create()->load($id);
             $responseData = $subscriptionModel->getData('response_data');
 
             if ($responseData) {
                 $this->subscriptions = json_decode($responseData, true);
+                $logger->info('  Loaded from cached response_data: ' . json_encode(['id' => $this->subscriptions['id'] ?? 'MISSING']));
             } else {
                 $this->subscriptions = $this->fetchSubscriptionDataFromApi($id);
+                $logger->info('  Loaded from API: ' . json_encode(['id' => $this->subscriptions['id'] ?? 'MISSING']));
 
                 if ($this->subscriptions) {
                     $subscriptionModel->setData('response_data', json_encode($this->subscriptions));
                     $subscriptionModel->save();
                 }
             }
+            
+            $logger->info('  Final subscription data ID: ' . ($this->subscriptions['id'] ?? 'NULL'));
         }
 
         return $this->subscriptions;
