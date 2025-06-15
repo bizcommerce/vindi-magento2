@@ -12,6 +12,7 @@ use Vindi\Payment\Helper\Data;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Sales\Api\InvoiceRepositoryInterface;
 use Vindi\Payment\Model\PaymentSplitFactory;
+use Psr\Log\LoggerInterface;
 
 /**
  * Class BillPaid
@@ -60,7 +61,7 @@ class BillPaid
     {
         $bill = $data['bill'];
         if (!$bill) {
-            $this->logger->error(__('Error while interpreting webhook "bill_paid"'));
+            $this->logError('Error while interpreting webhook "bill_paid"');
             return false;
         }
 
@@ -75,55 +76,121 @@ class BillPaid
     private function handleSubscriptionFlow($bill, $data)
     {
         $subscriptionId = $bill['subscription']['id'];
+        $currentCycle = isset($bill['period']['cycle']) ? $bill['period']['cycle'] : 1;
+        
         $lockName = 'vindi_subscription_' . $subscriptionId;
         if (!$this->dbAdapter->query("SELECT GET_LOCK(?, 10)", [$lockName])->fetchColumn()) {
-            $this->logger->error(__('Could not acquire lock for subscription ID: %1', $subscriptionId));
+            $this->logError('Could not acquire lock for subscription ID: ' . $subscriptionId);
             return false;
         }
 
         try {
             $originalOrder = $this->orderCreator->getOrderFromSubscriptionId($subscriptionId);
 
-            if ($originalOrder) {
-                $vindiBillId = $originalOrder->getVindiBillId();
-                $billIds = array_map('trim', explode(',', $vindiBillId));
-                $currentSplit = $this->paymentSplitFactory->create()
-                    ->getCollection()
-                    ->addFieldToFilter('bill_id', $bill['id'])
-                    ->getFirstItem();
-                if ($currentSplit && $currentSplit->getId()) {
-                    $currentSplit->setStatus('paid')->save();
-                }
-                $splits = $this->paymentSplitFactory->create()
-                    ->getCollection()
-                    ->addFieldToFilter('bill_id', ['in' => $billIds]);
-                $allPaid = true;
-                foreach ($splits as $split) {
-                    if ($split->getStatus() !== 'paid') {
-                        $allPaid = false;
-                        break;
-                    }
-                }
-                if (!$allPaid) {
-                    $this->logger->info(__('Not all payment splits for subscription order %1 are paid yet.', $originalOrder->getIncrementId()));
-                    return true;
-                }
-                $queueItem = $this->orderCreationQueueFactory->create();
-                $queueItem->setData([
-                    'bill_data' => json_encode($data),
-                    'status'    => 'pending',
-                    'type'      => 'bill_paid'
-                ]);
-                $this->orderCreationQueueRepository->save($queueItem);
-                $this->logger->info(__('Created order creation queue item for subscription.'));
-            } else {
-                $this->logger->info(__('No corresponding order found for subscription ID: %1. Ignoring event.', $subscriptionId));
+            if (!$originalOrder) {
+                $this->logInfo('No corresponding order found for subscription ID: ' . $subscriptionId . '. Ignoring event.');
+                return true;
             }
 
-            return true;
+            // Verificar se é multimeios
+            $isMultiMeios = ($originalOrder->getPayment()->getMethod() === 'vindi_cardcard');
+            
+            if ($isMultiMeios) {
+                $this->logInfo('MULTIMEIOS_RENEWAL: Processing multimeios bill_paid for subscription ' . $subscriptionId . ', cycle ' . $currentCycle . ', bill ' . $bill['id']);
+                return $this->handleMultiMeiosSubscriptionFlow($bill, $data, $currentCycle, $originalOrder);
+            } else {
+                return $this->handleSingleCardSubscriptionFlow($bill, $data, $originalOrder);
+            }
+
         } finally {
             $this->dbAdapter->query("SELECT RELEASE_LOCK(?)", [$lockName]);
         }
+    }
+
+    /**
+     * Handle bill_paid for multimeios (2 cards) subscriptions
+     */
+    private function handleMultiMeiosSubscriptionFlow($bill, $data, $currentCycle, $originalOrder)
+    {
+        $subscriptionId = $bill['subscription']['id'];
+        $billId = $bill['id'];
+        
+        // Atualizar/criar payment split para esta bill
+        $this->updatePaymentSplitForRenewal($billId, 'paid', $subscriptionId, $currentCycle, $originalOrder);
+        
+        // Verificar se AMBAS as bills do ciclo atual foram pagas
+        $cycleBillsStatus = $this->getCycleBillsStatus($subscriptionId, $currentCycle);
+        
+        $this->logInfo('MULTIMEIOS_RENEWAL: Cycle status for subscription ' . $subscriptionId . ', cycle ' . $currentCycle . ': ' . $cycleBillsStatus['paid_bills'] . ' paid, ' . $cycleBillsStatus['total_bills'] . ' total');
+        
+        if ($cycleBillsStatus['total_bills'] < 2) {
+            $this->logInfo('MULTIMEIOS_RENEWAL: Waiting for second bill of cycle ' . $currentCycle);
+            return true; // Aguardar a outra bill
+        }
+        
+        if ($cycleBillsStatus['paid_bills'] === 2) {
+            $this->logInfo('MULTIMEIOS_RENEWAL: Both bills of cycle ' . $currentCycle . ' are paid. Generating invoice.');
+            
+            // Enfileirar criação de nova order/invoice
+            $queueItem = $this->orderCreationQueueFactory->create();
+            $queueItem->setData([
+                'bill_data' => json_encode($data),
+                'status' => 'pending',
+                'type' => 'bill_paid_multimeios',
+                'cycle' => $currentCycle
+            ]);
+            $this->orderCreationQueueRepository->save($queueItem);
+            
+            return true;
+        }
+        
+        $this->logInfo('MULTIMEIOS_RENEWAL: Not all bills of cycle ' . $currentCycle . ' are paid yet (' . $cycleBillsStatus['paid_bills'] . '/' . $cycleBillsStatus['total_bills'] . ')');
+        return true;
+    }
+
+    /**
+     * Handle bill_paid for single card subscriptions (original logic)
+     */
+    private function handleSingleCardSubscriptionFlow($bill, $data, $originalOrder)
+    {
+        $vindiBillId = $originalOrder->getVindiBillId();
+        $billIds = array_map('trim', explode(',', $vindiBillId));
+        
+        $currentSplit = $this->paymentSplitFactory->create()
+            ->getCollection()
+            ->addFieldToFilter('bill_id', $bill['id'])
+            ->getFirstItem();
+        if ($currentSplit && $currentSplit->getId()) {
+            $currentSplit->setStatus('paid')->save();
+        }
+        
+        $splits = $this->paymentSplitFactory->create()
+            ->getCollection()
+            ->addFieldToFilter('bill_id', ['in' => $billIds]);
+        
+        $allPaid = true;
+        foreach ($splits as $split) {
+            if ($split->getStatus() !== 'paid') {
+                $allPaid = false;
+                break;
+            }
+        }
+        
+        if (!$allPaid) {
+            $this->logInfo('Not all payment splits for subscription order ' . $originalOrder->getIncrementId() . ' are paid yet.');
+            return true;
+        }
+        
+        $queueItem = $this->orderCreationQueueFactory->create();
+        $queueItem->setData([
+            'bill_data' => json_encode($data),
+            'status'    => 'pending',
+            'type'      => 'bill_paid'
+        ]);
+        $this->orderCreationQueueRepository->save($queueItem);
+        $this->logInfo('Created order creation queue item for subscription.');
+        
+        return true;
     }
 
     private function handleRegularOrderFlow($bill)
@@ -140,7 +207,7 @@ class BillPaid
         }
 
         if (!$order) {
-            $this->logger->error(__('Order not found for bill code: %1', $bill['code']));
+            $this->logError('Order not found for bill code: ' . $bill['code']);
             return false;
         }
 
@@ -163,7 +230,7 @@ class BillPaid
             }
             foreach ($splits as $split) {
                 if ($split->getStatus() !== 'paid') {
-                    $this->logger->info(__('Not all payment splits for order %1 are paid yet.', $order->getIncrementId()));
+                    $this->logInfo('Not all payment splits for order ' . $order->getIncrementId() . ' are paid yet.');
                     return true;
                 }
             }
@@ -172,10 +239,77 @@ class BillPaid
         return $this->createInvoice($order);
     }
 
+    /**
+     * Get status of all bills for a specific subscription cycle
+     */
+    private function getCycleBillsStatus($subscriptionId, $cycle)
+    {
+        // Buscar todas as bills do ciclo atual
+        $splits = $this->paymentSplitFactory->create()
+            ->getCollection()
+            ->addFieldToFilter('subscription_id', $subscriptionId)
+            ->addFieldToFilter('cycle', $cycle);
+        
+        $totalBills = $splits->getSize();
+        $paidBills = 0;
+        $failedBills = 0;
+        
+        foreach ($splits as $split) {
+            if ($split->getStatus() === 'paid') {
+                $paidBills++;
+            } elseif ($split->getStatus() === 'failed') {
+                $failedBills++;
+            }
+        }
+        
+        return [
+            'total_bills' => $totalBills,
+            'paid_bills' => $paidBills,
+            'failed_bills' => $failedBills,
+            'pending_bills' => $totalBills - $paidBills - $failedBills
+        ];
+    }
+
+    /**
+     * Update or create payment split for renewal bills
+     */
+    private function updatePaymentSplitForRenewal($billId, $status, $subscriptionId, $cycle, $originalOrder)
+    {
+        // Primeiro, tentar encontrar split existente
+        $existingSplit = $this->paymentSplitFactory->create()
+            ->getCollection()
+            ->addFieldToFilter('bill_id', $billId)
+            ->getFirstItem();
+        
+        if ($existingSplit->getId()) {
+            // Atualizar split existente
+            $existingSplit->setStatus($status);
+            $existingSplit->setSubscriptionId($subscriptionId);
+            $existingSplit->setCycle($cycle);
+            $existingSplit->save();
+            $this->logInfo('MULTIMEIOS_RENEWAL: Payment split updated for bill ' . $billId);
+        } else {
+            // Criar novo split para bill de renovação
+            $split = $this->paymentSplitFactory->create();
+            $split->setData([
+                'bill_id' => $billId,
+                'subscription_id' => $subscriptionId,
+                'cycle' => $cycle,
+                'status' => $status,
+                'payment_method' => 'credit_card',
+                'order_id' => $originalOrder->getId(),
+                'order_increment_id' => $originalOrder->getIncrementId(),
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+            $split->save();
+            $this->logInfo('MULTIMEIOS_RENEWAL: New payment split created for bill ' . $billId);
+        }
+    }
+
     public function createInvoice(\Magento\Sales\Model\Order $order)
     {
         if (!$order->getId() || !$order->canInvoice()) {
-            $this->logger->error(__('Impossible to generate invoice for order %1.', $order->getId()));
+            $this->logError('Impossible to generate invoice for order ' . $order->getId());
             return false;
         }
 
@@ -192,12 +326,36 @@ class BillPaid
             $order->setState($state);
         }
         $order->addCommentToStatusHistory(
-            __('The payment was confirmed and the order is being processed'),
+            'The payment was confirmed and the order is being processed',
             $status
         );
         $this->orderRepository->save($order);
 
-        $this->logger->info(__('Invoice created successfully for order %1.', $order->getIncrementId()));
+        $this->logInfo('Invoice created successfully for order ' . $order->getIncrementId());
         return true;
+    }
+
+    /**
+     * Helper method to log messages without translation issues
+     */
+    private function logInfo($message)
+    {
+        if (method_exists($this->logger, 'info')) {
+            $this->logger->info($message);
+        } else {
+            error_log('[VINDI INFO] ' . $message);
+        }
+    }
+
+    /**
+     * Helper method to log error messages without translation issues
+     */
+    private function logError($message)
+    {
+        if (method_exists($this->logger, 'error')) {
+            $this->logger->error($message);
+        } else {
+            error_log('[VINDI ERROR] ' . $message);
+        }
     }
 }

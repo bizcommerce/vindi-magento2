@@ -620,12 +620,16 @@ class OrderCreator
         $billCard1 = $billsResult['bill1'];
         $billCard2 = $billsResult['bill2'];
 
+        // Obter informações de ciclo e assinatura
+        $subscriptionId = $billCard1['subscription']['id'] ?? null;
+        $cycle = isset($billCard1['period']['cycle']) ? $billCard1['period']['cycle'] : 1;
+
         // Salvar o pedido se necessário
         if (!$originalOrder->getId()) {
             $originalOrder = $this->orderRepository->save($originalOrder);
         }
 
-        // Criar payment splits
+        // Criar payment splits com informações de renovação
         $dataFirst = [
             'order_id' => $originalOrder->getId(),
             'order_increment_id' => $originalOrder->getIncrementId(),
@@ -633,6 +637,8 @@ class OrderCreator
             'amount' => $amountCredit,
             'total_amount' => $amountCredit,
             'bill_id' => $billCard1['id'],
+            'subscription_id' => $subscriptionId,  // NOVO: campo para tracking
+            'cycle' => $cycle,                     // NOVO: campo para tracking de ciclo
             'status' => $billCard1['status'] ?? 'pending',
             'additional_data' => json_encode($this->maskSensitiveDataForSplit($billCard1)),
             'is_refunded' => 0,
@@ -650,6 +656,8 @@ class OrderCreator
             'amount' => $amountSecondCard,
             'total_amount' => $amountSecondCard,
             'bill_id' => $billCard2['id'],
+            'subscription_id' => $subscriptionId,  // NOVO: campo para tracking
+            'cycle' => $cycle,                     // NOVO: campo para tracking de ciclo
             'status' => $billCard2['status'] ?? 'pending',
             'additional_data' => json_encode($this->maskSensitiveDataForSplit($billCard2)),
             'is_refunded' => 0,
@@ -663,6 +671,8 @@ class OrderCreator
         // Atualizar vindi_bill_id no pedido com as novas bills
         $originalOrder->setData('vindi_bill_id', $billCard1['id'] . ',' . $billCard2['id']);
         $this->orderRepository->save($originalOrder);
+
+        error_log("VINDI_MULTIMEIOS: Payment splits criados para renovação - Subscription ID: {$subscriptionId}, Cycle: {$cycle}, Bills: {$billCard1['id']}, {$billCard2['id']}");
     }
 
     /**

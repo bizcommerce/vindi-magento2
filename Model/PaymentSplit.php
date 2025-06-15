@@ -227,4 +227,46 @@ class PaymentSplit extends AbstractModel implements PaymentSplitInterface
     {
         return $this->setData(self::BILL_ID, $billId);
     }
+
+    /**
+     * Get subscription id.
+     *
+     * @return mixed
+     */
+    public function getSubscriptionId()
+    {
+        return $this->getData(self::SUBSCRIPTION_ID);
+    }
+
+    /**
+     * Set subscription id.
+     *
+     * @param mixed $subscriptionId
+     * @return $this
+     */
+    public function setSubscriptionId($subscriptionId)
+    {
+        return $this->setData(self::SUBSCRIPTION_ID, $subscriptionId);
+    }
+
+    /**
+     * Get cycle.
+     *
+     * @return mixed
+     */
+    public function getCycle()
+    {
+        return $this->getData(self::CYCLE);
+    }
+
+    /**
+     * Set cycle.
+     *
+     * @param mixed $cycle
+     * @return $this
+     */
+    public function setCycle($cycle)
+    {
+        return $this->setData(self::CYCLE, $cycle);
+    }
 }

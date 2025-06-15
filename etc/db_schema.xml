@@ -183,6 +183,8 @@
         <column xsi:type="decimal" name="amount" scale="4" precision="12" nullable="false" default="0.0000" comment="Amount for Payment Method"/>
         <column xsi:type="decimal" name="total_amount" scale="4" precision="12" nullable="false" comment="Total Order Amount"/>
         <column xsi:type="varchar" name="bill_id" nullable="true" length="64" comment="Bill ID for Transaction"/>
+        <column xsi:type="int" name="subscription_id" nullable="true" comment="Vindi Subscription ID for Renewals"/>
+        <column xsi:type="int" name="cycle" nullable="true" comment="Subscription Cycle Number"/>
         <column xsi:type="varchar" name="status" nullable="true" length="32" comment="Status of Transaction"/>
         <column xsi:type="text" name="additional_data" nullable="true" comment="Additional Data in JSON Format"/>
         <column xsi:type="tinyint" name="is_refunded" nullable="false" default="0" comment="Refund Flag"/>
@@ -194,5 +196,12 @@
             <column name="entity_id"/>
         </constraint>
         <constraint xsi:type="foreign" referenceId="VINDI_PAYMENT_SPLIT_ORDER_ID_ORDER_ENTITY_ID" table="vindi_payment_split" column="order_id" referenceTable="sales_order" referenceColumn="entity_id" onDelete="CASCADE"/>
+        <constraint xsi:type="index" referenceId="VINDI_PAYMENT_SPLIT_SUBSCRIPTION_CYCLE">
+            <column name="subscription_id"/>
+            <column name="cycle"/>
+        </constraint>
+        <constraint xsi:type="index" referenceId="VINDI_PAYMENT_SPLIT_BILL_ID">
+            <column name="bill_id"/>
+        </constraint>
     </table>
 </schema>

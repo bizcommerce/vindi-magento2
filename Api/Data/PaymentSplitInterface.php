@@ -14,6 +14,8 @@ interface PaymentSplitInterface
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';
     const BILL_ID = 'bill_id';
+    const SUBSCRIPTION_ID = 'subscription_id';
+    const CYCLE = 'cycle';
 
     /**
      * Get entity ID.
@@ -164,4 +166,34 @@ interface PaymentSplitInterface
      * @return $this
      */
     public function setBillId($billId);
+
+    /**
+     * Get subscription id.
+     *
+     * @return mixed
+     */
+    public function getSubscriptionId();
+
+    /**
+     * Set subscription id.
+     *
+     * @param mixed $subscriptionId
+     * @return $this
+     */
+    public function setSubscriptionId($subscriptionId);
+
+    /**
+     * Get cycle.
+     *
+     * @return mixed
+     */
+    public function getCycle();
+
+    /**
+     * Set cycle.
+     *
+     * @param mixed $cycle
+     * @return $this
+     */
+    public function setCycle($cycle);
 }
