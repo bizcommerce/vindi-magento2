@@ -12,6 +12,10 @@ use Vindi\Payment\Block\Info\Pix;
                 <?= $block->escapeHtml($block->getMethod()->getTitle()) ?>
             </strong>
         </dt>
+        <dd class="content">
+            <br/>
+            <p><strong><?= sprintf(__('Amount: %s'), $block->getFormattedAmount()) ?></strong></p>
+        </dd>
         <?php if ($block->canShowPixInfo()) : ?>
         <?php if ($block->getDaysToKeepWaitingPayment()) : ?>
             <dd>

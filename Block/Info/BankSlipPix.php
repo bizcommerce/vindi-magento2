@@ -254,4 +254,19 @@ class BankSlipPix extends Info
     {
         return (string)$this->getOrder()->getPayment()->getAdditionalInformation('due_at');
     }
+
+    /**
+     * Get formatted payment amount
+     *
+     * @return string
+     */
+    public function getFormattedAmount()
+    {
+        try {
+            $amount = $this->getOrder()->getGrandTotal();
+            return $this->currency->currency($amount, true, false);
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
 }

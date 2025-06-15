@@ -115,6 +115,39 @@ class CardCard extends \Magento\Payment\Block\Info
     }
 
     /**
+     * Get first card amount from split payment
+     *
+     * @return float
+     */
+    public function getFirstCardAmount()
+    {
+        $payment = $this->getOrder()->getPayment();
+        return (float) $payment->getAdditionalInformation('amount_credit');
+    }
+
+    /**
+     * Get second card amount from split payment
+     *
+     * @return float
+     */
+    public function getSecondCardAmount()
+    {
+        $payment = $this->getOrder()->getPayment();
+        return (float) $payment->getAdditionalInformation('amount_second_card');
+    }
+
+    /**
+     * Format currency value
+     *
+     * @param float $amount
+     * @return string
+     */
+    public function formatCurrency($amount)
+    {
+        return $this->currency->currency($amount, true, false);
+    }
+
+    /**
      * Get reorder URL for the order
      *
      * @return string

@@ -6,6 +6,14 @@ use Vindi\Payment\Block\Info\BankSlipPix;
 ?>
 
 <?php if (!$block->hasInvoice() && $block->canShowBankSlipPixInfo() && $block->getQrCodePix() && $block->getQrcodeOriginalPath() && $block->getPrintUrl()): ?>
+    <dl class="payment-method">
+        <dt class="title"><strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()) ?></strong></dt>
+        <dd class="content">
+            <br/>
+            <p><strong><?php echo sprintf(__('Amount: %s'), $block->getFormattedAmount()) ?></strong></p>
+        </dd>
+    </dl>
+    
     <div class="checkout-success qr-code">
         <?php if ($block->getQrCodePix()): ?>
             <object data="<?= $block->getQrCodePix() ?>" type="image/svg+xml" class="qr-code" id="qrcode">

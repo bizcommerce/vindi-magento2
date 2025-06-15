@@ -4,6 +4,24 @@
  */
 ?>
 <div class="card-card-info">
+    <!-- Payment Split Information -->
+    <?php if ($block->getFirstCardAmount() > 0 || $block->getSecondCardAmount() > 0): ?>
+        <dl class="payment-method split-info">
+            <dt class="title">
+                <strong><?= $block->escapeHtml(__('Payment Split')) ?></strong>
+            </dt>
+            <dd class="content">
+                <?php if ($block->getFirstCardAmount() > 0): ?>
+                    <p><strong><?= __('First Card:') ?></strong> <?= $block->formatCurrency($block->getFirstCardAmount()) ?></p>
+                <?php endif; ?>
+                <?php if ($block->getSecondCardAmount() > 0): ?>
+                    <p><strong><?= __('Second Card:') ?></strong> <?= $block->formatCurrency($block->getSecondCardAmount()) ?></p>
+                <?php endif; ?>
+            </dd>
+        </dl>
+        <hr>
+    <?php endif; ?>
+    
     <?php if ($block->canShowCcInfo()) : ?>
         <dl class="payment-method cc-info">
             <dt class="title">

@@ -262,6 +262,39 @@ class CardPix extends \Magento\Payment\Block\Info
     }
 
     /**
+     * Get credit card amount from split payment
+     *
+     * @return float
+     */
+    public function getCreditAmount()
+    {
+        $payment = $this->getOrder()->getPayment();
+        return (float) $payment->getAdditionalInformation('amount_credit');
+    }
+
+    /**
+     * Get PIX amount from split payment
+     *
+     * @return float
+     */
+    public function getPixAmount()
+    {
+        $payment = $this->getOrder()->getPayment();
+        return (float) $payment->getAdditionalInformation('amount_pix');
+    }
+
+    /**
+     * Format currency value
+     *
+     * @param float $amount
+     * @return string
+     */
+    public function formatCurrency($amount)
+    {
+        return $this->currency->currency($amount, true, false);
+    }
+
+    /**
      * Check if the payment split status is pending
      *
      * @return bool

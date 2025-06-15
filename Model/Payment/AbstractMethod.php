@@ -1263,20 +1263,39 @@ abstract class AbstractMethod extends OriginAbstractMethod
     protected function getMultiPaymentDiscountProductId()
     {
         try {
-            // Get the discount product ID from configuration or predefined value
+            // First check if we have it in cache or configuration
             $discountProductId = $this->helperData->getConfig('general', 'discount_product_id');
             
-            if ($discountProductId) {
+            if ($discountProductId && $discountProductId > 0) {
                 return (int) $discountProductId;
             }
             
-            // Return a fixed ID for discount product or null if not found
-            // This prevents errors during development
-            return 1; // You should configure this in admin panel
+            // Use the new helper to create/find the discount product automatically
+            $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+            $multiPaymentHelper = $objectManager->create(\Vindi\Payment\Helper\MultiPaymentHelper::class);
+            
+            $discountProductId = $multiPaymentHelper->getOrCreateDiscountProduct();
+            
+            $this->psrLogger->info('VINDI_MULTIPAYMENT: Using discount product ID: ' . $discountProductId);
+            
+            return $discountProductId;
             
         } catch (\Exception $e) {
-            $this->psrLogger->error('Error getting multi payment discount product ID: ' . $e->getMessage());
-            return 1; // Fallback to a default product ID
+            $this->psrLogger->error('VINDI_MULTIPAYMENT: Error getting/creating discount product: ' . $e->getMessage());
+            
+            // Fallback: try to create a basic product ID if all else fails
+            try {
+                $productManagement = $this->productManagement;
+                if (method_exists($productManagement, 'createDiscountProduct')) {
+                    return $productManagement->createDiscountProduct();
+                }
+            } catch (\Exception $fallbackException) {
+                $this->psrLogger->error('VINDI_MULTIPAYMENT: Fallback also failed: ' . $fallbackException->getMessage());
+            }
+            
+            throw new \Magento\Framework\Exception\LocalizedException(
+                __('Could not create or find discount product for multi-payment. Please check Vindi configuration.')
+            );
         }
     }
 

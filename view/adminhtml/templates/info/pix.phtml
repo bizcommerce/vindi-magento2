@@ -10,6 +10,9 @@ use Vindi\Payment\Block\Info\Pix;
         </strong>
     </dt><br>
     <?php if (!$block->hasInvoice()): ?>
+        <dd class="content">
+            <p><strong><?= sprintf(__('Amount: %s'), $block->getFormattedAmount()) ?></strong></p>
+        </dd>
         <?php if ($block->canShowPixInfo()) : ?>
         <?php if ($block->getDaysToKeepWaitingPayment()) : ?>
         <dd>

@@ -205,6 +205,27 @@ class Pix extends Info
     }
 
     /**
+     * Get formatted date for payment expiration
+     *
+     * @return string
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    public function getDaysToKeepWaitingPayment()
+    {
+        $maxDays = $this->getMaxDaysToPayment();
+        if (!$maxDays) {
+            return '';
+        }
+
+        try {
+            $dateTime = new \DateTime($maxDays);
+            return $this->timezone->formatDateTime($dateTime, \IntlDateFormatter::MEDIUM, \IntlDateFormatter::SHORT);
+        } catch (\Exception $e) {
+            return $maxDays;
+        }
+    }
+
+    /**
      * Validate timestamp against current store time
      *
      * @param int $timestampMaxDays
@@ -216,5 +237,20 @@ class Pix extends Info
             return false;
         }
         return $timestampMaxDays >= $this->timezone->scopeTimeStamp();
+    }
+
+    /**
+     * Get formatted payment amount
+     *
+     * @return string
+     */
+    public function getFormattedAmount()
+    {
+        try {
+            $amount = $this->getOrder()->getGrandTotal();
+            return $this->currency->currency($amount, true, false);
+        } catch (\Exception $e) {
+            return '';
+        }
     }
 }

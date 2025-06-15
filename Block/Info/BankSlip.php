@@ -120,4 +120,19 @@ class BankSlip extends \Magento\Payment\Block\Info
     {
         return (string)$this->getOrder()->getPayment()->getAdditionalInformation('due_at');
     }
+
+    /**
+     * Get formatted payment amount
+     *
+     * @return string
+     */
+    public function getFormattedAmount(): string
+    {
+        try {
+            $amount = $this->getOrder()->getGrandTotal();
+            return $this->currency->currency($amount, true, false);
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
 }

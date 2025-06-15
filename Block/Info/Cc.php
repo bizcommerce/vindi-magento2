@@ -69,4 +69,19 @@ class Cc extends \Magento\Payment\Block\Info
     {
         return $this->getInfo()->getOrder();
     }
+
+    /**
+     * Get formatted payment amount
+     *
+     * @return string
+     */
+    public function getFormattedAmount()
+    {
+        try {
+            $amount = $this->getOrder()->getGrandTotal();
+            return $this->currency->currency($amount, true, false);
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
 }

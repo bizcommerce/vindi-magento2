@@ -9,6 +9,20 @@
             <dt class="title">
                 <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
             </dt>
+            
+            <!-- Split de Valores -->
+            <?php if ($block->getFirstCardAmount() || $block->getSecondCardAmount()): ?>
+                <dd class="content">
+                    <h4><?= __('Payment Split') ?></h4>
+                    <?php if ($block->getFirstCardAmount()): ?>
+                        <p><strong><?= __('First Card') ?>:</strong> <?= $block->formatPrice($block->getFirstCardAmount()) ?></p>
+                    <?php endif; ?>
+                    <?php if ($block->getSecondCardAmount()): ?>
+                        <p><strong><?= __('Second Card') ?>:</strong> <?= $block->formatPrice($block->getSecondCardAmount()) ?></p>
+                    <?php endif; ?>
+                </dd>
+            <?php endif; ?>
+            
             <dd class="content">
                 <p><?php echo __('First Card Details:'); ?></p>
                 <?php $first = $block->getFirstCardInfo(); ?>

@@ -8,7 +8,11 @@ use Vindi\Payment\Block\Info\BankSlip;
 <?php if (!$block->hasInvoice() && $block->canShowBankslipInfo()) : ?>
     <dd class="content">
         <br/>
+        <p><strong><?php echo sprintf(__('Amount: %s'), $block->getFormattedAmount()) ?></strong></p>
         <p><?php echo sprintf(__('Print Url: %s'), '<a target="_blank" href="'. $block->getPrintUrl() . '">'. $block->getPrintUrl() . '</a>') ?></p>
+        <?php if ($block->getDueDate()): ?>
+            <p><?php echo sprintf(__('Due Date: %s'), $block->getDueDate()) ?></p>
+        <?php endif; ?>
         <br/>
     </dd>
 <?php endif; ?>

@@ -8,6 +8,8 @@ use Vindi\Payment\Block\Info\BankSlipPix;
     <dt class="title"><strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()) ?></strong></dt>
     <?php if (!$block->hasInvoice() && $block->canShowBankSlipPixInfo()) : ?>
         <dd class="content">
+            <br/>
+            <p><strong><?php echo sprintf(__('Amount: %s'), $block->getFormattedAmount()) ?></strong></p>
             <?php if ($block->getQrCodePix()): ?>
                 <object data="<?= $block->getQrCodePix() ?>" type="image/svg+xml" class="qr-code" id="qrcode" width="200" height="200">
                     <p>

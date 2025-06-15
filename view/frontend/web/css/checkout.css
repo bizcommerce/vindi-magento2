@@ -225,3 +225,105 @@
 .pix-copy-button:hover {
     background-color: #0056b3;
 }
+
+/* Payment Split Styles for Multi-Payment Methods */
+.payment-split-info {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.payment-split-info h3 {
+    margin: 0 0 15px 0;
+    color: #495057;
+    font-size: 1.2em;
+    text-align: center;
+}
+
+.split-details {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+@media (min-width: 768px) {
+    .split-details {
+        flex-direction: row;
+        justify-content: space-around;
+    }
+}
+
+.split-item {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    flex: 1;
+}
+
+.split-item strong {
+    display: block;
+    color: #343a40;
+    font-size: 1.1em;
+    margin-bottom: 8px;
+}
+
+.split-item span {
+    display: block;
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #28a745;
+    margin-bottom: 5px;
+}
+
+.split-item small {
+    color: #6c757d;
+    font-size: 0.9em;
+}
+
+.split-item.credit-card {
+    border-left: 4px solid #007bff;
+}
+
+.split-item.pix {
+    border-left: 4px solid #28a745;
+}
+
+.split-item.bolepix {
+    border-left: 4px solid #ffc107;
+}
+
+.split-item.first-card {
+    border-left: 4px solid #007bff;
+}
+
+.split-item.second-card {
+    border-left: 4px solid #6c757d;
+}
+
+/* Multi-payment containers */
+.vindi-cardpix, .vindi-cardcard, .vindi-cardbankslippix {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.payment-methods-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+@media (min-width: 768px) {
+    .payment-methods-container {
+        flex-direction: row;
+    }
+}
+
+.success-actions {
+    text-align: center;
+    margin-top: 20px;
+}

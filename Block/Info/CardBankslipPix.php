@@ -273,4 +273,37 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
         $item = $collection->getFirstItem();
         return !$item->getId() || $item->getStatus() === 'pending';
     }
+
+    /**
+     * Get credit card amount from split payment
+     *
+     * @return float
+     */
+    public function getCreditAmount()
+    {
+        $payment = $this->getOrder()->getPayment();
+        return (float) $payment->getAdditionalInformation('amount_credit');
+    }
+
+    /**
+     * Get bolepix amount from split payment
+     *
+     * @return float
+     */
+    public function getBolepixAmount()
+    {
+        $payment = $this->getOrder()->getPayment();
+        return (float) $payment->getAdditionalInformation('amount_bankslippix');
+    }
+
+    /**
+     * Format currency value
+     *
+     * @param float $amount
+     * @return string
+     */
+    public function formatCurrency($amount)
+    {
+        return $this->currency->currency($amount, true, false);
+    }
 }

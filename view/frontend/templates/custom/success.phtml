@@ -110,6 +110,180 @@ $message = $paymentMethod == 'vindi_vp_cc' ? 'Thank you! Your order has been suc
         <?php endif; ?>
     <?php endif;?>
 
+    <?php if ($paymentMethod == 'vindi_cardpix'): ?>
+        <?php
+        $amountCredit = (float) $payment->getAdditionalInformation('amount_credit');
+        $amountPix = (float) $payment->getAdditionalInformation('amount_pix');
+        $qrCodeImage = (string) $payment->getAdditionalInformation('qrcode_path');
+        $emv = (string) $payment->getAdditionalInformation('qrcode_original_path');
+        $ccInstallments = (int) $payment->getAdditionalInformation('cc_installments');
+        $ccLast4 = $payment->getAdditionalInformation('cc_last_4');
+        $ccType = $payment->getAdditionalInformation('cc_type');
+        ?>
+        <div class="vindi-cardpix payment-success__container">
+            <div class="payment-split-info">
+                <h3><?= __('Payment Split:') ?></h3>
+                <div class="split-details">
+                    <div class="split-item credit-card">
+                        <strong><?= __('Credit Card:') ?></strong>
+                        <span><?= $block->escapeHtml(sprintf('R$ %.2f', $amountCredit)) ?></span>
+                        <?php if ($ccInstallments > 1): ?>
+                            <span>(<?= $ccInstallments ?>x <?= __('installments') ?>)</span>
+                        <?php endif; ?>
+                        <?php if ($ccType && $ccLast4): ?>
+                            <br><small><?= $block->escapeHtml(strtoupper($ccType)) ?> **** <?= $block->escapeHtml($ccLast4) ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <div class="split-item pix">
+                        <strong><?= __('PIX:') ?></strong>
+                        <span><?= $block->escapeHtml(sprintf('R$ %.2f', $amountPix)) ?></span>
+                    </div>
+                </div>
+            </div>
+            <?php if ($qrCodeImage): ?>
+                <div class="vindi-pix pix">
+                    <h3><?= __('Pay with Pix:') ?></h3>
+                    <div class="qrcode">
+                        <object data="<?= $block->escapeHtml($qrCodeImage) ?>" type="image/svg+xml" class="qr-code" id="qrcode">
+                            <p><?= $block->escapeHtml(__('QR Code is not available.')) ?></p>
+                            <a href="<?= $block->escapeHtml($qrCodeImage) ?>" target="_blank" class="button-link">
+                                <?= __('Open QR Code') ?>
+                            </a>
+                        </object>
+                    </div>
+                    <div class="pix-code">
+                        <strong><?= __('Pix code:') ?></strong>
+                        <div class="pix-qrcode"><?= $emv ?></div>
+                        <div class="align-button">
+                            <button class="pix-copy-button"
+                                    data-text="<?= $block->escapeHtml(__('Copied!')) ?>"
+                                    onclick="vindiVr.copyCode(this, '.pix-qrcode', false)">
+                                <?= $block->escapeHtml(__('Copy PIX code')) ?>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($paymentMethod == 'vindi_cardcard'): ?>
+        <?php
+        $amountCredit = (float) $payment->getAdditionalInformation('amount_credit');
+        $amountSecondCard = (float) $payment->getAdditionalInformation('amount_second_card');
+        $ccInstallments1 = (int) $payment->getAdditionalInformation('cc_installments');
+        $ccInstallments2 = (int) $payment->getAdditionalInformation('cc_installments2');
+        $ccLast4_1 = $payment->getAdditionalInformation('cc_last_4');
+        $ccLast4_2 = $payment->getAdditionalInformation('cc_last_4_2');
+        $ccType1 = $payment->getAdditionalInformation('cc_type');
+        $ccType2 = $payment->getAdditionalInformation('cc_type2');
+        ?>
+        <div class="vindi-cardcard payment-success__container">
+            <div class="payment-split-info">
+                <h3><?= __('Payment Split:') ?></h3>
+                <div class="split-details">
+                    <div class="split-item credit-card first-card">
+                        <strong><?= __('First Card:') ?></strong>
+                        <span><?= $block->escapeHtml(sprintf('R$ %.2f', $amountCredit)) ?></span>
+                        <?php if ($ccInstallments1 > 1): ?>
+                            <span>(<?= $ccInstallments1 ?>x <?= __('installments') ?>)</span>
+                        <?php endif; ?>
+                        <?php if ($ccType1 && $ccLast4_1): ?>
+                            <br><small><?= $block->escapeHtml(strtoupper($ccType1)) ?> **** <?= $block->escapeHtml($ccLast4_1) ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <div class="split-item credit-card second-card">
+                        <strong><?= __('Second Card:') ?></strong>
+                        <span><?= $block->escapeHtml(sprintf('R$ %.2f', $amountSecondCard)) ?></span>
+                        <?php if ($ccInstallments2 > 1): ?>
+                            <span>(<?= $ccInstallments2 ?>x <?= __('installments') ?>)</span>
+                        <?php endif; ?>
+                        <?php if ($ccType2 && $ccLast4_2): ?>
+                            <br><small><?= $block->escapeHtml(strtoupper($ccType2)) ?> **** <?= $block->escapeHtml($ccLast4_2) ?></small>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <div class="success-actions">
+                <a href="<?= $block->getBaseUrl() . 'sales/order/history' ?>" class="pix-copy-button action primary">
+                    <?= $block->escapeHtml(__('My Orders')) ?>
+                </a>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($paymentMethod == 'vindi_cardbankslippix'): ?>
+        <?php
+        $amountCredit = (float) $payment->getAdditionalInformation('amount_credit');
+        $amountBankslipPix = (float) $payment->getAdditionalInformation('amount_bankslippix');
+        $qrCodeImage = (string) $payment->getAdditionalInformation('qrcode_path');
+        $emv = (string) $payment->getAdditionalInformation('qrcode_original_path');
+        $bankSlipUrl = (string) $payment->getAdditionalInformation('print_url');
+        $ccInstallments = (int) $payment->getAdditionalInformation('cc_installments');
+        $ccLast4 = $payment->getAdditionalInformation('cc_last_4');
+        $ccType = $payment->getAdditionalInformation('cc_type');
+        ?>
+        <div class="vindi-cardbankslippix payment-success__container">
+            <div class="payment-split-info">
+                <h3><?= __('Payment Split:') ?></h3>
+                <div class="split-details">
+                    <div class="split-item credit-card">
+                        <strong><?= __('Credit Card:') ?></strong>
+                        <span><?= $block->escapeHtml(sprintf('R$ %.2f', $amountCredit)) ?></span>
+                        <?php if ($ccInstallments > 1): ?>
+                            <span>(<?= $ccInstallments ?>x <?= __('installments') ?>)</span>
+                        <?php endif; ?>
+                        <?php if ($ccType && $ccLast4): ?>
+                            <br><small><?= $block->escapeHtml(strtoupper($ccType)) ?> **** <?= $block->escapeHtml($ccLast4) ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <div class="split-item bolepix">
+                        <strong><?= __('Bolepix:') ?></strong>
+                        <span><?= $block->escapeHtml(sprintf('R$ %.2f', $amountBankslipPix)) ?></span>
+                    </div>
+                </div>
+            </div>
+            <div class="payment-methods-container">
+                <?php if ($bankSlipUrl): ?>
+                    <div class="vindi-bankslip bankslip">
+                        <h3><?= __('Pay with Bankslip:') ?></h3>
+                        <div class="qrcode">
+                            <div class="bankslip-barcode-container">
+                                <div class="view-bankslip">
+                                    <a href="<?= $block->escapeHtml($bankSlipUrl) ?>" target="_blank" class="pix-copy-button action primary">
+                                        <?= $block->escapeHtml(__('View Bankslip')) ?>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+                <?php if ($qrCodeImage): ?>
+                    <div class="vindi-pix pix">
+                        <h3><?= __('Pay with Pix:') ?></h3>
+                        <div class="qrcode">
+                            <object data="<?= $block->escapeHtml($qrCodeImage) ?>" type="image/svg+xml" class="qr-code" id="qrcode">
+                                <p><?= $block->escapeHtml(__('QR Code is not available.')) ?></p>
+                                <a href="<?= $block->escapeHtml($qrCodeImage) ?>" target="_blank" class="button-link">
+                                    <?= __('Open QR Code') ?>
+                                </a>
+                            </object>
+                        </div>
+                        <div class="pix-code">
+                            <strong><?= __('Pix code:') ?></strong>
+                            <div class="pix-qrcode"><?= $emv ?></div>
+                            <button class="pix-copy-button"
+                                    data-text="<?= $block->escapeHtml(__('Copied!')) ?>"
+                                    onclick="vindiVr.copyCode(this, '.pix-qrcode', false)">
+                                <?= $block->escapeHtml(__('Copy PIX code')) ?>
+                            </button>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <?php if ($paymentMethod == 'vindi_bankslip'): ?>
         <?php
         $bankSlipUrl = (string) $payment->getAdditionalInformation('print_url');

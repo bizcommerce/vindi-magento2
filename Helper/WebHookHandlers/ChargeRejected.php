@@ -143,15 +143,21 @@ class ChargeRejected
             // 1 cartão falhou, 1 ainda pendente ou pode ter sido pago
             $this->logger->warning("MULTIMEIOS_CHARGE_REJECTED: One card failed in renewal for subscription {$subscriptionId}, cycle {$currentCycle}. Waiting for other card.");
             
-            // TODO: Implementar estratégia de retry ou notificação
+            // Implementar estratégia de notificação para falha parcial
+            $this->handlePartialFailureNotification($originalOrder, $subscriptionId, $currentCycle, $billId);
+            
             return true;
             
         } elseif ($cycleBillsStatus['failed_bills'] === 2) {
             // Ambos cartões falharam
             $this->logger->error("MULTIMEIOS_CHARGE_REJECTED: Both cards failed in renewal for subscription {$subscriptionId}, cycle {$currentCycle}.");
             
-            // TODO: Implementar notificação ao cliente e possível suspensão da assinatura
-            // Por enquanto apenas logar o problema
+            // Implementar notificação ao cliente e possível suspensão da assinatura
+            $this->handleCompleteFailureNotification($originalOrder, $subscriptionId, $currentCycle);
+            
+            // Marcar assinatura como pendente ou suspensa
+            $this->handleSubscriptionSuspension($subscriptionId, $currentCycle);
+            
             return true;
         }
         
@@ -337,5 +343,119 @@ class ChargeRejected
             return $orders ? reset($orders) : false;
         }
         return false;
+    }
+
+    /**
+     * Handle partial failure notification (one card failed)
+     */
+    private function handlePartialFailureNotification($originalOrder, $subscriptionId, $cycle, $failedBillId)
+    {
+        try {
+            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Sending partial failure notification for subscription {$subscriptionId}, cycle {$cycle}");
+            
+            // Preparar dados para email/notificação
+            $notificationData = [
+                'order' => $originalOrder,
+                'subscription_id' => $subscriptionId,
+                'cycle' => $cycle,
+                'failed_bill_id' => $failedBillId,
+                'failure_type' => 'partial',
+                'message' => 'Um dos cartões da sua assinatura apresentou falha no pagamento. Verificaremos o status do segundo cartão.'
+            ];
+            
+            // Enviar notificação (se implementado)
+            $this->sendFailureNotification($notificationData);
+            
+            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Partial failure notification sent for subscription {$subscriptionId}");
+            
+        } catch (\Exception $e) {
+            $this->logger->error("MULTIMEIOS_CHARGE_REJECTED: Error sending partial failure notification: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Handle complete failure notification (both cards failed)
+     */
+    private function handleCompleteFailureNotification($originalOrder, $subscriptionId, $cycle)
+    {
+        try {
+            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Sending complete failure notification for subscription {$subscriptionId}, cycle {$cycle}");
+            
+            // Preparar dados para email/notificação
+            $notificationData = [
+                'order' => $originalOrder,
+                'subscription_id' => $subscriptionId,
+                'cycle' => $cycle,
+                'failure_type' => 'complete',
+                'message' => 'Ambos os cartões da sua assinatura apresentaram falha no pagamento. Sua assinatura será suspensa temporariamente.',
+                'action_required' => true
+            ];
+            
+            // Enviar notificação crítica
+            $this->sendFailureNotification($notificationData);
+            
+            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Complete failure notification sent for subscription {$subscriptionId}");
+            
+        } catch (\Exception $e) {
+            $this->logger->error("MULTIMEIOS_CHARGE_REJECTED: Error sending complete failure notification: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Handle subscription suspension
+     */
+    private function handleSubscriptionSuspension($subscriptionId, $cycle)
+    {
+        try {
+            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Processing subscription suspension for subscription {$subscriptionId}, cycle {$cycle}");
+            
+            // Atualizar status da assinatura local se necessário
+            $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+            $subscriptionModel = $objectManager->create(\Vindi\Payment\Model\Subscription::class);
+            $subscription = $subscriptionModel->load($subscriptionId, 'vindi_id');
+            
+            if ($subscription->getId()) {
+                $subscription->setStatus('payment_failed');
+                $subscription->setData('last_failed_cycle', $cycle);
+                $subscription->setData('failure_date', date('Y-m-d H:i:s'));
+                $subscription->save();
+                
+                $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Local subscription status updated to payment_failed for subscription {$subscriptionId}");
+            }
+            
+            // Lógica adicional de suspensão pode ser implementada aqui
+            // Como pausar a assinatura na Vindi por X dias, etc.
+            
+        } catch (\Exception $e) {
+            $this->logger->error("MULTIMEIOS_CHARGE_REJECTED: Error handling subscription suspension: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Send failure notification (email, SMS, etc.)
+     */
+    private function sendFailureNotification($notificationData)
+    {
+        try {
+            // Por enquanto, apenas log detalhado
+            // Este método pode ser expandido para enviar emails reais
+            
+            $this->logger->info("MULTIMEIOS_NOTIFICATION: " . json_encode([
+                'type' => 'payment_failure',
+                'subscription_id' => $notificationData['subscription_id'],
+                'cycle' => $notificationData['cycle'],
+                'failure_type' => $notificationData['failure_type'],
+                'order_id' => $notificationData['order']->getIncrementId(),
+                'customer_email' => $notificationData['order']->getCustomerEmail(),
+                'message' => $notificationData['message']
+            ]));
+            
+            // TODO: Implementar envio real de email
+            // $emailHelper = $this->objectManager->get(\Vindi\Payment\Helper\EmailSender::class);
+            // $emailHelper->sendFailureNotification($notificationData);
+            
+        } catch (\Exception $e) {
+            $this->logger->error("MULTIMEIOS_NOTIFICATION: Error in notification: " . $e->getMessage());
+        }
     }
 }

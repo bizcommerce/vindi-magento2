@@ -7,6 +7,20 @@
             <strong><?= $block->escapeHtml($block->getMethod()->getTitle()) ?></strong>
         </dt>
     </dl>
+    
+    <!-- Split de Valores -->
+    <?php if ($block->getCardAmount() || $block->getPixAmount()): ?>
+        <div class="payment-split-info">
+            <h4><?= __('Payment Split') ?></h4>
+            <?php if ($block->getCardAmount()): ?>
+                <p><strong><?= __('Credit Card') ?>:</strong> <?= $block->formatPrice($block->getCardAmount()) ?></p>
+            <?php endif; ?>
+            <?php if ($block->getPixAmount()): ?>
+                <p><strong><?= __('PIX') ?>:</strong> <?= $block->formatPrice($block->getPixAmount()) ?></p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+    
     <hr>
     <?php if ($block->canShowCcInfo()) : ?>
         <dl class="payment-method cc-info">

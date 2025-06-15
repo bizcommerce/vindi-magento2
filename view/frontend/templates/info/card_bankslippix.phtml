@@ -9,6 +9,25 @@
             <strong><?php echo $block->escapeHtml($block->getMethod()->getTitle()); ?></strong>
         </dt>
     </dl>
+    
+    <!-- Payment Split Information -->
+    <?php if ($block->getCreditAmount() > 0 || $block->getBolepixAmount() > 0): ?>
+        <dl class="payment-method split-info">
+            <dt class="title">
+                <strong><?php echo $block->escapeHtml(__('Payment Split')); ?></strong>
+            </dt>
+            <dd class="content">
+                <?php if ($block->getCreditAmount() > 0): ?>
+                    <p><strong><?php echo __('Credit Card:'); ?></strong> <?php echo $block->formatCurrency($block->getCreditAmount()); ?></p>
+                <?php endif; ?>
+                <?php if ($block->getBolepixAmount() > 0): ?>
+                    <p><strong><?php echo __('Bolepix:'); ?></strong> <?php echo $block->formatCurrency($block->getBolepixAmount()); ?></p>
+                <?php endif; ?>
+            </dd>
+        </dl>
+        <hr>
+    <?php endif; ?>
+    
     <hr>
     <?php if ($block->canShowCcInfo()) : ?>
         <dl class="payment-method cc-info">
