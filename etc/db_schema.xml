@@ -196,12 +196,12 @@
             <column name="entity_id"/>
         </constraint>
         <constraint xsi:type="foreign" referenceId="VINDI_PAYMENT_SPLIT_ORDER_ID_ORDER_ENTITY_ID" table="vindi_payment_split" column="order_id" referenceTable="sales_order" referenceColumn="entity_id" onDelete="CASCADE"/>
-        <constraint xsi:type="index" referenceId="VINDI_PAYMENT_SPLIT_SUBSCRIPTION_CYCLE">
+        <index referenceId="VINDI_PAYMENT_SPLIT_SUBSCRIPTION_ID_CYCLE" indexType="btree">
             <column name="subscription_id"/>
             <column name="cycle"/>
-        </constraint>
-        <constraint xsi:type="index" referenceId="VINDI_PAYMENT_SPLIT_BILL_ID">
+        </index>
+        <index referenceId="VINDI_PAYMENT_SPLIT_BILL_ID" indexType="btree">
             <column name="bill_id"/>
-        </constraint>
+        </index>
     </table>
 </schema>
