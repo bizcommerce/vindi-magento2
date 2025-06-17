@@ -4,6 +4,8 @@ namespace Vindi\Payment\Model\Payment;
 use Magento\Framework\DataObject;
 use Magento\Quote\Api\Data\PaymentInterface;
 use Vindi\Payment\Block\Info\CardCard as InfoBlock;
+use Magento\Checkout\Model\Session as CheckoutSession;
+use Magento\Catalog\Api\ProductRepositoryInterface;
 
 /**
  * Class CardCard
@@ -172,5 +174,26 @@ class CardCard extends AbstractMethod
     protected function getPaymentMethodCode()
     {
         return \Vindi\Payment\Model\Payment\PaymentMethod::CARD_CARD;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isAvailable(\Magento\Quote\Api\Data\CartInterface $quote = null)
+    {
+        if ($quote === null) {
+            $quote = \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(CheckoutSession::class)
+                ->getQuote();
+        }
+        foreach ($quote->getAllVisibleItems() as $item) {
+            $product = \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(ProductRepositoryInterface::class)
+                ->getById($item->getProduct()->getId());
+            if ($product->getData('vindi_enable_recurrence') == '1') {
+                return false;
+            }
+        }
+        return parent::isAvailable($quote);
     }
 }
