@@ -760,3 +760,7 @@
 "Bill canceled event processed for single-method payment.","Evento de fatura cancelado processado para pagamento de método único."
 "Charge data not found in webhook data.","Dados da cobrança não encontrados nos dados do webhook."
 "The amount exceeds the total order value.","O valor excede o valor total do pedido."
+"Payment Split","Divisão de Pagamento"
+"Credit Card:","Cartão de Crédito:"
+"First Card:", "Primeiro Cartão:"
+"Second Card:", "Segundo Cartão:"
