@@ -86,18 +86,21 @@ class ChargeRejected
 
         $this->logger->info('CHARGE_REJECTED: Processing for bill ' . $billId);
 
-        // Verificar se é uma bill de assinatura e se é multimeios
+        // Verificar se é uma bill de assinatura
         $isSubscription = isset($bill['subscription']) && $bill['subscription'] !== null;
         if ($isSubscription) {
             return $this->handleSubscriptionChargeRejected($chargeData, $bill);
         }
 
-        // Lógica original para bills não-subscription
+        // Bills não-subscription podem ser:
+        // 1. Pedido avulso simples (sem splits)
+        // 2. Pedido avulso multimeios (com splits)
         return $this->handleRegularChargeRejected($chargeData, $billId);
     }
 
     /**
-     * Handle charge rejected for subscription bills (including multimeios)
+     * Handle charge rejected for subscription bills
+     * Assinaturas são sempre single method - não há multimeios para renovações
      */
     private function handleSubscriptionChargeRejected($chargeData, $bill)
     {
@@ -105,199 +108,137 @@ class ChargeRejected
         $subscriptionId = $bill['subscription']['id'];
         $currentCycle = isset($bill['period']['cycle']) ? $bill['period']['cycle'] : 1;
 
-        // Verificar se é multimeios
+        $this->logger->info("SUBSCRIPTION_CHARGE_REJECTED: Processing bill {$billId}, subscription {$subscriptionId}, cycle {$currentCycle}");
+
+        // Buscar pedido original da assinatura
         $originalOrder = $this->getOriginalOrderFromSubscription($subscriptionId);
         if (!$originalOrder) {
-            $this->logger->warning('CHARGE_REJECTED: Original order not found for subscription ' . $subscriptionId);
-            return $this->handleRegularChargeRejected($chargeData, $billId);
+            $this->logger->warning('SUBSCRIPTION_CHARGE_REJECTED: Original order not found for subscription ' . $subscriptionId);
+            return false;
         }
 
-        $isMultiMeios = ($originalOrder->getPayment()->getMethod() === 'vindi_cardcard');
-        
-        if ($isMultiMeios) {
-            return $this->handleMultiMeiosChargeRejected($chargeData, $bill, $currentCycle, $originalOrder);
+        // Verificar se é a última tentativa
+        $isLastAttempt = $chargeData['next_attempt'] === null;
+        $gatewayMessage = $chargeData['last_transaction']['gateway_message'] ?? 'Unknown error';
+
+        if ($isLastAttempt) {
+            $this->logger->error("SUBSCRIPTION_CHARGE_REJECTED: Final attempt failed for subscription {$subscriptionId}, cycle {$currentCycle}. Gateway: {$gatewayMessage}");
+            
+            // Notificar cliente sobre falha definitiva
+            $this->handleSubscriptionFailureNotification($originalOrder, $subscriptionId, $currentCycle, $gatewayMessage, true);
+            
+            // Marcar assinatura como com problema
+            $this->markSubscriptionAsFailed($subscriptionId, $currentCycle, $gatewayMessage);
         } else {
-            return $this->handleRegularChargeRejected($chargeData, $billId);
-        }
-    }
-
-    /**
-     * Handle charge rejected for multimeios renewal bills
-     */
-    private function handleMultiMeiosChargeRejected($chargeData, $bill, $currentCycle, $originalOrder)
-    {
-        $billId = $bill['id'];
-        $subscriptionId = $bill['subscription']['id'];
-        
-        $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Processing bill {$billId}, subscription {$subscriptionId}, cycle {$currentCycle}");
-
-        // Atualizar payment split para marcar como falha
-        $this->updatePaymentSplitForFailure($billId, $subscriptionId, $currentCycle, $originalOrder);
-
-        // Verificar status de todas as bills do ciclo
-        $cycleBillsStatus = $this->getCycleBillsStatus($subscriptionId, $currentCycle);
-        
-        $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Cycle status - Failed: {$cycleBillsStatus['failed_bills']}, Total: {$cycleBillsStatus['total_bills']}");
-
-        if ($cycleBillsStatus['failed_bills'] === 1 && $cycleBillsStatus['total_bills'] === 2) {
-            // 1 cartão falhou, 1 ainda pendente ou pode ter sido pago
-            $this->logger->warning("MULTIMEIOS_CHARGE_REJECTED: One card failed in renewal for subscription {$subscriptionId}, cycle {$currentCycle}. Waiting for other card.");
+            $this->logger->info("SUBSCRIPTION_CHARGE_REJECTED: Retry will be attempted for subscription {$subscriptionId}, cycle {$currentCycle}. Gateway: {$gatewayMessage}");
             
-            // Implementar estratégia de notificação para falha parcial
-            $this->handlePartialFailureNotification($originalOrder, $subscriptionId, $currentCycle, $billId);
-            
-            return true;
-            
-        } elseif ($cycleBillsStatus['failed_bills'] === 2) {
-            // Ambos cartões falharam
-            $this->logger->error("MULTIMEIOS_CHARGE_REJECTED: Both cards failed in renewal for subscription {$subscriptionId}, cycle {$currentCycle}.");
-            
-            // Implementar notificação ao cliente e possível suspensão da assinatura
-            $this->handleCompleteFailureNotification($originalOrder, $subscriptionId, $currentCycle);
-            
-            // Marcar assinatura como pendente ou suspensa
-            $this->handleSubscriptionSuspension($subscriptionId, $currentCycle);
-            
-            return true;
+            // Notificar cliente sobre tentativa falhada (retry será feito)
+            $this->handleSubscriptionFailureNotification($originalOrder, $subscriptionId, $currentCycle, $gatewayMessage, false);
         }
         
         return true;
     }
 
     /**
-     * Get status of all bills for a specific subscription cycle
-     */
-    private function getCycleBillsStatus($subscriptionId, $cycle)
-    {
-        $splits = $this->paymentSplitFactory->create()
-            ->getCollection()
-            ->addFieldToFilter('subscription_id', $subscriptionId)
-            ->addFieldToFilter('cycle', $cycle);
-        
-        $totalBills = $splits->getSize();
-        $paidBills = 0;
-        $failedBills = 0;
-        
-        foreach ($splits as $split) {
-            if ($split->getStatus() === 'paid') {
-                $paidBills++;
-            } elseif ($split->getStatus() === 'failed') {
-                $failedBills++;
-            }
-        }
-        
-        return [
-            'total_bills' => $totalBills,
-            'paid_bills' => $paidBills,
-            'failed_bills' => $failedBills,
-            'pending_bills' => $totalBills - $paidBills - $failedBills
-        ];
-    }
-
-    /**
-     * Update payment split for failed renewal bill
-     */
-    private function updatePaymentSplitForFailure($billId, $subscriptionId, $cycle, $originalOrder)
-    {
-        // Procurar split existente
-        $existingSplit = $this->paymentSplitFactory->create()
-            ->getCollection()
-            ->addFieldToFilter('bill_id', $billId)
-            ->getFirstItem();
-        
-        if ($existingSplit->getId()) {
-            // Atualizar split existente
-            $existingSplit->setStatus('failed');
-            $existingSplit->setSubscriptionId($subscriptionId);
-            $existingSplit->setCycle($cycle);
-            $existingSplit->save();
-            $this->logger->info('MULTIMEIOS_CHARGE_REJECTED: Payment split updated for bill ' . $billId);
-        } else {
-            // Criar novo split para bill de renovação falhada
-            $split = $this->paymentSplitFactory->create();
-            $split->setData([
-                'bill_id' => $billId,
-                'subscription_id' => $subscriptionId,
-                'cycle' => $cycle,
-                'status' => 'failed',
-                'payment_method' => 'credit_card',
-                'order_id' => $originalOrder->getId(),
-                'order_increment_id' => $originalOrder->getIncrementId(),
-                'created_at' => date('Y-m-d H:i:s')
-            ]);
-            $split->save();
-            $this->logger->info('MULTIMEIOS_CHARGE_REJECTED: New payment split created for failed bill ' . $billId);
-        }
-    }
-
-    /**
-     * Get original order from subscription ID
-     */
-    private function getOriginalOrderFromSubscription($subscriptionId)
-    {
-        // Buscar pedido que tem essa subscription_id
-        $criteria = $this->searchCriteriaBuilder
-            ->addFilter('vindi_subscription_id', $subscriptionId, 'eq')
-            ->create();
-        
-        $orders = $this->orderRepository->getList($criteria)->getItems();
-        return $orders ? reset($orders) : null;
-    }    /**
-     * Handle charge rejected for regular (non-subscription) bills - original logic
+     * Handle charge rejected for regular (non-subscription) bills
      */
     private function handleRegularChargeRejected($chargeData, $billId)
     {
+        $this->logger->info("REGULAR_CHARGE_REJECTED: Processing bill {$billId}");
+
+        // Buscar splits relacionados a esta bill
         $paymentSplitCollection = $this->paymentSplitFactory->create()->getCollection()
             ->addFieldToFilter('bill_id', $billId);
 
         if ($paymentSplitCollection->getSize() > 0) {
-            $chargeId = isset($chargeData['id']) ? $chargeData['id'] : null;
-            if (!$chargeId) {
-                throw new \Exception('Charge ID not found in webhook data.');
-            }
-
-            $paymentSplitItems = $paymentSplitCollection->getItems();
-
-            foreach ($paymentSplitItems as $paymentSplit) {
-                if (!$paymentSplit->getIsRefunded()) {
-                    $refundResult = $this->charge->refund($chargeId, ['amount' => $paymentSplit->getAmount()]);
-                    if ($refundResult) {
-                        $paymentSplit->setStatus('refunded');
-                        $paymentSplit->setIsRefunded(1);
-                        $paymentSplit->setRefundAmount($paymentSplit->getAmount());
-                        $paymentSplit->setRefundDate(date('Y-m-d H:i:s'));
-                        $paymentSplit->save();
-                    }
-                }
-            }
-
-            $firstPaymentSplit = reset($paymentSplitItems);
-            $orderId = $firstPaymentSplit->getOrderId();
-
-            try {
-                $order = $this->orderRepository->get($orderId);
-                if ($order->canCancel()) {
-                    $order->cancel();
-                    $order->addStatusHistoryComment('Order canceled due to multi-method payment refund.');
-                    $this->orderRepository->save($order);
-                }
-            } catch (\Exception $e) {
-                $this->logger->error('Error canceling order: ' . $e->getMessage());
-            }
-
-            return true;
+            // Pedido multimeios - tem splits
+            return $this->handleMultiMeiosRegularChargeRejected($chargeData, $billId, $paymentSplitCollection);
+        } else {
+            // Pedido simples - sem splits
+            return $this->handleSimpleChargeRejected($chargeData, $billId);
         }
+    }
 
-        if (!($order = $this->getOrderFromBill($billId))) {
-            $this->logger->warning('Order not found');
+    /**
+     * Handle charge rejected for multimeios regular orders (non-subscription)
+     */
+    private function handleMultiMeiosRegularChargeRejected($chargeData, $billId, $paymentSplitCollection)
+    {
+        $this->logger->info("MULTIMEIOS_REGULAR_CHARGE_REJECTED: Processing bill {$billId}");
+
+        $gatewayMessage = $chargeData['last_transaction']['gateway_message'] ?? 'Unknown error';
+
+        // Buscar o split correspondente a esta bill
+        $currentSplit = $paymentSplitCollection->getFirstItem();
+        if (!$currentSplit->getId()) {
+            $this->logger->error("MULTIMEIOS_REGULAR_CHARGE_REJECTED: Split not found for bill {$billId}");
             return false;
         }
 
-        $gatewayMessage = $chargeData['last_transaction']['gateway_message'];
+        // Marcar split como 'failed' (NÃO refunded!)
+        $currentSplit->setStatus('failed');
+        $currentSplit->save();
+
+        $this->logger->info("MULTIMEIOS_REGULAR_CHARGE_REJECTED: Split marked as failed for bill {$billId}");
+
+        // Buscar todos os splits do pedido
+        $order = $this->orderRepository->get($currentSplit->getOrderId());
+        $allSplits = $this->paymentSplitFactory->create()
+            ->getCollection()
+            ->addFieldToFilter('order_increment_id', $order->getIncrementId());
+
+        // Verificar se todos splits falharam
+        $allFailed = $this->areAllSplitsFailed($allSplits);
+        
+        if (!$allFailed) {
+            $this->logger->info("MULTIMEIOS_REGULAR_CHARGE_REJECTED: Not all splits failed for order {$order->getIncrementId()} - waiting for other methods");
+            
+            // Adicionar comentário sobre falha parcial
+            $order->addStatusHistoryComment(sprintf(
+                'One payment method failed. Motive: "%s". Waiting for other payment methods.',
+                $gatewayMessage
+            ));
+            $this->orderRepository->save($order);
+            
+            return true; // Aguardar outros métodos
+        }
+
+        // Todos splits falharam - cancelar pedido
+        $this->logger->error("MULTIMEIOS_REGULAR_CHARGE_REJECTED: All payment methods failed for order {$order->getIncrementId()} - canceling order");
+        
+        if ($order->canCancel()) {
+            $order->cancel();
+            $order->addStatusHistoryComment(sprintf(
+                'Order canceled - all payment methods failed. Last error: "%s"',
+                $gatewayMessage
+            ));
+            $this->orderRepository->save($order);
+        }
+        
+        return true;
+    }
+
+    /**
+     * Handle charge rejected for simple orders (single payment method)
+     */
+    private function handleSimpleChargeRejected($chargeData, $billId)
+    {
+        $this->logger->info("SIMPLE_CHARGE_REJECTED: Processing bill {$billId}");
+
+        $order = $this->getOrderFromBill($billId);
+        if (!$order) {
+            $this->logger->warning("SIMPLE_CHARGE_REJECTED: Order not found for bill {$billId}");
+            return false;
+        }
+
+        $gatewayMessage = $chargeData['last_transaction']['gateway_message'] ?? 'Unknown error';
         $isLastAttempt = $chargeData['next_attempt'] === null;
         $statusIsNotPending = $chargeData['status'] != 'pending';
 
         if ($isLastAttempt && $statusIsNotPending) {
+            // Última tentativa falhou - cancelar pedido
+            $this->logger->error("SIMPLE_CHARGE_REJECTED: Final attempt failed for order {$order->getIncrementId()} - canceling order");
+            
             $order->addStatusHistoryComment(sprintf(
                 'Payment rejected. Motive: "%s"',
                 $gatewayMessage
@@ -307,17 +248,30 @@ class ChargeRejected
                 $gatewayMessage
             ), true);
             $order->setStatus('canceled');
-            $this->logger->info(sprintf('All payment tries were rejected. Motive: "%s".', $gatewayMessage));
         } else {
+            // Tentativa falhou mas há retry - apenas comentar
+            $this->logger->info("SIMPLE_CHARGE_REJECTED: Retry will be attempted for order {$order->getIncrementId()}");
+            
             $order->addStatusHistoryComment(sprintf(
                 'Payment try rejected. Motive: "%s". A new try will be made',
                 $gatewayMessage
             ));
-            $this->logger->info(sprintf('Payment try rejected. Motive: "%s". A new try will be made', $gatewayMessage));
         }
 
-        $order->save();
+        $this->orderRepository->save($order);
+        return true;
+    }
 
+    /**
+     * Check if all splits for an order failed
+     */
+    private function areAllSplitsFailed($splits)
+    {
+        foreach ($splits as $split) {
+            if ($split->getStatus() !== 'failed') {
+                return false;
+            }
+        }
         return true;
     }
 
@@ -346,116 +300,80 @@ class ChargeRejected
     }
 
     /**
-     * Handle partial failure notification (one card failed)
+     * Get original order from subscription ID
      */
-    private function handlePartialFailureNotification($originalOrder, $subscriptionId, $cycle, $failedBillId)
+    private function getOriginalOrderFromSubscription($subscriptionId)
+    {
+        // Buscar pedido que tem essa subscription_id
+        $criteria = $this->searchCriteriaBuilder
+            ->addFilter('vindi_subscription_id', $subscriptionId, 'eq')
+            ->create();
+        
+        $orders = $this->orderRepository->getList($criteria)->getItems();
+        return $orders ? reset($orders) : null;
+    }
+
+    /**
+     * Handle subscription failure notification
+     */
+    private function handleSubscriptionFailureNotification($originalOrder, $subscriptionId, $cycle, $gatewayMessage, $isFinalAttempt)
     {
         try {
-            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Sending partial failure notification for subscription {$subscriptionId}, cycle {$cycle}");
+            $notificationType = $isFinalAttempt ? 'final_failure' : 'retry_failure';
             
-            // Preparar dados para email/notificação
+            $this->logger->info("SUBSCRIPTION_NOTIFICATION: Sending {$notificationType} notification for subscription {$subscriptionId}, cycle {$cycle}");
+            
+            // Preparar dados para notificação
             $notificationData = [
                 'order' => $originalOrder,
                 'subscription_id' => $subscriptionId,
                 'cycle' => $cycle,
-                'failed_bill_id' => $failedBillId,
-                'failure_type' => 'partial',
-                'message' => 'Um dos cartões da sua assinatura apresentou falha no pagamento. Verificaremos o status do segundo cartão.'
+                'gateway_message' => $gatewayMessage,
+                'is_final_attempt' => $isFinalAttempt,
+                'notification_type' => $notificationType
             ];
             
-            // Enviar notificação (se implementado)
-            $this->sendFailureNotification($notificationData);
-            
-            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Partial failure notification sent for subscription {$subscriptionId}");
-            
-        } catch (\Exception $e) {
-            $this->logger->error("MULTIMEIOS_CHARGE_REJECTED: Error sending partial failure notification: " . $e->getMessage());
-        }
-    }
-
-    /**
-     * Handle complete failure notification (both cards failed)
-     */
-    private function handleCompleteFailureNotification($originalOrder, $subscriptionId, $cycle)
-    {
-        try {
-            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Sending complete failure notification for subscription {$subscriptionId}, cycle {$cycle}");
-            
-            // Preparar dados para email/notificação
-            $notificationData = [
-                'order' => $originalOrder,
+            // Log detalhado da notificação
+            $this->logger->info("SUBSCRIPTION_NOTIFICATION: " . json_encode([
+                'type' => 'subscription_payment_failure',
                 'subscription_id' => $subscriptionId,
                 'cycle' => $cycle,
-                'failure_type' => 'complete',
-                'message' => 'Ambos os cartões da sua assinatura apresentaram falha no pagamento. Sua assinatura será suspensa temporariamente.',
-                'action_required' => true
-            ];
-            
-            // Enviar notificação crítica
-            $this->sendFailureNotification($notificationData);
-            
-            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Complete failure notification sent for subscription {$subscriptionId}");
-            
-        } catch (\Exception $e) {
-            $this->logger->error("MULTIMEIOS_CHARGE_REJECTED: Error sending complete failure notification: " . $e->getMessage());
-        }
-    }
-
-    /**
-     * Handle subscription suspension
-     */
-    private function handleSubscriptionSuspension($subscriptionId, $cycle)
-    {
-        try {
-            $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Processing subscription suspension for subscription {$subscriptionId}, cycle {$cycle}");
-            
-            // Atualizar status da assinatura local se necessário
-            $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-            $subscriptionModel = $objectManager->create(\Vindi\Payment\Model\Subscription::class);
-            $subscription = $subscriptionModel->load($subscriptionId, 'vindi_id');
-            
-            if ($subscription->getId()) {
-                $subscription->setStatus('payment_failed');
-                $subscription->setData('last_failed_cycle', $cycle);
-                $subscription->setData('failure_date', date('Y-m-d H:i:s'));
-                $subscription->save();
-                
-                $this->logger->info("MULTIMEIOS_CHARGE_REJECTED: Local subscription status updated to payment_failed for subscription {$subscriptionId}");
-            }
-            
-            // Lógica adicional de suspensão pode ser implementada aqui
-            // Como pausar a assinatura na Vindi por X dias, etc.
-            
-        } catch (\Exception $e) {
-            $this->logger->error("MULTIMEIOS_CHARGE_REJECTED: Error handling subscription suspension: " . $e->getMessage());
-        }
-    }
-
-    /**
-     * Send failure notification (email, SMS, etc.)
-     */
-    private function sendFailureNotification($notificationData)
-    {
-        try {
-            // Por enquanto, apenas log detalhado
-            // Este método pode ser expandido para enviar emails reais
-            
-            $this->logger->info("MULTIMEIOS_NOTIFICATION: " . json_encode([
-                'type' => 'payment_failure',
-                'subscription_id' => $notificationData['subscription_id'],
-                'cycle' => $notificationData['cycle'],
-                'failure_type' => $notificationData['failure_type'],
-                'order_id' => $notificationData['order']->getIncrementId(),
-                'customer_email' => $notificationData['order']->getCustomerEmail(),
-                'message' => $notificationData['message']
+                'is_final_attempt' => $isFinalAttempt,
+                'order_id' => $originalOrder->getIncrementId(),
+                'customer_email' => $originalOrder->getCustomerEmail(),
+                'gateway_message' => $gatewayMessage
             ]));
             
-            // TODO: Implementar envio real de email
+            // TODO: Implementar envio real de email/notificação
             // $emailHelper = $this->objectManager->get(\Vindi\Payment\Helper\EmailSender::class);
-            // $emailHelper->sendFailureNotification($notificationData);
+            // $emailHelper->sendSubscriptionFailureNotification($notificationData);
             
         } catch (\Exception $e) {
-            $this->logger->error("MULTIMEIOS_NOTIFICATION: Error in notification: " . $e->getMessage());
+            $this->logger->error("SUBSCRIPTION_NOTIFICATION: Error in notification: " . $e->getMessage());
         }
     }
+
+    /**
+     * Mark subscription as failed
+     */
+    private function markSubscriptionAsFailed($subscriptionId, $cycle, $gatewayMessage)
+    {
+        try {
+            $this->logger->info("SUBSCRIPTION_STATUS: Marking subscription {$subscriptionId} as failed for cycle {$cycle}");
+            
+            // TODO: Implementar atualização do status da assinatura
+            // Por enquanto apenas log
+            $this->logger->info("SUBSCRIPTION_STATUS: " . json_encode([
+                'action' => 'mark_as_failed',
+                'subscription_id' => $subscriptionId,
+                'cycle' => $cycle,
+                'gateway_message' => $gatewayMessage,
+                'timestamp' => date('Y-m-d H:i:s')
+            ]));
+            
+        } catch (\Exception $e) {
+            $this->logger->error("SUBSCRIPTION_STATUS: Error marking subscription as failed: " . $e->getMessage());
+        }
+    }
+
 }

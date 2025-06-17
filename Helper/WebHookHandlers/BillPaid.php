@@ -76,7 +76,6 @@ class BillPaid
     private function handleSubscriptionFlow($bill, $data)
     {
         $subscriptionId = $bill['subscription']['id'];
-        $currentCycle = isset($bill['period']['cycle']) ? $bill['period']['cycle'] : 1;
         
         $lockName = 'vindi_subscription_' . $subscriptionId;
         if (!$this->dbAdapter->query("SELECT GET_LOCK(?, 10)", [$lockName])->fetchColumn()) {
@@ -86,162 +85,28 @@ class BillPaid
 
         try {
             $originalOrder = $this->orderCreator->getOrderFromSubscriptionId($subscriptionId);
-
             if (!$originalOrder) {
-                $this->logInfo('No corresponding order found for subscription ID: ' . $subscriptionId . '. Ignoring event.');
+                $this->logInfo('No corresponding order found for subscription ID: ' . $subscriptionId);
                 return true;
             }
 
-            // REFATORAÇÃO: Multimeios não é mais suportado para assinaturas
-            // Todas as assinaturas são tratadas como single method
-            return $this->handleSingleCardSubscriptionFlow($bill, $data, $originalOrder);
+            // ASSINATURAS SÃO SEMPRE SINGLE METHOD
+            // Não há lógica de multimeios para renovações
+            $this->logInfo('Processing subscription renewal for order: ' . $originalOrder->getIncrementId() . ', subscription: ' . $subscriptionId);
+            
+            $queueItem = $this->orderCreationQueueFactory->create();
+            $queueItem->setData([
+                'bill_data' => json_encode($data),
+                'status'    => 'pending',
+                'type'      => 'bill_paid'
+            ]);
+            $this->orderCreationQueueRepository->save($queueItem);
+            $this->logInfo('Created order creation queue item for subscription renewal.');
+            
+            return true;
 
         } finally {
             $this->dbAdapter->query("SELECT RELEASE_LOCK(?)", [$lockName]);
-        }
-    }
-
-    /**
-     * Handle bill_paid for multimeios (2 cards) subscriptions
-     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
-     * Método mantido apenas para evitar erros de referência.
-     */
-    private function handleMultiMeiosSubscriptionFlow($bill, $data, $currentCycle, $originalOrder)
-    {
-        $this->logError('DEPRECATED: handleMultiMeiosSubscriptionFlow called. Multimeios is no longer supported for subscriptions.');
-        // Redirecionar para o fluxo padrão de single card
-        return $this->handleSingleCardSubscriptionFlow($bill, $data, $originalOrder);
-    }
-
-    /**
-     * Handle bill_paid for single card subscriptions (original logic)
-     */
-    private function handleSingleCardSubscriptionFlow($bill, $data, $originalOrder)
-    {
-        $vindiBillId = $originalOrder->getVindiBillId();
-        $billIds = array_map('trim', explode(',', $vindiBillId));
-        
-        $currentSplit = $this->paymentSplitFactory->create()
-            ->getCollection()
-            ->addFieldToFilter('bill_id', $bill['id'])
-            ->getFirstItem();
-        if ($currentSplit && $currentSplit->getId()) {
-            $currentSplit->setStatus('paid')->save();
-        }
-        
-        $splits = $this->paymentSplitFactory->create()
-            ->getCollection()
-            ->addFieldToFilter('bill_id', ['in' => $billIds]);
-        
-        $allPaid = true;
-        foreach ($splits as $split) {
-            if ($split->getStatus() !== 'paid') {
-                $allPaid = false;
-                break;
-            }
-        }
-        
-        if (!$allPaid) {
-            $this->logInfo('Not all payment splits for subscription order ' . $originalOrder->getIncrementId() . ' are paid yet.');
-            return true;
-        }
-        
-        $queueItem = $this->orderCreationQueueFactory->create();
-        $queueItem->setData([
-            'bill_data' => json_encode($data),
-            'status'    => 'pending',
-            'type'      => 'bill_paid'
-        ]);
-        $this->orderCreationQueueRepository->save($queueItem);
-        $this->logInfo('Created order creation queue item for subscription.');
-        
-        return true;
-    }
-
-    private function handleRegularOrderFlow($bill)
-    {
-        $order = null;
-        if (!empty($bill['code'])) {
-            $code = $bill['code'];
-            if (substr($code, -3) === '-01' || substr($code, -3) === '-02') {
-                $code = substr($code, 0, -3);
-            }
-            $search = $this->searchCriteriaBuilder->addFilter('increment_id', $code, 'eq')->create();
-            $items  = $this->orderRepository->getList($search)->getItems();
-            $order  = reset($items) ?: null;
-        }
-
-        if (!$order) {
-            $this->logError('Order not found for bill code: ' . $bill['code']);
-            return false;
-        }
-
-        $splits = $this->paymentSplitFactory->create()
-            ->getCollection()
-            ->addFieldToFilter('order_increment_id', $order->getIncrementId());
-
-        if ($splits->getSize() > 0) {
-            $current = $this->paymentSplitFactory->create()
-                ->getCollection()
-                ->addFieldToFilter('bill_id', $bill['id'])
-                ->getFirstItem();
-            if ($current->getId()) {
-                $current->setStatus('paid')->save();
-                $pi = $order->getPayment()->getAdditionalInformation();
-                if ($current->getPaymentMethod() === 'pix' || $current->getPaymentMethod() === 'pix_bank_slip') {
-                    $pi['qrcode_path'] = $pi['print_url'] = $pi['due_at'] = null;
-                    $order->getPayment()->setAdditionalInformation($pi)->save();
-                }
-            }
-            foreach ($splits as $split) {
-                if ($split->getStatus() !== 'paid') {
-                    $this->logInfo('Not all payment splits for order ' . $order->getIncrementId() . ' are paid yet.');
-                    return true;
-                }
-            }
-        }
-
-        return $this->createInvoice($order);
-    }
-
-    /**
-     * Get status of all bills for a specific subscription cycle
-     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
-     * Método mantido apenas para evitar erros de referência.
-     */
-    private function getCycleBillsStatus($subscriptionId, $cycle)
-    {
-        $this->logError('DEPRECATED: getCycleBillsStatus called. This method is no longer used as multimeios is not supported for subscriptions.');
-        
-        // Retornar estrutura mínima para evitar erros
-        return [
-            'total_bills' => 1,
-            'paid_bills' => 1,
-            'failed_bills' => 0,
-            'pending_bills' => 0
-        ];
-    }
-
-    /**
-     * Update or create payment split for renewal bills
-     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
-     * Método mantido apenas para evitar erros de referência.
-     */
-    private function updatePaymentSplitForRenewal($billId, $status, $subscriptionId, $cycle, $originalOrder)
-    {
-        $this->logError('DEPRECATED: updatePaymentSplitForRenewal called. This method is no longer used as multimeios is not supported for subscriptions.');
-        
-        // Implementação mínima para evitar erros críticos
-        // Atualizar apenas o split existente se existir
-        $existingSplit = $this->paymentSplitFactory->create()
-            ->getCollection()
-            ->addFieldToFilter('bill_id', $billId)
-            ->getFirstItem();
-        
-        if ($existingSplit->getId()) {
-            $existingSplit->setStatus($status);
-            $existingSplit->save();
-            $this->logInfo('Updated existing payment split for bill ' . $billId);
         }
     }
 
@@ -296,5 +161,81 @@ class BillPaid
         } else {
             error_log('[VINDI ERROR] ' . $message);
         }
+    }
+
+    private function handleRegularOrderFlow($bill)
+    {
+        $order = $this->getOrderFromBill($bill);
+        if (!$order) {
+            $this->logError('Order not found for bill code: ' . $bill['code']);
+            return false;
+        }
+
+        // Buscar todos os splits do pedido
+        $splits = $this->paymentSplitFactory->create()
+            ->getCollection()
+            ->addFieldToFilter('order_increment_id', $order->getIncrementId());
+
+        // Se NÃO há splits, é um pagamento simples - pode criar invoice
+        if ($splits->getSize() === 0) {
+            $this->logInfo('Single payment method detected for order: ' . $order->getIncrementId());
+            return $this->createInvoice($order);
+        }
+
+        // Se HÁ splits, é multimeios - precisa verificar se todos foram pagos
+        $currentSplit = $splits->getItemByColumnValue('bill_id', $bill['id']);
+        if ($currentSplit && $currentSplit->getId()) {
+            $currentSplit->setStatus('paid')->save();
+            
+            // Limpar QR Code/PIX data se necessário
+            if (in_array($currentSplit->getPaymentMethod(), ['pix', 'pix_bank_slip'])) {
+                $this->clearPixData($order);
+            }
+        }
+
+        // Verificar se todos splits estão pagos
+        $allPaid = $this->areAllSplitsPaid($splits);
+        
+        if (!$allPaid) {
+            $this->logInfo('Not all payment splits are paid for order: ' . $order->getIncrementId());
+            return true; // Aguardar outros pagamentos
+        }
+
+        $this->logInfo('All payment splits paid for order: ' . $order->getIncrementId());
+        return $this->createInvoice($order);
+    }
+
+    private function getOrderFromBill($bill)
+    {
+        if (empty($bill['code'])) {
+            return null;
+        }
+
+        $code = $bill['code'];
+        // Remove suffix -01, -02 para multimeios
+        if (substr($code, -3) === '-01' || substr($code, -3) === '-02') {
+            $code = substr($code, 0, -3);
+        }
+
+        $search = $this->searchCriteriaBuilder->addFilter('increment_id', $code, 'eq')->create();
+        $items  = $this->orderRepository->getList($search)->getItems();
+        return reset($items) ?: null;
+    }
+
+    private function areAllSplitsPaid($splits)
+    {
+        foreach ($splits as $split) {
+            if ($split->getStatus() !== 'paid') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function clearPixData($order)
+    {
+        $pi = $order->getPayment()->getAdditionalInformation();
+        $pi['qrcode_path'] = $pi['print_url'] = $pi['due_at'] = null;
+        $order->getPayment()->setAdditionalInformation($pi)->save();
     }
 }

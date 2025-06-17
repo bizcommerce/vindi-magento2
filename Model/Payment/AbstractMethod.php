@@ -1193,11 +1193,11 @@ abstract class AbstractMethod extends OriginAbstractMethod
             $cvv = $payment->getAdditionalInformation('cc_cvv2');
             $owner = $payment->getAdditionalInformation('cc_owner2');
         } else {
-            $number = $payment->getAdditionalInformation('cc_number') ?: $payment->getCcNumber();
-            $month = $payment->getAdditionalInformation('cc_exp_month') ?: $payment->getCcExpMonth();
-            $year = $payment->getAdditionalInformation('cc_exp_year') ?: $payment->getCcExpYear();
-            $cvv = $payment->getAdditionalInformation('cc_cvv') ?: $payment->getCcCid();
-            $owner = $payment->getAdditionalInformation('cc_owner') ?: $payment->getCcOwner();
+            $number = $payment->getAdditionalInformation('cc_number1') ?: $payment->getAdditionalInformation('cc_number') ?: $payment->getCcNumber();
+            $month = $payment->getAdditionalInformation('cc_exp_month1') ?: $payment->getAdditionalInformation('cc_exp_month') ?: $payment->getCcExpMonth();
+            $year = $payment->getAdditionalInformation('cc_exp_year1') ?: $payment->getAdditionalInformation('cc_exp_year') ?: $payment->getCcExpYear();
+            $cvv = $payment->getAdditionalInformation('cc_cvv1') ?: $payment->getAdditionalInformation('cc_cvv') ?: $payment->getCcCid();
+            $owner = $payment->getAdditionalInformation('cc_owner1') ?: $payment->getAdditionalInformation('cc_owner') ?: $payment->getCcOwner();
         }
 
         // Verificar se todos os campos obrigatórios estão preenchidos

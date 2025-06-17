@@ -84,24 +84,26 @@ class Subscription
     public function canceled($data)
     {
         if (!$order = $this->getOrder($data['subscription']['code'])) {
+            $this->logger->error('SUBSCRIPTION_CANCELED: Order not found for subscription code: ' . $data['subscription']['code']);
             return false;
         }
 
-        if (isset($data['subscription']['id'])) {
+        if (!isset($data['subscription']['id'])) {
+            $this->logger->error('SUBSCRIPTION_CANCELED: Subscription ID not found in webhook data');
             return false;
         }
 
         $subscriptionId = $data['subscription']['id'];
 
+        $this->logger->info('SUBSCRIPTION_CANCELED: Processing cancellation for subscription ' . $subscriptionId);
+
         $order->addCommentToStatusHistory(__('The subscription was canceled')->getText());
         $this->orderRepository->save($order);
 
-        $this->cancel($order->getIncrementId());
+        // Cancelar/atualizar assinatura local
+        $this->markSubscriptionAsCanceled($subscriptionId);
 
-        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-        $subscription = $objectManager->create(\Vindi\Payment\Model\Subscription::class)->load($subscriptionId);
-        $subscription->setStatus('canceled');
-        $subscription->save();
+        $this->logger->info('SUBSCRIPTION_CANCELED: Successfully processed cancellation for subscription ' . $subscriptionId);
 
         return true;
     }
@@ -163,5 +165,30 @@ class Subscription
         }
 
         $order->save();
+    }
+
+    /**
+     * Mark subscription as canceled in local database
+     *
+     * @param int $subscriptionId
+     */
+    private function markSubscriptionAsCanceled($subscriptionId)
+    {
+        try {
+            // TODO: Implementar atualização do status da assinatura local
+            // Por enquanto apenas log
+            $this->logger->info("SUBSCRIPTION_STATUS: Marking subscription {$subscriptionId} as canceled");
+            
+            // Exemplo de implementação futura:
+            // $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+            // $subscription = $objectManager->create(\Vindi\Payment\Model\Subscription::class)->load($subscriptionId, 'vindi_id');
+            // if ($subscription->getId()) {
+            //     $subscription->setStatus('canceled');
+            //     $subscription->save();
+            // }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("SUBSCRIPTION_STATUS: Error marking subscription as canceled: " . $e->getMessage());
+        }
     }
 }

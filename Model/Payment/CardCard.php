@@ -84,6 +84,10 @@ class CardCard extends AbstractMethod
         if (!is_object($additionalData)) {
             $additionalData = new DataObject($additionalData ?: []);
         }
+        
+        // Debug log all additional data received
+        $this->psrLogger->info('VINDI_CARDCARD assignData: ' . json_encode($additionalData->getData()));
+        
         $info = $this->getInfoInstance();
 
         // Ensure additional_information is array
@@ -96,8 +100,12 @@ class CardCard extends AbstractMethod
         if ($additionalData->getData('payment_profile')) {
             $profileId = $additionalData->getData('payment_profile');
             
-            // For saved payment profiles, use default values
-            $additionalInfo['cc_type'] = 'VI'; // Default type
+            // Get real card type from saved profile or use type from frontend
+            $ccType1 = $additionalData->getData('cc_type1') ?: $this->getCardTypeFromProfile($profileId);
+            
+            $this->psrLogger->info('VINDI_CARDCARD: First card - Profile ID: ' . $profileId . ', cc_type1 from frontend: ' . ($additionalData->getData('cc_type1') ?: 'EMPTY') . ', final ccType1: ' . $ccType1);
+            
+            $additionalInfo['cc_type'] = (string) $this->getCardTypeCode($ccType1);
             $additionalInfo['cc_owner'] = 'Card Owner'; // Default owner  
             $additionalInfo['cc_last_4'] = '****'; // Default last 4
             $additionalInfo['cc_installments'] = (string) $additionalData->getData('cc_installments1');
@@ -124,8 +132,12 @@ class CardCard extends AbstractMethod
         if ($additionalData->getData('payment_profile2')) {
             $profileId2 = $additionalData->getData('payment_profile2');
             
-            // For saved payment profiles, use default values
-            $additionalInfo['cc_type2'] = 'VI'; // Default type
+            // Get real card type from saved profile or use type from frontend
+            $ccType2 = $additionalData->getData('cc_type2') ?: $this->getCardTypeFromProfile($profileId2);
+            
+            $this->psrLogger->info('VINDI_CARDCARD: Second card - Profile ID: ' . $profileId2 . ', cc_type2 from frontend: ' . ($additionalData->getData('cc_type2') ?: 'EMPTY') . ', final ccType2: ' . $ccType2);
+            
+            $additionalInfo['cc_type2'] = (string) $this->getCardTypeCode($ccType2);
             $additionalInfo['cc_owner2'] = 'Card Owner'; // Default owner
             $additionalInfo['cc_last_4_2'] = '****'; // Default last 4
             $additionalInfo['cc_installments2'] = (string) $additionalData->getData('cc_installments2');
@@ -164,6 +176,31 @@ class CardCard extends AbstractMethod
             }
         }
         return $ccType;
+    }
+
+    /**
+     * Get card type from payment profile
+     *
+     * @param int $profileId
+     * @return string
+     */
+    private function getCardTypeFromProfile($profileId)
+    {
+        if (!$profileId) {
+            return 'VI'; // Default fallback
+        }
+
+        try {
+            // Use the payment profile repository to get the profile
+            $paymentProfile = $this->paymentProfileRepository->getById($profileId);
+            if ($paymentProfile && $paymentProfile->getCcType()) {
+                return $paymentProfile->getCcType();
+            }
+        } catch (\Exception $e) {
+            $this->psrLogger->error('VINDI_CARDCARD: Error getting card type from profile: ' . $e->getMessage());
+        }
+
+        return 'VI'; // Default fallback
     }
 
     /**

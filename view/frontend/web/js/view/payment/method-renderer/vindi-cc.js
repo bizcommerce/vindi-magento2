@@ -140,6 +140,13 @@ define([
 
             this.checkPlanInstallments();
 
+            // Add listener for payment profile selection to set card type automatically
+            this.selectedPaymentProfile.subscribe(function (profileId) {
+                if (profileId) {
+                    self.setCardTypeFromProfile(profileId);
+                }
+            });
+
             return this;
         },
 
@@ -337,6 +344,22 @@ define([
         },
         getFormattedPrice: function (price) {
             return priceUtils.formatPrice(price, quote.getPriceFormat());
+        },
+
+        /**
+         * Set card type based on selected payment profile
+         * @param {String} profileId
+         */
+        setCardTypeFromProfile: function (profileId) {
+            const savedCards = window.checkoutConfig.payment?.vindi?.saved_cards;
+            
+            if (savedCards && profileId) {
+                const selectedCard = savedCards.find(card => card.id == profileId);
+                if (selectedCard && selectedCard.card_type) {
+                    this.selectedCardType(selectedCard.card_type);
+                    this.creditCardType(selectedCard.card_type);
+                }
+            }
         },
 
         getPaymentProfiles: function () {

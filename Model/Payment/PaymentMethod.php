@@ -66,15 +66,19 @@ class PaymentMethod
      */
     public function getCreditCardApiCode(string $ccType): string
     {
+        error_log('VINDI_PAYMENT_METHOD_DEBUG: getCreditCardApiCode called with: ' . $ccType);
+        
         $methods = $this->get();
         if ($methods) {
             foreach ($methods['credit_card'] as $type) {
                 if (isset($this->methodsCodes[$type['code']]) && $ccType == $this->methodsCodes[$type['code']]) {
+                    error_log('VINDI_PAYMENT_METHOD_DEBUG: Found mapping: ' . $ccType . ' -> ' . $type['code']);
                     return $type['code'];
                 }
             }
         }
 
+        error_log('VINDI_PAYMENT_METHOD_DEBUG: No mapping found, returning original: ' . $ccType);
         return $ccType;
     }
 

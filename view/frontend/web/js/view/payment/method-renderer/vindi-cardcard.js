@@ -105,11 +105,20 @@ define([
             this.creditCardExpYear2(ccExpYear2);
             this.creditCardExpMonth2(ccExpMonth2);
 
-            return {
+            // Debug logs for card types
+            console.log('=== VINDI_CARDCARD getData() DEBUG ===');
+            console.log('selectedCardType():', this.selectedCardType());
+            console.log('selectedCardType2():', this.selectedCardType2());
+            console.log('creditCardType():', this.creditCardType());
+            console.log('creditCardType2():', this.creditCardType2());
+            console.log('selectedPaymentProfile():', this.selectedPaymentProfile());
+            console.log('selectedPaymentProfile2():', this.selectedPaymentProfile2());
+
+            var paymentData = {
                 'method': this.getCode(),
                 'additional_data': {
                     'payment_profile': this.selectedPaymentProfile(),
-                    'cc_type1': this.selectedCardType(),
+                    'cc_type1': this.creditCardType(),
                     'cc_exp_year1': (ccExpYear && ccExpYear.length === 4 ? ccExpYear : (ccExpYear ? '20' + ccExpYear : '')),
                     'cc_exp_month1': ccExpMonth,
                     'cc_number1': this.creditCardNumber(),
@@ -118,7 +127,7 @@ define([
                     'cc_installments1': this.selectedInstallments() ? this.selectedInstallments() : 1,
 
                     'payment_profile2': this.selectedPaymentProfile2(),
-                    'cc_type2': this.selectedCardType2(),
+                    'cc_type2': this.creditCardType2(),
                     'cc_exp_year2': (ccExpYear2 && ccExpYear2.length === 4 ? ccExpYear2 : (ccExpYear2 ? '20' + ccExpYear2 : '')),
                     'cc_exp_month2': ccExpMonth2,
                     'cc_number2': this.creditCardNumber2(),
@@ -131,6 +140,11 @@ define([
                     'amount_second_card': this.secondCardAmountDisplay()
                 }
             };
+
+            console.log('Final payment data being sent:', paymentData);
+            console.log('=== END VINDI_CARDCARD getData() DEBUG ===');
+
+            return paymentData;
         },
 
         /**
@@ -315,6 +329,41 @@ define([
 
             this.checkPlanInstallments();
 
+            // Add listeners for payment profile selection to set card type automatically
+            this.selectedPaymentProfile.subscribe(function (profileId) {
+                console.log('=== FIRST CARD PROFILE CHANGED ===');
+                console.log('First card payment profile changed to:', profileId);
+                console.log('Current selectedCardType():', self.selectedCardType());
+                console.log('Current creditCardType():', self.creditCardType());
+                if (profileId) {
+                    self.setCardTypeFromProfile(profileId, 1);
+                } else {
+                    console.log('Profile cleared, resetting card type');
+                    self.selectedCardType(null);
+                    self.creditCardType('');
+                }
+                console.log('After change - selectedCardType():', self.selectedCardType());
+                console.log('After change - creditCardType():', self.creditCardType());
+                console.log('=== END FIRST CARD PROFILE CHANGED ===');
+            });
+
+            this.selectedPaymentProfile2.subscribe(function (profileId) {
+                console.log('=== SECOND CARD PROFILE CHANGED ===');
+                console.log('Second card payment profile changed to:', profileId);
+                console.log('Current selectedCardType2():', self.selectedCardType2());
+                console.log('Current creditCardType2():', self.creditCardType2());
+                if (profileId) {
+                    self.setCardTypeFromProfile(profileId, 2);
+                } else {
+                    console.log('Profile cleared, resetting card type');
+                    self.selectedCardType2(null);
+                    self.creditCardType2('');
+                }
+                console.log('After change - selectedCardType2():', self.selectedCardType2());
+                console.log('After change - creditCardType2():', self.creditCardType2());
+                console.log('=== END SECOND CARD PROFILE CHANGED ===');
+            });
+
             return this;
         },
 
@@ -421,9 +470,10 @@ define([
          * @return {Object|Boolean}
          */
         getIcons: function (type) {
-            return window.checkoutConfig.payment.vindi?.icons?.hasOwnProperty(type)
-                ? window.checkoutConfig.payment.vindi.icons[type]
-                : false;
+            // Try to get icons from vindi_cardcard config first, then fallback to vindi
+            const icons = window.checkoutConfig.payment?.vindi_cardcard?.icons || 
+                         window.checkoutConfig.payment?.vindi?.icons;
+            return icons?.hasOwnProperty(type) ? icons[type] : false;
         },
 
         /**
@@ -469,7 +519,8 @@ define([
          * @return {Object}
          */
         getCcAvailableTypes: function () {
-            return window.checkoutConfig.payment.vindi.availableTypes;
+            return window.checkoutConfig.payment?.vindi_cardcard?.availableTypes || 
+                   window.checkoutConfig.payment?.vindi?.availableTypes;
         },
 
         /**
@@ -477,7 +528,8 @@ define([
          * @return {Object}
          */
         getCcMonths: function () {
-            return window.checkoutConfig.payment.vindi.months['vindi'];
+            return window.checkoutConfig.payment?.vindi_cardcard?.months?.[this.getCode()] || 
+                   window.checkoutConfig.payment?.vindi?.months?.['vindi'];
         },
 
         /**
@@ -485,7 +537,8 @@ define([
          * @return {Object}
          */
         getCcYears: function () {
-            return window.checkoutConfig.payment.vindi.years['vindi'];
+            return window.checkoutConfig.payment?.vindi_cardcard?.years?.[this.getCode()] || 
+                   window.checkoutConfig.payment?.vindi?.years?.['vindi'];
         },
 
         /**
@@ -493,7 +546,8 @@ define([
          * @return {Boolean}
          */
         hasVerification: function () {
-            return window.checkoutConfig.payment.vindi.hasVerification['vindi'];
+            return window.checkoutConfig.payment?.vindi_cardcard?.hasVerification?.[this.getCode()] || 
+                   window.checkoutConfig.payment?.vindi?.hasVerification?.['vindi'];
         },
 
         /**
@@ -514,7 +568,10 @@ define([
          * @return {Boolean}
          */
         installmentsAllowed: function () {
-            let isAllowed = parseInt(window.checkoutConfig.payment.vindi.isInstallmentsAllowedInStore);
+            let isAllowed = parseInt(
+                window.checkoutConfig.payment?.vindi_cardcard?.isInstallmentsAllowedInStore || 
+                window.checkoutConfig.payment?.vindi?.isInstallmentsAllowedInStore
+            );
             return isAllowed !== 0;
         },
 
@@ -526,7 +583,8 @@ define([
             self.isInstallmentsDisabled(true);
             let installments = [];
             let creditValue = parseFloat(self.creditAmountDisplay() || 0);
-            let ccCheckoutConfig = window.checkoutConfig.payment.vindi;
+            let ccCheckoutConfig = window.checkoutConfig.payment?.vindi_cardcard || 
+                                  window.checkoutConfig.payment?.vindi;
             if (ccCheckoutConfig) {
                 let maxInstallmentsNumber = maxInstallments || ccCheckoutConfig.maxInstallments;
                 let minInstallmentsValue = ccCheckoutConfig.minInstallmentsValue;
@@ -562,7 +620,8 @@ define([
             self.isInstallmentsDisabled2(true);
             let installments = [];
             let secondCardValue = parseFloat(self.secondCardAmountDisplay() || 0);
-            let ccCheckoutConfig = window.checkoutConfig.payment.vindi;
+            let ccCheckoutConfig = window.checkoutConfig.payment?.vindi_cardcard || 
+                                  window.checkoutConfig.payment?.vindi;
             if (ccCheckoutConfig) {
                 let maxInstallmentsNumber = maxInstallments || ccCheckoutConfig.maxInstallments;
                 let minInstallmentsValue = ccCheckoutConfig.minInstallmentsValue;
@@ -600,20 +659,68 @@ define([
         },
 
         /**
+         * Set card type based on selected payment profile
+         * @param {String} profileId
+         * @param {Number} cardNumber - 1 for first card, 2 for second card
+         */
+        setCardTypeFromProfile: function (profileId, cardNumber) {
+            console.log('setCardTypeFromProfile called with profileId:', profileId, 'cardNumber:', cardNumber);
+            
+            const savedCards = window.checkoutConfig.payment?.vindi_cardcard?.saved_cards || 
+                              window.checkoutConfig.payment?.vindi?.saved_cards;
+            
+            console.log('Available saved cards:', savedCards);
+            
+            if (savedCards && profileId) {
+                const selectedCard = savedCards.find(card => card.id == profileId);
+                console.log('Selected card found:', selectedCard);
+                
+                if (selectedCard && selectedCard.card_type) {
+                    console.log('Setting card type:', selectedCard.card_type, 'for card number:', cardNumber);
+                    
+                    if (cardNumber === 1) {
+                        this.selectedCardType(selectedCard.card_type);
+                        this.creditCardType(selectedCard.card_type);
+                        console.log('First card type set to:', selectedCard.card_type);
+                    } else if (cardNumber === 2) {
+                        this.selectedCardType2(selectedCard.card_type);
+                        this.creditCardType2(selectedCard.card_type);
+                        console.log('Second card type set to:', selectedCard.card_type);
+                    }
+                } else {
+                    console.warn('Selected card not found or missing card_type');
+                }
+            } else {
+                console.warn('No saved cards available or profileId is empty');
+            }
+        },
+
+        /**
          * Return payment profiles
          * @return {Array}
          */
         getPaymentProfiles: function () {
             let paymentProfiles = [];
-            const savedCards = window.checkoutConfig.payment?.vindi?.saved_cards;
+            // Try to get saved cards from vindi_cardcard config first, then fallback to vindi
+            const savedCards = window.checkoutConfig.payment?.vindi_cardcard?.saved_cards || 
+                              window.checkoutConfig.payment?.vindi?.saved_cards;
+            
+            console.log('getPaymentProfiles - window.checkoutConfig.payment:', window.checkoutConfig?.payment);
+            console.log('getPaymentProfiles - vindi_cardcard.saved_cards:', window.checkoutConfig.payment?.vindi_cardcard?.saved_cards);
+            console.log('getPaymentProfiles - vindi.saved_cards:', window.checkoutConfig.payment?.vindi?.saved_cards);
+            console.log('getPaymentProfiles - final savedCards:', savedCards);
+            
             if (savedCards) {
                 savedCards.forEach(function (card) {
+                    console.log('Processing saved card:', card);
                     paymentProfiles.push({
                         'value': card.id,
                         'text': card.card_type.toUpperCase() + ' xxxx-' + card.card_number
                     });
                 });
             }
+            
+            console.log('getPaymentProfiles - final paymentProfiles:', paymentProfiles);
             return paymentProfiles;
         },
 

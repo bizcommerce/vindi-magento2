@@ -240,6 +240,13 @@ define([
 
             this.checkPlanInstallments();
 
+            // Add listener for payment profile selection to set card type automatically
+            this.selectedPaymentProfile.subscribe(function (profileId) {
+                if (profileId) {
+                    self.setCardTypeFromProfile(profileId);
+                }
+            });
+
             return this;
         },
 
@@ -376,9 +383,10 @@ define([
          * @return {Object|Boolean}
          */
         getIcons: function (type) {
-            return window.checkoutConfig.payment.vindi?.icons?.hasOwnProperty(type)
-                ? window.checkoutConfig.payment.vindi.icons[type]
-                : false;
+            // Try to get icons from vindi_cardpix config first, then fallback to vindi
+            const icons = window.checkoutConfig.payment?.vindi_cardpix?.icons || 
+                         window.checkoutConfig.payment?.vindi?.icons;
+            return icons?.hasOwnProperty(type) ? icons[type] : false;
         },
 
         /**
@@ -557,13 +565,32 @@ define([
         },
 
         /**
+         * Set card type based on selected payment profile
+         * @param {String} profileId
+         */
+        setCardTypeFromProfile: function (profileId) {
+            const savedCards = window.checkoutConfig.payment?.vindi_cardpix?.saved_cards || 
+                              window.checkoutConfig.payment?.vindi?.saved_cards;
+            
+            if (savedCards && profileId) {
+                const selectedCard = savedCards.find(card => card.id == profileId);
+                if (selectedCard && selectedCard.card_type) {
+                    this.selectedCardType(selectedCard.card_type);
+                    this.creditCardType(selectedCard.card_type);
+                }
+            }
+        },
+
+        /**
          * Get saved payment profiles
          *
          * @return {Array}
          */
         getPaymentProfiles: function () {
             let paymentProfiles = [];
-            const savedCards = window.checkoutConfig.payment?.vindi?.saved_cards;
+            // Try to get saved cards from vindi_cardpix config first, then fallback to vindi
+            const savedCards = window.checkoutConfig.payment?.vindi_cardpix?.saved_cards || 
+                              window.checkoutConfig.payment?.vindi?.saved_cards;
 
             if (savedCards) {
                 savedCards.forEach(function (card) {

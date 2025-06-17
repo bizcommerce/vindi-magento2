@@ -269,4 +269,67 @@ class PaymentSplit extends AbstractModel implements PaymentSplitInterface
     {
         return $this->setData(self::CYCLE, $cycle);
     }
+
+    /**
+     * Get is refunded flag.
+     *
+     * @return mixed
+     */
+    public function getIsRefunded()
+    {
+        return $this->getData(self::IS_REFUNDED);
+    }
+
+    /**
+     * Set is refunded flag.
+     *
+     * @param mixed $isRefunded
+     * @return $this
+     */
+    public function setIsRefunded($isRefunded)
+    {
+        return $this->setData(self::IS_REFUNDED, $isRefunded);
+    }
+
+    /**
+     * Get refund amount.
+     *
+     * @return mixed
+     */
+    public function getRefundAmount()
+    {
+        return $this->getData(self::REFUND_AMOUNT);
+    }
+
+    /**
+     * Set refund amount.
+     *
+     * @param mixed $refundAmount
+     * @return $this
+     */
+    public function setRefundAmount($refundAmount)
+    {
+        return $this->setData(self::REFUND_AMOUNT, $refundAmount);
+    }
+
+    /**
+     * Get refund date.
+     *
+     * @return mixed
+     */
+    public function getRefundDate()
+    {
+        return $this->getData(self::REFUND_DATE);
+    }
+
+    /**
+     * Set refund date.
+     *
+     * @param mixed $refundDate
+     * @return $this
+     */
+    public function setRefundDate($refundDate)
+    {
+        return $this->setData(self::REFUND_DATE, $refundDate);
+    }
 }

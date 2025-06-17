@@ -144,6 +144,10 @@ class CardBankslipPix extends AbstractMethod
         if (!is_object($additionalData)) {
             $additionalData = new DataObject($additionalData ?: []);
         }
+        
+        // Debug log all additional data received
+        $this->psrLogger->info('VINDI_CARDBANKSLIPPIX assignData: ' . json_encode($additionalData->getData()));
+        
         $info = $this->getInfoInstance();
 
         // Ensure additional_information is array
@@ -155,11 +159,14 @@ class CardBankslipPix extends AbstractMethod
         if ($additionalData->getData("payment_profile")) {
             $profileId = $additionalData->getData("payment_profile");
             
-            // For saved payment profiles, we need to get the card info from the database
-            // or use default values since the API doesn't return sensitive card data
-            $additionalInfo['cc_type'] = 'VI'; // Default type, can be improved
-            $additionalInfo['cc_owner'] = 'Card Owner'; // Default owner, can be improved  
-            $additionalInfo['cc_last_4'] = '****'; // Default last 4, can be improved
+            // Get real card type from saved profile or use type from frontend
+            $ccType = $additionalData->getData('cc_type') ?: $this->getCardTypeFromProfile($profileId);
+            
+            $this->psrLogger->info('VINDI_CARDBANKSLIPPIX: Profile ID: ' . $profileId . ', cc_type from frontend: ' . ($additionalData->getData('cc_type') ?: 'EMPTY') . ', final ccType: ' . $ccType);
+            
+            $additionalInfo['cc_type'] = (string) $this->getCardTypeCode($ccType);
+            $additionalInfo['cc_owner'] = 'Card Owner'; // Default owner  
+            $additionalInfo['cc_last_4'] = '****'; // Default last 4
             $additionalInfo['cc_installments'] = (string) $additionalData->getData("cc_installments");
         } else {
             $ccType  = $additionalData->getData("cc_type");
@@ -204,6 +211,31 @@ class CardBankslipPix extends AbstractMethod
             }
         }
         return $ccType;
+    }
+
+    /**
+     * Get card type from payment profile
+     *
+     * @param int $profileId
+     * @return string
+     */
+    private function getCardTypeFromProfile($profileId)
+    {
+        if (!$profileId) {
+            return 'VI'; // Default fallback
+        }
+
+        try {
+            // Use the payment profile repository to get the profile
+            $paymentProfile = $this->paymentProfileRepository->getById($profileId);
+            if ($paymentProfile && $paymentProfile->getCcType()) {
+                return $paymentProfile->getCcType();
+            }
+        } catch (\Exception $e) {
+            $this->psrLogger->error('VINDI_CARDBANKSLIPPIX: Error getting card type from profile: ' . $e->getMessage());
+        }
+
+        return 'VI'; // Default fallback
     }
 
     /**

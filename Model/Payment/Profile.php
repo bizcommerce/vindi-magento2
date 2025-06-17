@@ -92,27 +92,37 @@ class Profile
 
         $holder  = $whichCard === 'second'
             ? ($payment->getAdditionalInformation('cc_owner2')      ?: $payment->getCcOwner())
-            : ($payment->getAdditionalInformation('cc_owner')       ?: $payment->getCcOwner());
+            : ($payment->getAdditionalInformation('cc_owner1')      ?: $payment->getAdditionalInformation('cc_owner') ?: $payment->getCcOwner());
 
         $month   = $whichCard === 'second'
             ? ($payment->getAdditionalInformation('cc_exp_month2')  ?: $payment->getCcExpMonth())
-            : ($payment->getAdditionalInformation('cc_exp_month')   ?: $payment->getCcExpMonth());
+            : ($payment->getAdditionalInformation('cc_exp_month1')  ?: $payment->getAdditionalInformation('cc_exp_month') ?: $payment->getCcExpMonth());
 
         $year    = $whichCard === 'second'
             ? ($payment->getAdditionalInformation('cc_exp_year2')   ?: $payment->getCcExpYear())
-            : ($payment->getAdditionalInformation('cc_exp_year')    ?: $payment->getCcExpYear());
+            : ($payment->getAdditionalInformation('cc_exp_year1')   ?: $payment->getAdditionalInformation('cc_exp_year') ?: $payment->getCcExpYear());
 
         $number  = $whichCard === 'second'
             ? ($payment->getAdditionalInformation('cc_number2')     ?: $payment->getCcNumber())
-            : ($payment->getAdditionalInformation('cc_number')      ?: $payment->getCcNumber());
+            : ($payment->getAdditionalInformation('cc_number1')     ?: $payment->getAdditionalInformation('cc_number') ?: $payment->getCcNumber());
 
         $cvv     = $whichCard === 'second'
             ? ($payment->getAdditionalInformation('cc_cvv2')        ?: $payment->getCcCid())
-            : ($payment->getAdditionalInformation('cc_cvv')         ?: $payment->getCcCid());
+            : ($payment->getAdditionalInformation('cc_cvv1')        ?: $payment->getAdditionalInformation('cc_cvv') ?: $payment->getCcCid());
 
         $ccType  = $whichCard === 'second'
             ? ($payment->getAdditionalInformation('cc_type2')       ?: $payment->getCcType())
-            : ($payment->getAdditionalInformation('cc_type')        ?: $payment->getCcType());
+            : ($payment->getAdditionalInformation('cc_type1')       ?: $payment->getAdditionalInformation('cc_type') ?: $payment->getCcType());
+
+        // Log debug para verificar se o ccType está sendo capturado
+        error_log('VINDI_PROFILE_DEBUG: Building credit card data for ' . $whichCard . ' card');
+        error_log('VINDI_PROFILE_DEBUG: cc_type found: ' . ($ccType ?: 'EMPTY'));
+        error_log('VINDI_PROFILE_DEBUG: Available payment data: ' . json_encode([
+            'cc_type1' => $payment->getAdditionalInformation('cc_type1'),
+            'cc_type2' => $payment->getAdditionalInformation('cc_type2'),
+            'cc_type' => $payment->getAdditionalInformation('cc_type'),
+            'getCcType' => $payment->getCcType()
+        ]));
 
         if (empty($holder)) {
             throw new LocalizedException(__('holder_name cannot be blank'));
@@ -124,6 +134,10 @@ class Profile
         }
 
         $ccTypeCode = $this->paymentMethod->getCreditCardApiCode($ccType);
+
+        // Log debug para verificar o mapeamento do ccType
+        error_log('VINDI_PROFILE_DEBUG: Original ccType: ' . ($ccType ?: 'EMPTY'));
+        error_log('VINDI_PROFILE_DEBUG: Mapped ccTypeCode: ' . ($ccTypeCode ?: 'EMPTY'));
 
         return [
             'holder_name'          => $holder,

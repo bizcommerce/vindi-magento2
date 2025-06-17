@@ -16,6 +16,9 @@ interface PaymentSplitInterface
     const BILL_ID = 'bill_id';
     const SUBSCRIPTION_ID = 'subscription_id';
     const CYCLE = 'cycle';
+    const IS_REFUNDED = 'is_refunded';
+    const REFUND_AMOUNT = 'refund_amount';
+    const REFUND_DATE = 'refund_date';
 
     /**
      * Get entity ID.
@@ -196,4 +199,49 @@ interface PaymentSplitInterface
      * @return $this
      */
     public function setCycle($cycle);
+
+    /**
+     * Get is refunded flag.
+     *
+     * @return mixed
+     */
+    public function getIsRefunded();
+
+    /**
+     * Set is refunded flag.
+     *
+     * @param mixed $isRefunded
+     * @return $this
+     */
+    public function setIsRefunded($isRefunded);
+
+    /**
+     * Get refund amount.
+     *
+     * @return mixed
+     */
+    public function getRefundAmount();
+
+    /**
+     * Set refund amount.
+     *
+     * @param mixed $refundAmount
+     * @return $this
+     */
+    public function setRefundAmount($refundAmount);
+
+    /**
+     * Get refund date.
+     *
+     * @return mixed
+     */
+    public function getRefundDate();
+
+    /**
+     * Set refund date.
+     *
+     * @param mixed $refundDate
+     * @return $this
+     */
+    public function setRefundDate($refundDate);
 }

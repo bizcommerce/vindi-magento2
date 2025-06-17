@@ -3,6 +3,7 @@ namespace Vindi\Payment\Model\CardCard;
 
 use Magento\Checkout\Model\ConfigProviderInterface;
 use Magento\Customer\Model\Session as CustomerSession;
+use Magento\Framework\View\Asset\Source;
 use Magento\Payment\Helper\Data as PaymentHelper;
 use Magento\Payment\Model\CcConfig;
 use Magento\Payment\Model\CcGenericConfigProvider;
@@ -61,10 +62,21 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
     protected $creditCardTypeSource;
 
     /**
+     * @var Source
+     */
+    protected $assetSource;
+
+    /**
+     * @var array
+     */
+    protected $icons = [];
+
+    /**
      * ConfigProvider constructor.
      *
      * @param CcConfig $ccConfig
      * @param PaymentHelper $paymentHelper
+     * @param Source $assetSource
      * @param Data $data
      * @param CustomerSession $customerSession
      * @param PaymentMethod $paymentMethod
@@ -74,6 +86,7 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
     public function __construct(
         CcConfig $ccConfig,
         PaymentHelper $paymentHelper,
+        Source $assetSource,
         Data $data,
         CustomerSession $customerSession,
         PaymentMethod $paymentMethod,
@@ -83,6 +96,7 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
         parent::__construct($ccConfig, $paymentHelper, [self::CODE]);
         $this->ccConfig = $ccConfig;
         $this->paymentHelper = $paymentHelper;
+        $this->assetSource = $assetSource;
         $this->helperData = $data;
         $this->customerSession = $customerSession;
         $this->paymentMethod = $paymentMethod;
@@ -115,6 +129,7 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
                     'minInstallmentsValue' => (int) $this->helperData->getMinInstallmentsValue(),
                     'saved_cards' => $this->getPaymentProfiles(),
                     'credit_card_images' => $this->getCreditCardImages(),
+                    'icons' => $this->getIcons(),
                     'double_card_enabled' => true,
                     'enabledDocument' => true,
                     'customer_taxvat' => $customerTaxvat
@@ -163,5 +178,39 @@ class ConfigProvider extends CcGenericConfigProvider implements ConfigProviderIn
             ];
         }
         return $ccImages;
+    }
+
+    /**
+     * Get icons for available payment methods
+     *
+     * @return array
+     */
+    public function getIcons()
+    {
+        if (!empty($this->icons)) {
+            return $this->icons;
+        }
+
+        $types = $this->getCreditCardImages();
+        foreach ($types as $type) {
+            $code = $type['code'];
+            $label = $type['label'];
+
+            if (!array_key_exists($code, $this->icons)) {
+                $asset = $this->ccConfig->createAsset('Vindi_Payment::images/cc/' . strtolower($code) . '.png');
+                $placeholder = $this->assetSource->findSource($asset);
+                if ($placeholder) {
+                    list($width, $height) = getimagesize($asset->getSourceFile());
+                    $this->icons[$code] = [
+                        'url' => $asset->getUrl(),
+                        'width' => $width,
+                        'height' => $height,
+                        'title' => $label,
+                    ];
+                }
+            }
+        }
+
+        return $this->icons;
     }
 }
