@@ -410,6 +410,8 @@ class OrderCreator
 
     /**
      * Enfileira ou executa a criação das duas bills manuais para recorrência multimeios
+     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
+     * Método mantido apenas para evitar erros de referência.
      * @param \Magento\Sales\Model\Order $originalOrder
      * @param string|int $subscriptionId
      * @param array $billData
@@ -417,84 +419,17 @@ class OrderCreator
      */
     public function enqueueManualBillsForMultiMeios($originalOrder, $subscriptionId, $billData)
     {
-        $payment = $originalOrder->getPayment();
-        $amountCredit = $payment->getAdditionalInformation('amount_credit');
-        $amountSecondCard = $payment->getAdditionalInformation('amount_second_card');
-        $profileId1 = $payment->getAdditionalInformation('payment_profile');
-        $profileId2 = $payment->getAdditionalInformation('payment_profile2');
-        $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
-        $installments2 = $payment->getAdditionalInformation('cc_installments2') ?: 1;
-        $customerId = $originalOrder->getData('vindi_customer_id');
-        $cycle = isset($billData['period']['cycle']) ? $billData['period']['cycle'] : '01';
-        $incrementId = $originalOrder->getIncrementId();
-
-        $productList = $this->productManagement->findOrCreateProductsToSubscription($originalOrder);
-
-        // Usar método centralizado para obter/criar produto de desconto
-        try {
-            $multiPaymentDiscountProductId = $this->getOrCreateDiscountProduct();
-        } catch (\Exception $e) {
-            error_log("VINDI_MULTIMEIOS: Erro ao obter produto de desconto: " . $e->getMessage());
-            $multiPaymentDiscountProductId = null;
-        }
-
-        $billItemsCard1 = $productList;
-        $billItemsCard2 = $productList;
-        if ($multiPaymentDiscountProductId) {
-            $billItemsCard1[] = [
-                'product_id' => $multiPaymentDiscountProductId,
-                'amount' => -((float)$amountSecondCard)
-            ];
-            $billItemsCard2[] = [
-                'product_id' => $multiPaymentDiscountProductId,
-                'amount' => -((float)$amountCredit)
-            ];
-        }
-
-        $bodyCard1 = [
-            'customer_id' => $customerId,
-            'subscription_id' => $subscriptionId,
-            'payment_method_code' => 'credit_card',
-            'payment_profile' => ['id' => $profileId1],
-            'bill_items' => $billItemsCard1,
-            'installments' => (int)$installments1,
-            'code' => $incrementId . '-C' . str_pad($cycle, 2, '0', STR_PAD_LEFT) . '-01', // Formato: 123456-C02-01
-        ];
-        $bodyCard2 = [
-            'customer_id' => $customerId,
-            'subscription_id' => $subscriptionId,
-            'payment_method_code' => 'credit_card',
-            'payment_profile' => ['id' => $profileId2],
-            'bill_items' => $billItemsCard2,
-            'installments' => (int)$installments2,
-            'code' => $incrementId . '-C' . str_pad($cycle, 2, '0', STR_PAD_LEFT) . '-02', // Formato: 123456-C02-02
-        ];
-
-        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-        /** @var \Vindi\Payment\Helper\Api $apiHelper */
-        $apiHelper = $objectManager->get(\Vindi\Payment\Helper\Api::class);
-
-        try {
-            // Validar se os payment profiles existem na Vindi
-            $this->validatePaymentProfiles($originalOrder, $profileId1, $profileId2);
-        } catch (\Exception $e) {
-            error_log("VINDI_MULTIMEIOS: " . $e->getMessage());
-            return;
-        }
-
-        // Tentar criar as bills com rollback automático em caso de falha
-        try {
-            $billsResult = $this->createBillsWithRollback($bodyCard1, $bodyCard2);
-
-            // Atualizar pedido e splits após criação bem-sucedida das bills
-            $this->updateOrderAndSplits($originalOrder, $billsResult, $amountCredit, $amountSecondCard);
-        } catch (\Exception $e) {
-            error_log("VINDI_MULTIMEIOS: Erro ao criar bills manuais - " . $e->getMessage());
-        }
+        error_log("DEPRECATED: enqueueManualBillsForMultiMeios called. Multimeios is no longer supported for subscriptions.");
+        
+        // Esta funcionalidade foi removida conforme nova política
+        // Multimeios não é mais suportado para assinaturas
+        return;
     }
 
     /**
      * Valida se os payment profiles existem na Vindi antes de criar as bills
+     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
+     * Método mantido apenas para evitar erros de referência.
      * @param \Magento\Sales\Model\Order $originalOrder
      * @param string|int $profileId1
      * @param string|int $profileId2
@@ -503,68 +438,27 @@ class OrderCreator
      */
     protected function validatePaymentProfiles($originalOrder, $profileId1, $profileId2)
     {
-        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-        $profileHelper = $objectManager->get(\Vindi\Payment\Model\Payment\Profile::class);
-
-        // Validar profile 1
-        try {
-            $profile1Valid = $profileHelper->getPaymentProfileById($profileId1);
-            if (!$profile1Valid || (isset($profile1Valid['not_found']) && $profile1Valid['not_found'])) {
-                throw new \Exception("Payment Profile 1 (ID: {$profileId1}) não encontrado na Vindi");
-            }
-        } catch (\Exception $e) {
-            throw new \Exception("Erro ao validar Payment Profile 1 (ID: {$profileId1}): " . $e->getMessage());
-        }
-
-        // Validar profile 2
-        try {
-            $profile2Valid = $profileHelper->getPaymentProfileById($profileId2);
-            if (!$profile2Valid || (isset($profile2Valid['not_found']) && $profile2Valid['not_found'])) {
-                throw new \Exception("Payment Profile 2 (ID: {$profileId2}) não encontrado na Vindi");
-            }
-        } catch (\Exception $e) {
-            throw new \Exception("Erro ao validar Payment Profile 2 (ID: {$profileId2}): " . $e->getMessage());
-        }
-
-        return [$profile1Valid, $profile2Valid];
+        error_log("DEPRECATED: validatePaymentProfiles called. This method is no longer used as multimeios is not supported for subscriptions.");
+        throw new \Exception('Multimeios não é mais suportado para assinaturas');
     }
 
     /**
      * Obtém ou cria produto de desconto para multimeios de forma consistente
+     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
+     * Método mantido apenas para evitar erros de referência.
      * @return int
      * @throws \Exception
      */
     protected function getOrCreateDiscountProduct()
     {
-        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-        $helperData = $objectManager->get(\Vindi\Payment\Helper\Data::class);
-
-        // Tentar pegar da configuração primeiro
-        $discountProductId = $helperData->getConfig('general', 'discount_product_id');
-        if ($discountProductId && is_numeric($discountProductId)) {
-            return (int) $discountProductId;
-        }
-
-        // Criar automaticamente se não existir
-        $apiHelper = $objectManager->get(\Vindi\Payment\Helper\Api::class);
-        $response = $apiHelper->request('products', 'POST', [
-            'name' => 'Desconto Multimeios de Pagamento',
-            'code' => 'discount_multipayment_' . time(),
-            'status' => 'active',
-            'pricing_schema' => ['price' => 0.00]
-        ]);
-
-        if ($response && isset($response['product']['id'])) {
-            $productId = $response['product']['id'];
-            // TODO: Implementar salvamento na configuração para uso futuro
-            return $productId;
-        }
-
-        throw new \Exception('Não foi possível criar produto de desconto na Vindi');
+        error_log("DEPRECATED: getOrCreateDiscountProduct called. This method is no longer used as multimeios is not supported for subscriptions.");
+        throw new \Exception('Multimeios não é mais suportado para assinaturas');
     }
 
     /**
      * Cria as bills com sistema de rollback automático
+     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
+     * Método mantido apenas para evitar erros de referência.
      * @param array $billData1
      * @param array $billData2
      * @return array
@@ -572,43 +466,14 @@ class OrderCreator
      */
     protected function createBillsWithRollback($billData1, $billData2)
     {
-        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-        $apiHelper = $objectManager->get(\Vindi\Payment\Helper\Api::class);
-        $createdBills = [];
-
-        try {
-            // Criar primeira bill
-            $result1 = $apiHelper->request('bills', 'POST', $billData1);
-            if (!$result1 || !isset($result1['bill']['id'])) {
-                throw new \Exception('Falha ao criar primeira bill para multimeios: ' . json_encode($result1));
-            }
-            $createdBills[] = $result1['bill']['id'];
-
-            // Criar segunda bill
-            $result2 = $apiHelper->request('bills', 'POST', $billData2);
-            if (!$result2 || !isset($result2['bill']['id'])) {
-                throw new \Exception('Falha ao criar segunda bill para multimeios: ' . json_encode($result2));
-            }
-            $createdBills[] = $result2['bill']['id'];
-
-            return ['bill1' => $result1['bill'], 'bill2' => $result2['bill']];
-
-        } catch (\Exception $e) {
-            // Rollback: cancelar bills criadas em caso de falha
-            foreach ($createdBills as $billId) {
-                try {
-                    $apiHelper->cancelVindiBill($billId);
-                    error_log("VINDI_MULTIMEIOS: Bill {$billId} cancelada durante rollback");
-                } catch (\Exception $rollbackError) {
-                    error_log("VINDI_MULTIMEIOS: Erro no rollback da bill {$billId}: " . $rollbackError->getMessage());
-                }
-            }
-            throw $e;
-        }
+        error_log("DEPRECATED: createBillsWithRollback called. This method is no longer used as multimeios is not supported for subscriptions.");
+        throw new \Exception('Multimeios não é mais suportado para assinaturas');
     }
 
     /**
      * Atualiza o pedido e os registros de payment split após criação bem-sucedida das bills
+     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
+     * Método mantido apenas para evitar erros de referência.
      * @param \Magento\Sales\Model\Order $originalOrder
      * @param array $billsResult
      * @param float $amountCredit
@@ -617,62 +482,9 @@ class OrderCreator
      */
     protected function updateOrderAndSplits($originalOrder, $billsResult, $amountCredit, $amountSecondCard)
     {
-        $billCard1 = $billsResult['bill1'];
-        $billCard2 = $billsResult['bill2'];
-
-        // Obter informações de ciclo e assinatura
-        $subscriptionId = $billCard1['subscription']['id'] ?? null;
-        $cycle = isset($billCard1['period']['cycle']) ? $billCard1['period']['cycle'] : 1;
-
-        // Salvar o pedido se necessário
-        if (!$originalOrder->getId()) {
-            $originalOrder = $this->orderRepository->save($originalOrder);
-        }
-
-        // Criar payment splits com informações de renovação
-        $dataFirst = [
-            'order_id' => $originalOrder->getId(),
-            'order_increment_id' => $originalOrder->getIncrementId(),
-            'payment_method' => 'credit_card',
-            'amount' => $amountCredit,
-            'total_amount' => $amountCredit,
-            'bill_id' => $billCard1['id'],
-            'subscription_id' => $subscriptionId,  // NOVO: campo para tracking
-            'cycle' => $cycle,                     // NOVO: campo para tracking de ciclo
-            'status' => $billCard1['status'] ?? 'pending',
-            'additional_data' => json_encode($this->maskSensitiveDataForSplit($billCard1)),
-            'is_refunded' => 0,
-            'refund_amount' => 0
-        ];
-
-        $split1 = $this->paymentSplitFactory->create();
-        $split1->setData($dataFirst);
-        $split1->save();
-
-        $dataSecond = [
-            'order_id' => $originalOrder->getId(),
-            'order_increment_id' => $originalOrder->getIncrementId(),
-            'payment_method' => 'credit_card',
-            'amount' => $amountSecondCard,
-            'total_amount' => $amountSecondCard,
-            'bill_id' => $billCard2['id'],
-            'subscription_id' => $subscriptionId,  // NOVO: campo para tracking
-            'cycle' => $cycle,                     // NOVO: campo para tracking de ciclo
-            'status' => $billCard2['status'] ?? 'pending',
-            'additional_data' => json_encode($this->maskSensitiveDataForSplit($billCard2)),
-            'is_refunded' => 0,
-            'refund_amount' => 0
-        ];
-
-        $split2 = $this->paymentSplitFactory->create();
-        $split2->setData($dataSecond);
-        $split2->save();
-
-        // Atualizar vindi_bill_id no pedido com as novas bills
-        $originalOrder->setData('vindi_bill_id', $billCard1['id'] . ',' . $billCard2['id']);
-        $this->orderRepository->save($originalOrder);
-
-        error_log("VINDI_MULTIMEIOS: Payment splits criados para renovação - Subscription ID: {$subscriptionId}, Cycle: {$cycle}, Bills: {$billCard1['id']}, {$billCard2['id']}");
+        error_log("DEPRECATED: updateOrderAndSplits called. This method is no longer used as multimeios is not supported for subscriptions.");
+        // Esta funcionalidade foi removida conforme nova política
+        return;
     }
 
     /**

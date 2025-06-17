@@ -100,57 +100,20 @@ class BillCreated
 
         try {
             $originalOrder = $this->orderCreator->getOrderFromSubscriptionId($subscriptionId);
-            $isMultiMeios = false;
+            
+            // REFATORAÇÃO: Multimeios não é mais suportado para assinaturas
+            // Todas as assinaturas são tratadas como método único
             if ($originalOrder) {
                 $payment = $originalOrder->getPayment();
                 if ($payment && $payment->getMethod() === 'vindi_cardcard') {
-                    $isMultiMeios = true;
+                    error_log('DEPRECATED: vindi_cardcard method detected for subscription. Multimeios is no longer supported for subscriptions.');
+                    // Não fazer nenhum processamento especial para multimeios em assinaturas
                 }
             }
-            if ($isMultiMeios) {
-                // Verificar se é renovação ou criação inicial
-                $isRenewalBill = $this->isRenewalBill($bill);
-                $billId = $bill['id'] ?? null;
-                $billCode = $bill['code'] ?? '';
-                
-                // Verificar se é uma bill manual já criada com sufixo identificador
-                // Padrões: {order}-01, {order}-02 (criação inicial) ou {order}-C{cycle}-01, {order}-C{cycle}-02 (renovações)
-                $isManualBillWithSuffix = (preg_match('/-0[12]$/', $billCode) || preg_match('/-C\d+-0[12]$/', $billCode));
-                
-                if ($isRenewalBill) {
-                    // Para renovações: cancelar apenas bills automáticas (sem sufixo), criar bills manuais
-                    if (!$isManualBillWithSuffix) {
-                        try {
-                            $this->orderCreator->cancelVindiBill($billId);
-                            error_log('VINDI_MULTIMEIOS: Cancelled automatic renewal bill: ' . $billId);
-                        } catch (\Exception $e) {
-                            error_log('VINDI_MULTIMEIOS: Error cancelling automatic renewal bill: ' . $e->getMessage());
-                        }
-                        
-                        $this->orderCreator->enqueueManualBillsForMultiMeios($originalOrder, $subscriptionId, $bill);
-                    } else {
-                        error_log('VINDI_MULTIMEIOS: Skipping processing for manual bill with suffix: ' . $billCode);
-                    }
-                } else {
-                    // Para criação inicial: verificar se bill já foi tratada no AbstractMethod
-                    if (!$isManualBillWithSuffix) {
-                        // É uma bill automática criada apesar do novo fluxo
-                        if ($billId) {
-                            try {
-                                $this->orderCreator->cancelVindiBill($billId);
-                                error_log('VINDI_MULTIMEIOS: Cancelled unexpected automatic bill: ' . $billId);
-                            } catch (\Exception $e) {
-                                error_log('VINDI_MULTIMEIOS: Error cancelling unexpected automatic bill: ' . $e->getMessage());
-                            }
-                        }
-                    } else {
-                        error_log('VINDI_MULTIMEIOS: Processing manual bill from new strategy: ' . $billCode);
-                    }
-                }
-                
-                return true;
-            }
-
+            
+            // Processar como bill normal de assinatura (método único)
+            // Lógica original para bills de assinatura simples
+            
             if ($originalOrder && $originalOrder->getData('vindi_subscription_can_create_new_order') == true) {
                 $originalOrder->setData('vindi_subscription_can_create_new_order', false);
                 $originalOrder->setData('vindi_bill_id', $bill['id']);

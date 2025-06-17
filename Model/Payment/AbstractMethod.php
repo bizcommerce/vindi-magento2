@@ -191,27 +191,25 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $paymentMethodCode = $this->getPaymentMethodCode();
         $plan = $this->helperData->isSubscriptionOrder($order);
 
-        // DEBUG TEMPORÁRIO - LOG DO FLUXO
-        $this->psrLogger->info('VINDI_DEBUG: Payment Method Code: ' . $paymentMethodCode);
-        $this->psrLogger->info('VINDI_DEBUG: Is Subscription: ' . ($plan ? 'YES' : 'NO'));
-        $this->psrLogger->info('VINDI_DEBUG: Is Multi Method: ' . ($this->helperData->isMultiMethod($paymentMethodCode) ? 'YES' : 'NO'));
+        $this->psrLogger->info('VINDI_PAYMENT: Payment Method Code: ' . $paymentMethodCode);
+        $this->psrLogger->info('VINDI_PAYMENT: Is Subscription: ' . ($plan ? 'YES' : 'NO'));
+        $this->psrLogger->info('VINDI_PAYMENT: Is Multi Method: ' . ($this->helperData->isMultiMethod($paymentMethodCode) ? 'YES' : 'NO'));
 
         if ($plan) {
+            // MULTIMEIOS NÃO SÃO MAIS SUPORTADOS PARA ASSINATURAS
             if ($this->helperData->isMultiMethod($paymentMethodCode)) {
-                if ($paymentMethodCode !== PaymentMethod::CARD_CARD) {
-                    $this->psrLogger->error('VINDI_DEBUG: Multi method não é CARD_CARD - Método: ' . $paymentMethodCode);
-                    return $this->handleError($order);
-                }
-                $this->psrLogger->info('VINDI_DEBUG: Entrando no fluxo processMultiMethodSubscriptionPayment');
-                return $this->processMultiMethodSubscriptionPayment($payment, $amount, $plan);
-            } else {
-                $this->psrLogger->info('VINDI_DEBUG: Entrando no fluxo processSingleMethodSubscriptionPayment');
-                return $this->processSingleMethodSubscriptionPayment($payment, $plan);
+                $this->psrLogger->error('VINDI_PAYMENT: Multimeios de pagamento não são suportados para assinaturas. Método: ' . $paymentMethodCode);
+                throw new LocalizedException(__('Multimeios de pagamento não são suportados para produtos com assinatura. Use apenas um método de pagamento.'));
             }
+            
+            $this->psrLogger->info('VINDI_PAYMENT: Processando assinatura com método único');
+            return $this->processSingleMethodSubscriptionPayment($payment, $plan);
         } else {
             if ($this->helperData->isMultiMethod($paymentMethodCode)) {
+                $this->psrLogger->info('VINDI_PAYMENT: Processando compra avulsa com multimeios');
                 return $this->processMultiMethodInvoicePayment($payment, $amount);
             } else {
+                $this->psrLogger->info('VINDI_PAYMENT: Processando compra avulsa com método único');
                 return $this->processSingleMethodInvoicePayment($payment, $amount);
             }
         }
@@ -704,310 +702,336 @@ abstract class AbstractMethod extends OriginAbstractMethod
         return $this->handleError($order);
     }
 
+    /**
+     * MÉTODO DEPRECADO - NÃO MAIS USADO
+     * 
+     * Este método processava split payment para assinaturas, mas foi deprecado porque
+     * multimeios de pagamento não são mais suportados para assinaturas.
+     * 
+     * @deprecated A partir de junho 2025
+     * @see processPayment() - agora bloqueia multimeios para assinaturas
+     */
     protected function processMultiMethodSubscriptionPayment(InfoInterface $payment, $amount, OrderItemInterface $orderItem)
     {
+        // MÉTODO DEPRECADO - Lança exceção para indicar que não deve ser usado
+        throw new \Exception('Multimeios de pagamento não são mais suportados para assinaturas. Este método foi deprecado.');
+    }
+
+    protected function processPayment(InfoInterface $payment, $amount)
+    {
         $order = $payment->getOrder();
+
         $customerId = $this->customer->findOrCreate($order);
-        $productList = $this->productManagement->findOrCreateProductsToSubscription($order);
+        if (!$customerId) {
+            throw new LocalizedException(__('Vindi customer_id cannot be blank.'));
+        }
+
+        $payment->setAdditionalInformation('customer_id', $customerId);
+
+        $paymentMethodCode = $this->getPaymentMethodCode();
+        $plan = $this->helperData->isSubscriptionOrder($order);
+
+        $this->psrLogger->info('VINDI_PAYMENT: Payment Method Code: ' . $paymentMethodCode);
+        $this->psrLogger->info('VINDI_PAYMENT: Is Subscription: ' . ($plan ? 'YES' : 'NO'));
+        $this->psrLogger->info('VINDI_PAYMENT: Is Multi Method: ' . ($this->helperData->isMultiMethod($paymentMethodCode) ? 'YES' : 'NO'));
+
+        if ($plan) {
+            // MULTIMEIOS NÃO SÃO MAIS SUPORTADOS PARA ASSINATURAS
+            if ($this->helperData->isMultiMethod($paymentMethodCode)) {
+                $this->psrLogger->error('VINDI_PAYMENT: Multimeios de pagamento não são suportados para assinaturas. Método: ' . $paymentMethodCode);
+                throw new LocalizedException(__('Multimeios de pagamento não são suportados para produtos com assinatura. Use apenas um método de pagamento.'));
+            }
+            
+            $this->psrLogger->info('VINDI_PAYMENT: Processando assinatura com método único');
+            return $this->processSingleMethodSubscriptionPayment($payment, $plan);
+        } else {
+            if ($this->helperData->isMultiMethod($paymentMethodCode)) {
+                $this->psrLogger->info('VINDI_PAYMENT: Processando compra avulsa com multimeios');
+                return $this->processMultiMethodInvoicePayment($payment, $amount);
+            } else {
+                $this->psrLogger->info('VINDI_PAYMENT: Processando compra avulsa com método único');
+                return $this->processSingleMethodInvoicePayment($payment, $amount);
+            }
+        }
+    }
+
+    protected function processSingleMethodInvoicePayment(InfoInterface $payment, $amount)
+    {
+        $order = $payment->getOrder();
+        $paymentMethodCode = $this->getPaymentMethodCode();
+        $customerId = $this->customer->findOrCreate($order);
+        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+
+        $body = [
+            'customer_id' => $customerId,
+            'payment_method_code' => $paymentMethodCode,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId()
+        ];
+
+        if ($paymentMethodCode === PaymentMethod::CREDIT_CARD) {
+            $paymentProfile = null;
+            $profileId = $payment->getAdditionalInformation('payment_profile');
+            
+            // Try to get existing payment profile if ID is provided
+            if ($profileId) {
+                $paymentProfile = $this->getPaymentProfileFromVindi((int)$profileId);
+            }
+            
+            // If profile not found or not provided, create new one
+            if (!$paymentProfile) {
+                $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+            }
+
+            $body['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+        }
+
+        $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
+        if ($installments) {
+            $body['installments'] = (int)$installments;
+        }
+
+        $bill = $this->bill->create($body);
+        if ($bill) {
+            $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
+            if ($this->successfullyPaid($body, $bill)) {
+                $order->setData('vindi_bill_id', $bill['id']);
+                return $bill['id'];
+            }
+            $this->bill->delete($bill['id']);
+        }
+        return $this->handleError($order);
+    }
+
+    protected function processMultiMethodInvoicePayment(InfoInterface $payment, $amount)
+    {
+        $order = $payment->getOrder();
+        $paymentMethodCode = $this->getPaymentMethodCode();
+
+        if ($paymentMethodCode === PaymentMethod::CARD_PIX) {
+            return $this->processCardPix($payment, $order);
+        }
+
+        if ($paymentMethodCode === PaymentMethod::CARD_CARD) {
+            return $this->processTwoCards($payment, $order);
+        }
+
+        if ($paymentMethodCode === PaymentMethod::CARD_BANKSLIP_PIX) {
+            return $this->processCardBankslipPix($payment, $order);
+        }
+
+        return $this->handleError($order);
+    }
+
+    protected function processCardPix(InfoInterface $payment, Order $order)
+    {
+        $this->psrLogger->info('=== INICIANDO PROCESSO CARTÃO + PIX ===');
+        $this->psrLogger->info('Pedido: ' . $order->getIncrementId() . ' | Total: R$ ' . $order->getGrandTotal());
+        
+        $customerId = $this->customer->findOrCreate($order);
+        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+
+        $amountCredit = $payment->getAdditionalInformation('amount_credit');
+        $amountPix    = $payment->getAdditionalInformation('amount_pix');
+        
+        $this->psrLogger->info('Valores: Cartão R$ ' . $amountCredit . ' | PIX R$ ' . $amountPix);
+        
+        if (!$amountCredit || !$amountPix) {
+            $this->psrLogger->error('ERRO: Valores de cartão ou PIX não definidos');
+            return $this->handleError($order);
+        }
+
+        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+        $this->psrLogger->info('Produto de desconto ID: ' . $multiPaymentDiscountProductId);
+
+        $bodyCredit = [
+            'customer_id'         => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-01',
+        ];
+        $bodyCredit['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount'     => -((float)$amountPix),
+        ];
+
+        $paymentProfile = null;
+        $profileId = $payment->getAdditionalInformation('payment_profile');
+        
+        // Try to get existing payment profile if ID is provided
+        if ($profileId) {
+            $paymentProfile = $this->getPaymentProfile((int)$profileId);
+        }
+        
+        // If profile not found or not provided, create new one
+        if (!$paymentProfile) {
+            $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+        }
+
+        $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+
+        $installments = $payment->getAdditionalInformation('cc_installments')
+            ?: $payment->getAdditionalInformation('installments')
+                ?: $payment->getInstallments();
+        if ($installments) {
+            $bodyCredit['installments'] = (int)$installments;
+        }
+
+        $this->psrLogger->info('Criando BILL 1 (Cartão) com código: ' . $order->getIncrementId() . '-01');
+        $billCredit = $this->bill->create($bodyCredit);
+        
+        if (!$billCredit) {
+            $this->psrLogger->error('ERRO: Falha na criação da BILL 1 (Cartão)');
+            return $this->handleError($order);
+        }
+        
+        $this->psrLogger->info('BILL 1 criada com sucesso. ID: ' . ($billCredit['id'] ?? 'N/A') . ' | Status: ' . ($billCredit['status'] ?? 'N/A'));
+        
+        if (!$this->successfullyPaid($bodyCredit, $billCredit)) {
+            $this->psrLogger->error('ERRO: BILL 1 não passou na validação de pagamento. Status: ' . ($billCredit['status'] ?? 'N/A'));
+            if ($billCredit && isset($billCredit['id'])) {
+                $this->bill->delete($billCredit['id']);
+                $this->psrLogger->info('BILL 1 deletada devido à falha na validação');
+            }
+            return $this->handleError($order);
+        }
+        
+        $bodyPix = [
+            'customer_id'         => $customerId,
+            'payment_method_code' => PaymentMethod::PIX,
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-02',
+        ];
+        $bodyPix['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount'     => -((float)$amountCredit),
+        ];
+
+        $this->psrLogger->info('Criando BILL 2 (PIX) com código: ' . $order->getIncrementId() . '-02');
+        $billPix = $this->bill->create($bodyPix);
+        
+        if (!$billPix) {
+            $this->psrLogger->error('ERRO: Falha na criação da BILL 2 (PIX)');
+            $this->bill->delete($billCredit['id']);
+            $this->psrLogger->info('BILL 1 deletada devido à falha na criação da BILL 2');
+            return $this->handleError($order);
+        }
+        
+        $this->psrLogger->info('BILL 2 criada com sucesso. ID: ' . ($billPix['id'] ?? 'N/A') . ' | Status: ' . ($billPix['status'] ?? 'N/A'));
+        
+        if (!$this->successfullyPaid($bodyPix, $billPix)) {
+            $this->psrLogger->error('ERRO: BILL 2 não passou na validação de pagamento. Status: ' . ($billPix['status'] ?? 'N/A'));
+            if ($billPix && isset($billPix['id'])) {
+                $this->bill->delete($billPix['id']);
+                $this->psrLogger->info('BILL 2 deletada devido à falha na validação');
+            }
+            $this->bill->delete($billCredit['id']);
+            $this->psrLogger->info('BILL 1 deletada devido à falha da BILL 2');
+            return $this->handleError($order);
+        }
+        
+        $this->psrLogger->info('=== PROCESSO CARTÃO + PIX CONCLUÍDO COM SUCESSO ===');
+        $this->psrLogger->info('Bills criadas: ' . $billCredit['id'] . ' (Cartão) + ' . $billPix['id'] . ' (PIX)');
+        
+        $order->setData('vindi_bill_id', $billCredit['id'] . ',' . $billPix['id']);
+        $this->savePaymentSplitRecord(
+            $order,
+            $billCredit,
+            $billPix,
+            $amountCredit,
+            $amountPix,
+            PaymentMethod::CREDIT_CARD,
+            PaymentMethod::PIX
+        );
+        $order->getPayment()->setMethod('vindi_cardpix');
+        $this->orderRepository->save($order);
+
+        return $billCredit['id'] . '|' . $billPix['id'];
+    }
+
+    protected function processTwoCards(InfoInterface $payment, Order $order)
+    {
+        $customerId = $this->customer->findOrCreate($order);
+        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
 
         $amountCredit = $payment->getAdditionalInformation('amount_credit');
         $amountSecondCard = $payment->getAdditionalInformation('amount_second_card');
-        
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Iniciando nova estratégia para Order: ' . $order->getIncrementId());
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Amount Credit: ' . ($amountCredit ?: 'NULL/EMPTY'));
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Amount Second Card: ' . ($amountSecondCard ?: 'NULL/EMPTY'));
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Customer ID: ' . $customerId);
-        
-        // Log detalhado de TODOS os dados do payment
-        $allAdditionalInfo = $payment->getAdditionalInformation();
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: All Additional Info: ' . json_encode($allAdditionalInfo));
-        
-        // Log dos dados de cartão específicos
-        $cardData = [
-            'cc_owner' => $payment->getCcOwner(),
-            'cc_number' => $payment->getCcNumber() ? 'SET' : 'EMPTY',
-            'cc_exp_month' => $payment->getCcExpMonth(),
-            'cc_exp_year' => $payment->getCcExpYear(),
-            'cc_cid' => $payment->getCcCid() ? 'SET' : 'EMPTY',
-            'cc_type' => $payment->getCcType(),
-            
-            // Dados do additional_information
-            'cc_owner_ai' => $payment->getAdditionalInformation('cc_owner'),
-            'cc_number_ai' => $payment->getAdditionalInformation('cc_number') ? 'SET' : 'EMPTY',
-            'cc_exp_month_ai' => $payment->getAdditionalInformation('cc_exp_month'),
-            'cc_exp_year_ai' => $payment->getAdditionalInformation('cc_exp_year'),
-            'cc_cvv_ai' => $payment->getAdditionalInformation('cc_cvv') ? 'SET' : 'EMPTY',
-            'cc_type_ai' => $payment->getAdditionalInformation('cc_type'),
-            
-            // Dados do segundo cartão
-            'cc_owner2_ai' => $payment->getAdditionalInformation('cc_owner2'),
-            'cc_number2_ai' => $payment->getAdditionalInformation('cc_number2') ? 'SET' : 'EMPTY',
-            'cc_exp_month2_ai' => $payment->getAdditionalInformation('cc_exp_month2'),
-            'cc_exp_year2_ai' => $payment->getAdditionalInformation('cc_exp_year2'),
-            'cc_cvv2_ai' => $payment->getAdditionalInformation('cc_cvv2') ? 'SET' : 'EMPTY',
-            'cc_type2_ai' => $payment->getAdditionalInformation('cc_type2'),
-        ];
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Card Data Summary: ' . json_encode($cardData));
-        
         if (!$amountCredit || !$amountSecondCard) {
-            $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Valores dos cartões não encontrados');
             return $this->handleError($order);
         }
 
-        // Obter plano
-        $options = $orderItem->getProductOptions();
-        if (!empty($options['info_buyRequest']['selected_plan_id'])) {
-            $planId = $options['info_buyRequest']['selected_plan_id'];
-            $vindiPlan = $this->vindiPlanRepository->getById($planId);
-            $planId = $vindiPlan->getVindiId();
-        } else {
-            $planId = $this->planManagement->create($orderItem->getProductId());
-        }
-
-        // Obter payment profiles para os cartões
-        $profileId1 = $payment->getAdditionalInformation('payment_profile');
-        $profileId2 = $payment->getAdditionalInformation('payment_profile2');
-        
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: ProfileId1 (raw): ' . var_export($profileId1, true));
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: ProfileId2 (raw): ' . var_export($profileId2, true));
-        
-        // Converter para inteiro e tratar valores vazios/nulos
-        $profileId1 = $profileId1 ? (int)$profileId1 : 0;
-        $profileId2 = $profileId2 ? (int)$profileId2 : 0;
-        
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: ProfileId1 (processed): ' . $profileId1);
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: ProfileId2 (processed): ' . $profileId2);
-        
-        $paymentProfile1 = null;
-        $paymentProfile2 = null;
-        
-        // Obter payment profile 1
-        if ($profileId1 > 0) {
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Obtaining profile 1 from Vindi...');
-            try {
-                $paymentProfile1 = $this->getPaymentProfileFromVindi($profileId1);
-                $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Profile 1 response: ' . json_encode($paymentProfile1));
-                
-                // Se profile existe no payment mas API retorna 404, assumir que pode ser usado
-                if (!$paymentProfile1) {
-                    $this->psrLogger->warning('VINDI_MULTIMEIOS_NEW: Profile 1 not found in API, but exists in payment. Using profile ID: ' . $profileId1);
-                    $paymentProfile1 = ['id' => $profileId1];
-                }
-            } catch (\Exception $e) {
-                $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Error getting profile 1: ' . $e->getMessage());
-                // Em caso de erro, tentar usar o ID diretamente
-                $paymentProfile1 = ['id' => $profileId1];
-            }
-        }
-        
-        // Só criar novo profile se realmente não temos um ID válido
-        if (!$paymentProfile1 && $this->hasValidCardData($payment, 'first')) {
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Creating payment profile 1...');
-            try {
-                $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
-                $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Created profile 1: ' . json_encode($paymentProfile1));
-            } catch (\Exception $e) {
-                $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Error creating profile 1: ' . $e->getMessage());
-            }
-        }
-        
-        // Validar payment profile 1 - NOVA ESTRATÉGIA: se não existir, criar assinatura sem payment_profile
-        $hasValidProfile1 = false;
-        if ($paymentProfile1 && isset($paymentProfile1['id'])) {
-            // Verificar se o profile realmente existe na Vindi
-            try {
-                $verifyProfile1 = $this->getPaymentProfileFromVindi($paymentProfile1['id']);
-                if ($verifyProfile1) {
-                    $hasValidProfile1 = true;
-                    $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Payment profile 1 OK - ID: ' . $paymentProfile1['id']);
-                } else {
-                    $this->psrLogger->warning('VINDI_MULTIMEIOS_NEW: Payment profile 1 (ID: ' . $paymentProfile1['id'] . ') not found in Vindi API. Will create subscription without payment_profile.');
-                    $paymentProfile1 = null;
-                }
-            } catch (\Exception $e) {
-                $this->psrLogger->warning('VINDI_MULTIMEIOS_NEW: Error verifying profile 1: ' . $e->getMessage() . '. Will create subscription without payment_profile.');
-                $paymentProfile1 = null;
-            }
-        } else {
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: No valid payment profile 1 found. Will create subscription without payment_profile.');
-        }
-        
-        // Obter payment profile 2
-        if ($profileId2 > 0) {
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Obtaining profile 2 from Vindi...');
-            try {
-                $paymentProfile2 = $this->getPaymentProfileFromVindi($profileId2);
-                $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Profile 2 response: ' . json_encode($paymentProfile2));
-                
-                // Se profile existe no payment mas API retorna 404, assumir que pode ser usado
-                if (!$paymentProfile2) {
-                    $this->psrLogger->warning('VINDI_MULTIMEIOS_NEW: Profile 2 not found in API, but exists in payment. Using profile ID: ' . $profileId2);
-                    $paymentProfile2 = ['id' => $profileId2];
-                }
-            } catch (\Exception $e) {
-                $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Error getting profile 2: ' . $e->getMessage());
-                // Em caso de erro, tentar usar o ID diretamente
-                $paymentProfile2 = ['id' => $profileId2];
-            }
-        }
-        
-        // Só criar novo profile se realmente não temos um ID válido
-        if (!$paymentProfile2 && $this->hasValidCardData($payment, 'second')) {
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Creating payment profile 2...');
-            try {
-                $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
-                $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Created profile 2: ' . json_encode($paymentProfile2));
-            } catch (\Exception $e) {
-                $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Error creating profile 2: ' . $e->getMessage());
-            }
-        }
-        
-        // Validar payment profile 2 - NOVA ESTRATÉGIA: se não existir, criar bill sem payment_profile
-        $hasValidProfile2 = false;
-        if ($paymentProfile2 && isset($paymentProfile2['id'])) {
-            // Verificar se o profile realmente existe na Vindi
-            try {
-                $verifyProfile2 = $this->getPaymentProfileFromVindi($paymentProfile2['id']);
-                if ($verifyProfile2) {
-                    $hasValidProfile2 = true;
-                    $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Payment profile 2 OK - ID: ' . $paymentProfile2['id']);
-                } else {
-                    $this->psrLogger->warning('VINDI_MULTIMEIOS_NEW: Payment profile 2 (ID: ' . $paymentProfile2['id'] . ') not found in Vindi API. Will create bill without payment_profile.');
-                    $paymentProfile2 = null;
-                }
-            } catch (\Exception $e) {
-                $this->psrLogger->warning('VINDI_MULTIMEIOS_NEW: Error verifying profile 2: ' . $e->getMessage() . '. Will create bill without payment_profile.');
-                $paymentProfile2 = null;
-            }
-        } else {
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: No valid payment profile 2 found. Will create bill without payment_profile.');
-        }
-
-        // Obter produto de desconto para rateio
         $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
-        
-        // NOVA ESTRATÉGIA: 
-        // 1. Criar assinatura usando a bill obrigatória para o primeiro cartão (com desconto do valor do segundo cartão)
-        // 2. Criar uma bill avulsa para o segundo cartão
-        
-        // Preparar bill items para a bill obrigatória da assinatura (cartão 1 com desconto)
-        $billItemsCard1 = $productList;
-        $billItemsCard1[] = [
-            'product_id' => $multiPaymentDiscountProductId,
-            'amount' => -((float)$amountSecondCard) // Desconto do valor do segundo cartão
-        ];
 
-        // CRIAÇÃO DA ASSINATURA: Com bill obrigatória já configurada para o cartão 1
-        $bodySubscription = [
-            'customer_id'         => $customerId,
+        $bodyCard1 = [
+            'customer_id' => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
-            'plan_id'             => $planId,
-            'product_items'       => $productList,
-            'code'                => $order->getIncrementId() . '-01', // Código com sufixo identificador
-            'bill_items'          => $billItemsCard1, // Bill da assinatura já com desconto aplicado
-            'due_at'              => date('Y-m-d'),
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-01'
         ];
-        
-        // Só incluir payment_profile se temos um válido
-        if ($hasValidProfile1 && $paymentProfile1) {
-            $bodySubscription['payment_profile'] = ['id' => $paymentProfile1['id']];
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Creating subscription WITH payment_profile: ' . $paymentProfile1['id']);
-        } else {
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Creating subscription WITHOUT payment_profile (Vindi will handle payment method)');
-        }
-        
-        $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
-        if ($installments1) {
-            $bodySubscription['installments'] = (int)$installments1;
-        }
-        
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Criando assinatura com bill obrigatória para cartão 1 (valor com desconto)');
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Subscription body: ' . json_encode($bodySubscription));
-        $responseData = $this->subscriptionRepository->create($bodySubscription);
-        
-        if (!$responseData || !isset($responseData['subscription'])) {
-            $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Falha ao criar assinatura - Response: ' . json_encode($responseData));
-            return $this->handleError($order);
-        }
-
-        $subscription = $responseData['subscription'];
-        $billCard1 = $responseData['bill'] ?? null;
-        
-        if (!$billCard1) {
-            $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Bill obrigatória da assinatura não foi criada');
-            return $this->handleError($order);
-        }
-        
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Assinatura criada - ID: ' . $subscription['id']);
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Bill 1 criada automaticamente - ID: ' . $billCard1['id']);
-
-        // CRIAÇÃO DA SEGUNDA BILL AVULSA para o cartão 2
-        $billItemsCard2 = [];
-        $billItemsCard2[] = [
+        $bodyCard1['bill_items'][] = [
             'product_id' => $multiPaymentDiscountProductId,
-            'amount' => (float)$amountSecondCard // Apenas o valor do segundo cartão
+            'amount' => -((float)$amountSecondCard)
         ];
+
+        $profileId1 = (int)$payment->getAdditionalInformation('payment_profile');
+        if ($profileId1) {
+            $paymentProfile1 = $this->getPaymentProfileFromVindi($profileId1);
+            if (!$paymentProfile1) {
+                $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+            }
+        } else {
+            $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+        }
+        $bodyCard1['payment_profile'] = ['id' => $paymentProfile1['id'] ?? null];
+
+        $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
+        $bodyCard1['installments'] = (int)$installments1;
 
         $bodyCard2 = [
             'customer_id' => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
-            'bill_items' => $billItemsCard2,
-            'code' => $order->getIncrementId() . '-02', // Código com sufixo identificador
-            'due_at' => date('Y-m-d'),
-            'notes' => 'Cartão 2 - Multimeios (Assinatura: ' . $subscription['id'] . ')'
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-02'
         ];
-        
-        // Só incluir payment_profile se temos um válido
-        if ($hasValidProfile2 && $paymentProfile2) {
-            $bodyCard2['payment_profile'] = ['id' => $paymentProfile2['id']];
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Creating bill 2 WITH payment_profile: ' . $paymentProfile2['id']);
+        $bodyCard2['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount' => -((float)$amountCredit)
+        ];
+
+        $profileId2 = (int)$payment->getAdditionalInformation('payment_profile2');
+        if ($profileId2) {
+            $paymentProfile2 = $this->getPaymentProfileFromVindi($profileId2);
+            if (!$paymentProfile2) {
+                $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+            }
         } else {
-            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Creating bill 2 WITHOUT payment_profile (Vindi will handle payment method)');
+            $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
         }
-        
+        $bodyCard2['payment_profile'] = ['id' => $paymentProfile2['id'] ?? null];
+
         $installments2 = $payment->getAdditionalInformation('cc_installments2') ?: 1;
-        if ($installments2) {
-            $bodyCard2['installments'] = (int)$installments2;
+        $bodyCard2['installments'] = (int)$installments2;
+
+        $billCard1 = $this->bill->create($bodyCard1);
+        if (!$billCard1 || !$this->successfullyPaid($bodyCard1, $billCard1)) {
+            if ($billCard1 && isset($billCard1['id'])) {
+                $this->bill->delete($billCard1['id']);
+            }
+            return $this->handleError($order);
         }
-        
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Criando bill avulsa para cartão 2');
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Bill 2 body: ' . json_encode($bodyCard2));
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCard1, $billCard1);
+
         $billCard2 = $this->bill->create($bodyCard2);
-        
-        if (!$billCard2 || !isset($billCard2['id'])) {
-            $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Falha ao criar bill 2 - Response: ' . json_encode($billCard2));
-            // Em caso de falha, cancelar a assinatura criada
-            $this->subscriptionRepository->deleteAndCancelBills($subscription['id']);
+        if (!$billCard2 || !$this->successfullyPaid($bodyCard2, $billCard2)) {
+            if ($billCard2 && isset($billCard2['id'])) {
+                $this->bill->delete($billCard2['id']);
+            }
+            $this->bill->delete($billCard1['id']);
             return $this->handleError($order);
         }
-        
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Bill 2 criada com sucesso - ID: ' . $billCard2['id']);
-
-        // Verificar se ambas as bills foram pagas com sucesso
-        $bill1Success = $this->successfullyPaid($bodySubscription, $billCard1, $subscription);
-        $bill2Success = $this->successfullyPaid($bodyCard2, $billCard2);
-        
-        if (!$bill1Success || !$bill2Success) {
-            $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Uma ou ambas as bills falharam no pagamento');
-            $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Bill 1 Success: ' . ($bill1Success ? 'YES' : 'NO'));
-            $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: Bill 2 Success: ' . ($bill2Success ? 'YES' : 'NO'));
-            
-            // Cancelar tudo em caso de falha
-            $this->subscriptionRepository->deleteAndCancelBills($subscription['id']);
-            $this->bill->delete($billCard2['id']);
-            
-            return $this->handleError($order);
-        }
-
-        // Combinar IDs das bills para rastreamento
-        $combinedBillId = $billCard1['id'] . ',' . $billCard2['id'];
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Ambas as bills processadas com sucesso - Combined ID: ' . $combinedBillId);
-        
-        // Processar informações adicionais
-        $this->handleBankSplitAdditionalInformation($payment, $bodySubscription, $billCard1);
         $this->handleBankSplitAdditionalInformation($payment, $bodyCard2, $billCard2);
-        
-        // Salvar registro do split de pagamento
+
+        $order->setData('vindi_bill_id', $billCard1['id'] . ',' . $billCard2['id']);
         $this->savePaymentSplitRecord(
             $order,
             $billCard1,
@@ -1017,30 +1041,760 @@ abstract class AbstractMethod extends OriginAbstractMethod
             PaymentMethod::CREDIT_CARD,
             PaymentMethod::CREDIT_CARD
         );
-
-        // Salvar dados da assinatura e bills no pedido
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Salvando dados da assinatura no pedido');
-        $this->saveSubscriptionToDatabase($subscription, $order, $combinedBillId);
-        
-        $order->setData('vindi_subscription_id', $subscription['id']);
-        $order->setData('vindi_bill_id', $combinedBillId);
         $order->getPayment()->setMethod('vindi_cardcard');
-
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Salvando pedido...');
-        $this->saveOrderToSubscriptionOrdersTable($order);
         $this->orderRepository->save($order);
+        return $billCard1['id'] . '|' . $billCard2['id'];
+    }
+
+    protected function processCardBankslipPix(InfoInterface $payment, Order $order)
+    {
+        $customerId   = $this->customer->findOrCreate($order);
+        $productList  = $this->productManagement->findOrCreateProductsFromOrder($order);
+
+        $amountCredit      = $payment->getAdditionalInformation('amount_credit');
+        $amountBankslipPix = $payment->getAdditionalInformation('amount_bankslippix');
+        if (!$amountCredit || !$amountBankslipPix) {
+            return $this->handleError($order);
+        }
+
+        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+
+        $bodyCredit = [
+            'customer_id'         => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-01',
+        ];
+        $bodyCredit['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount'     => -((float)$amountBankslipPix),
+        ];
+
+        $paymentProfile = null;
+        $profileId = $payment->getAdditionalInformation('payment_profile');
         
-        // AUDITORIA: Verificar quantas bills foram criadas para a assinatura
-        $audit = $this->auditSubscriptionBills($subscription['id'], $order->getIncrementId());
-        if ($audit['alert']) {
-            $this->psrLogger->error('VINDI_MULTIMEIOS_NEW: ALERTA DE AUDITORIA - Mais bills do que esperado!');
+        // Try to get existing payment profile if ID is provided
+        if ($profileId) {
+            $paymentProfile = $this->getPaymentProfileFromVindi((int)$profileId);
         }
         
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Processo de multimeios para assinatura concluído com sucesso');
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Assinatura ID: ' . $subscription['id']);
-        $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Bills: ' . $combinedBillId);
+        // If profile not found or not provided, create new one
+        if (!$paymentProfile) {
+            $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+            if (!$paymentProfile) {
+                $this->psrLogger->error("Failed to create payment profile for CardBankslipPix. Using null profile.");
+                // Continue processing without profile, API will handle this case
+            }
+        }
 
-        return $combinedBillId;
+        $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+
+        $installments = $payment->getAdditionalInformation('cc_installments')
+            ?: $payment->getAdditionalInformation('installments')
+                ?: $payment->getInstallments();
+        if ($installments) {
+            $bodyCredit['installments'] = (int)$installments;
+        }
+
+        $billCredit = $this->bill->create($bodyCredit);
+        if (!$billCredit || !$this->successfullyPaid($bodyCredit, $billCredit)) {
+            if ($billCredit && isset($billCredit['id'])) {
+                $this->bill->delete($billCredit['id']);
+            }
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
+
+        $bodyBankslipPix = [
+            'customer_id'         => $customerId,
+            'payment_method_code' => PaymentMethod::BANK_SLIP_PIX,
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-02',
+        ];
+        $bodyBankslipPix['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount'     => -((float)$amountCredit),
+        ];
+
+        $billBankslipPix = $this->bill->create($bodyBankslipPix);
+        if (!$billBankslipPix || !$this->successfullyPaid($bodyBankslipPix, $billBankslipPix)) {
+            if ($billBankslipPix && isset($billBankslipPix['id'])) {
+                $this->bill->delete($billBankslipPix['id']);
+            }
+            $this->bill->delete($billCredit['id']);
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyBankslipPix, $billBankslipPix);
+
+        $order->setData('vindi_bill_id', $billCredit['id'] . ',' . $billBankslipPix['id']);
+        $this->savePaymentSplitRecord(
+            $order,
+            $billCredit,
+            $billBankslipPix,
+            $amountCredit,
+            $amountBankslipPix,
+            PaymentMethod::CREDIT_CARD,
+            PaymentMethod::BANK_SLIP_PIX
+        );
+        $order->getPayment()->setMethod('vindi_cardbankslippix');
+        $this->orderRepository->save($order);
+
+        return $billCredit['id'] . '|' . $billBankslipPix['id'];
+    }
+
+    protected function processSingleMethodSubscriptionPayment(InfoInterface $payment, OrderItemInterface $orderItem)
+    {
+        try {
+            $order = $payment->getOrder();
+            $customerId = $this->customer->findOrCreate($order);
+            $vindiPlan = null;
+            $options = $orderItem->getProductOptions();
+            if (!empty($options['info_buyRequest']['selected_plan_id'])) {
+                $planId = $options['info_buyRequest']['selected_plan_id'];
+                $vindiPlan = $this->vindiPlanRepository->getById($planId);
+                $planId = $vindiPlan->getVindiId();
+            } else {
+                $planId = $this->planManagement->create($orderItem->getProductId());
+            }
+            $productItems = $this->productManagement->findOrCreateProductsToSubscription($order);
+            $body = [
+                'customer_id' => $customerId,
+                'payment_method_code' => $this->getPaymentMethodCode(),
+                'plan_id' => $planId,
+                'product_items' => $productItems,
+                'code' => $order->getIncrementId(),
+                'bill_items' => []
+            ];
+            $installments = $payment->getAdditionalInformation('installments');
+            if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
+                $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
+                    ? $this->getPaymentProfileFromVindi((int)$payment->getAdditionalInformation('payment_profile'))
+                    : $this->createPaymentProfile($order, $payment, $customerId);
+
+                if ($paymentProfile) {
+                    $body['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+                }
+                if ($vindiPlan && $vindiPlan->getInstallments() != null) {
+                    if ((int)$installments > (int)$vindiPlan->getInstallments()) {
+                        throw new LocalizedException(__('The number of installments cannot be greater than the number of installments of the plan.'));
+                    }
+                }
+            }
+            if ($installments) {
+                $body['installments'] = (int)$installments;
+            }
+            $responseData = $this->subscriptionRepository->create($body);
+            if ($responseData) {
+                if (!isset($responseData['bill'])) {
+                    $order->setData('vindi_subscription_can_create_new_order', true);
+                }
+                $bill = $responseData['bill'];
+                $subscription = $responseData['subscription'];
+                $billId = !$bill ? null : $bill['id'];
+                if ($subscription) {
+                    $this->saveSubscriptionToDatabase($subscription, $order, $billId);
+                }
+                if ($bill) {
+                    $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
+                }
+                if ($this->successfullyPaid($body, $bill, $subscription)) {
+                    $billId = $bill['id'] ?? 0;
+                    $subscriptionId = $responseData['subscription']['id'];
+                    
+                    $this->psrLogger->info('Setting vindi_bill_id: ' . $billId . ' for order: ' . $order->getIncrementId());
+                    $order->setData('vindi_bill_id', $billId);
+                    
+                    $this->psrLogger->info('Setting vindi_subscription_id: ' . $subscriptionId . ' for order: ' . $order->getIncrementId());
+                    $order->setData('vindi_subscription_id', $subscriptionId);
+                    
+                    $this->psrLogger->info('Saving order to subscription orders table...');
+                    $this->saveOrderToSubscriptionOrdersTable($order);
+                    
+                    $this->psrLogger->info('Saving order via repository...');
+                    // Save the order to persist subscription_id and bill_id
+                    $this->orderRepository->save($order);
+                    
+                    $this->psrLogger->info('Order saved successfully. Verifying saved data...');
+                    // Verify the data was saved
+                    $savedSubscriptionId = $order->getData('vindi_subscription_id');
+                    $this->psrLogger->info('Verified subscription_id after save: ' . ($savedSubscriptionId ?: 'NULL'));
+                    
+                    return $billId;
+                } else {
+                    $this->subscriptionRepository->deleteAndCancelBills($subscription['id']);
+                    $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+                    $sub = $objectManager->create(\Vindi\Payment\Model\Subscription::class)->load($subscription['id']);
+                    $sub->setStatus('canceled');
+                    $sub->save();
+                    if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
+                        $paymentProfileId = $paymentProfile['id'] ?? null;
+                        if ($paymentProfileId) {
+                            $this->profile->deletePaymentProfile($paymentProfileId);
+                            $paymentProfileRepositoryModel = $this->paymentProfileRepository->getByProfileId($paymentProfileId);
+                            $this->paymentProfileRepository->delete($paymentProfileRepositoryModel);
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            return $this->handleError($order);
+        }
+        return $this->handleError($order);
+    }
+
+    /**
+     * MÉTODO DEPRECADO - NÃO MAIS USADO
+     * 
+     * Este método processava split payment para assinaturas, mas foi deprecado porque
+     * multimeios de pagamento não são mais suportados para assinaturas.
+     * 
+     * @deprecated A partir de junho 2025
+     * @see processPayment() - agora bloqueia multimeios para assinaturas
+     */
+    protected function processMultiMethodSubscriptionPayment(InfoInterface $payment, $amount, OrderItemInterface $orderItem)
+    {
+        // MÉTODO DEPRECADO - Lança exceção para indicar que não deve ser usado
+        throw new \Exception('Multimeios de pagamento não são mais suportados para assinaturas. Este método foi deprecado.');
+    }
+
+    protected function processPayment(InfoInterface $payment, $amount)
+    {
+        $order = $payment->getOrder();
+
+        $customerId = $this->customer->findOrCreate($order);
+        if (!$customerId) {
+            throw new LocalizedException(__('Vindi customer_id cannot be blank.'));
+        }
+
+        $payment->setAdditionalInformation('customer_id', $customerId);
+
+        $paymentMethodCode = $this->getPaymentMethodCode();
+        $plan = $this->helperData->isSubscriptionOrder($order);
+
+        $this->psrLogger->info('VINDI_PAYMENT: Payment Method Code: ' . $paymentMethodCode);
+        $this->psrLogger->info('VINDI_PAYMENT: Is Subscription: ' . ($plan ? 'YES' : 'NO'));
+        $this->psrLogger->info('VINDI_PAYMENT: Is Multi Method: ' . ($this->helperData->isMultiMethod($paymentMethodCode) ? 'YES' : 'NO'));
+
+        if ($plan) {
+            // MULTIMEIOS NÃO SÃO MAIS SUPORTADOS PARA ASSINATURAS
+            if ($this->helperData->isMultiMethod($paymentMethodCode)) {
+                $this->psrLogger->error('VINDI_PAYMENT: Multimeios de pagamento não são suportados para assinaturas. Método: ' . $paymentMethodCode);
+                throw new LocalizedException(__('Multimeios de pagamento não são suportados para produtos com assinatura. Use apenas um método de pagamento.'));
+            }
+            
+            $this->psrLogger->info('VINDI_PAYMENT: Processando assinatura com método único');
+            return $this->processSingleMethodSubscriptionPayment($payment, $plan);
+        } else {
+            if ($this->helperData->isMultiMethod($paymentMethodCode)) {
+                $this->psrLogger->info('VINDI_PAYMENT: Processando compra avulsa com multimeios');
+                return $this->processMultiMethodInvoicePayment($payment, $amount);
+            } else {
+                $this->psrLogger->info('VINDI_PAYMENT: Processando compra avulsa com método único');
+                return $this->processSingleMethodInvoicePayment($payment, $amount);
+            }
+        }
+    }
+
+    protected function processSingleMethodInvoicePayment(InfoInterface $payment, $amount)
+    {
+        $order = $payment->getOrder();
+        $paymentMethodCode = $this->getPaymentMethodCode();
+        $customerId = $this->customer->findOrCreate($order);
+        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+
+        $body = [
+            'customer_id' => $customerId,
+            'payment_method_code' => $paymentMethodCode,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId()
+        ];
+
+        if ($paymentMethodCode === PaymentMethod::CREDIT_CARD) {
+            $paymentProfile = null;
+            $profileId = $payment->getAdditionalInformation('payment_profile');
+            
+            // Try to get existing payment profile if ID is provided
+            if ($profileId) {
+                $paymentProfile = $this->getPaymentProfileFromVindi((int)$profileId);
+            }
+            
+            // If profile not found or not provided, create new one
+            if (!$paymentProfile) {
+                $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+            }
+
+            $body['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+        }
+
+        $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
+        if ($installments) {
+            $body['installments'] = (int)$installments;
+        }
+
+        $bill = $this->bill->create($body);
+        if ($bill) {
+            $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
+            if ($this->successfullyPaid($body, $bill)) {
+                $order->setData('vindi_bill_id', $bill['id']);
+                return $bill['id'];
+            }
+            $this->bill->delete($bill['id']);
+        }
+        return $this->handleError($order);
+    }
+
+    protected function processMultiMethodInvoicePayment(InfoInterface $payment, $amount)
+    {
+        $order = $payment->getOrder();
+        $paymentMethodCode = $this->getPaymentMethodCode();
+
+        if ($paymentMethodCode === PaymentMethod::CARD_PIX) {
+            return $this->processCardPix($payment, $order);
+        }
+
+        if ($paymentMethodCode === PaymentMethod::CARD_CARD) {
+            return $this->processTwoCards($payment, $order);
+        }
+
+        if ($paymentMethodCode === PaymentMethod::CARD_BANKSLIP_PIX) {
+            return $this->processCardBankslipPix($payment, $order);
+        }
+
+        return $this->handleError($order);
+    }
+
+    protected function processCardPix(InfoInterface $payment, Order $order)
+    {
+        $this->psrLogger->info('=== INICIANDO PROCESSO CARTÃO + PIX ===');
+        $this->psrLogger->info('Pedido: ' . $order->getIncrementId() . ' | Total: R$ ' . $order->getGrandTotal());
+        
+        $customerId = $this->customer->findOrCreate($order);
+        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+
+        $amountCredit = $payment->getAdditionalInformation('amount_credit');
+        $amountPix    = $payment->getAdditionalInformation('amount_pix');
+        
+        $this->psrLogger->info('Valores: Cartão R$ ' . $amountCredit . ' | PIX R$ ' . $amountPix);
+        
+        if (!$amountCredit || !$amountPix) {
+            $this->psrLogger->error('ERRO: Valores de cartão ou PIX não definidos');
+            return $this->handleError($order);
+        }
+
+        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+        $this->psrLogger->info('Produto de desconto ID: ' . $multiPaymentDiscountProductId);
+
+        $bodyCredit = [
+            'customer_id'         => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-01',
+        ];
+        $bodyCredit['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount'     => -((float)$amountPix),
+        ];
+
+        $paymentProfile = null;
+        $profileId = $payment->getAdditionalInformation('payment_profile');
+        
+        // Try to get existing payment profile if ID is provided
+        if ($profileId) {
+            $paymentProfile = $this->getPaymentProfile((int)$profileId);
+        }
+        
+        // If profile not found or not provided, create new one
+        if (!$paymentProfile) {
+            $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+        }
+
+        $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+
+        $installments = $payment->getAdditionalInformation('cc_installments')
+            ?: $payment->getAdditionalInformation('installments')
+                ?: $payment->getInstallments();
+        if ($installments) {
+            $bodyCredit['installments'] = (int)$installments;
+        }
+
+        $this->psrLogger->info('Criando BILL 1 (Cartão) com código: ' . $order->getIncrementId() . '-01');
+        $billCredit = $this->bill->create($bodyCredit);
+        
+        if (!$billCredit) {
+            $this->psrLogger->error('ERRO: Falha na criação da BILL 1 (Cartão)');
+            return $this->handleError($order);
+        }
+        
+        $this->psrLogger->info('BILL 1 criada com sucesso. ID: ' . ($billCredit['id'] ?? 'N/A') . ' | Status: ' . ($billCredit['status'] ?? 'N/A'));
+        
+        if (!$this->successfullyPaid($bodyCredit, $billCredit)) {
+            $this->psrLogger->error('ERRO: BILL 1 não passou na validação de pagamento. Status: ' . ($billCredit['status'] ?? 'N/A'));
+            if ($billCredit && isset($billCredit['id'])) {
+                $this->bill->delete($billCredit['id']);
+                $this->psrLogger->info('BILL 1 deletada devido à falha na validação');
+            }
+            return $this->handleError($order);
+        }
+        
+        $bodyPix = [
+            'customer_id'         => $customerId,
+            'payment_method_code' => PaymentMethod::PIX,
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-02',
+        ];
+        $bodyPix['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount'     => -((float)$amountCredit),
+        ];
+
+        $this->psrLogger->info('Criando BILL 2 (PIX) com código: ' . $order->getIncrementId() . '-02');
+        $billPix = $this->bill->create($bodyPix);
+        
+        if (!$billPix) {
+            $this->psrLogger->error('ERRO: Falha na criação da BILL 2 (PIX)');
+            $this->bill->delete($billCredit['id']);
+            $this->psrLogger->info('BILL 1 deletada devido à falha na criação da BILL 2');
+            return $this->handleError($order);
+        }
+        
+        $this->psrLogger->info('BILL 2 criada com sucesso. ID: ' . ($billPix['id'] ?? 'N/A') . ' | Status: ' . ($billPix['status'] ?? 'N/A'));
+        
+        if (!$this->successfullyPaid($bodyPix, $billPix)) {
+            $this->psrLogger->error('ERRO: BILL 2 não passou na validação de pagamento. Status: ' . ($billPix['status'] ?? 'N/A'));
+            if ($billPix && isset($billPix['id'])) {
+                $this->bill->delete($billPix['id']);
+                $this->psrLogger->info('BILL 2 deletada devido à falha na validação');
+            }
+            $this->bill->delete($billCredit['id']);
+            $this->psrLogger->info('BILL 1 deletada devido à falha da BILL 2');
+            return $this->handleError($order);
+        }
+        
+        $this->psrLogger->info('=== PROCESSO CARTÃO + PIX CONCLUÍDO COM SUCESSO ===');
+        $this->psrLogger->info('Bills criadas: ' . $billCredit['id'] . ' (Cartão) + ' . $billPix['id'] . ' (PIX)');
+        
+        $order->setData('vindi_bill_id', $billCredit['id'] . ',' . $billPix['id']);
+        $this->savePaymentSplitRecord(
+            $order,
+            $billCredit,
+            $billPix,
+            $amountCredit,
+            $amountPix,
+            PaymentMethod::CREDIT_CARD,
+            PaymentMethod::PIX
+        );
+        $order->getPayment()->setMethod('vindi_cardpix');
+        $this->orderRepository->save($order);
+
+        return $billCredit['id'] . '|' . $billPix['id'];
+    }
+
+    protected function processTwoCards(InfoInterface $payment, Order $order)
+    {
+        $customerId = $this->customer->findOrCreate($order);
+        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+
+        $amountCredit = $payment->getAdditionalInformation('amount_credit');
+        $amountSecondCard = $payment->getAdditionalInformation('amount_second_card');
+        if (!$amountCredit || !$amountSecondCard) {
+            return $this->handleError($order);
+        }
+
+        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+
+        $bodyCard1 = [
+            'customer_id' => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-01'
+        ];
+        $bodyCard1['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount' => -((float)$amountSecondCard)
+        ];
+
+        $profileId1 = (int)$payment->getAdditionalInformation('payment_profile');
+        if ($profileId1) {
+            $paymentProfile1 = $this->getPaymentProfileFromVindi($profileId1);
+            if (!$paymentProfile1) {
+                $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+            }
+        } else {
+            $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+        }
+        $bodyCard1['payment_profile'] = ['id' => $paymentProfile1['id'] ?? null];
+
+        $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
+        $bodyCard1['installments'] = (int)$installments1;
+
+        $bodyCard2 = [
+            'customer_id' => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items' => $productList,
+            'code' => $order->getIncrementId() . '-02'
+        ];
+        $bodyCard2['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount' => -((float)$amountCredit)
+        ];
+
+        $profileId2 = (int)$payment->getAdditionalInformation('payment_profile2');
+        if ($profileId2) {
+            $paymentProfile2 = $this->getPaymentProfileFromVindi($profileId2);
+            if (!$paymentProfile2) {
+                $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+            }
+        } else {
+            $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+        }
+        $bodyCard2['payment_profile'] = ['id' => $paymentProfile2['id'] ?? null];
+
+        $installments2 = $payment->getAdditionalInformation('cc_installments2') ?: 1;
+        $bodyCard2['installments'] = (int)$installments2;
+
+        $billCard1 = $this->bill->create($bodyCard1);
+        if (!$billCard1 || !$this->successfullyPaid($bodyCard1, $billCard1)) {
+            if ($billCard1 && isset($billCard1['id'])) {
+                $this->bill->delete($billCard1['id']);
+            }
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCard1, $billCard1);
+
+        $billCard2 = $this->bill->create($bodyCard2);
+        if (!$billCard2 || !$this->successfullyPaid($bodyCard2, $billCard2)) {
+            if ($billCard2 && isset($billCard2['id'])) {
+                $this->bill->delete($billCard2['id']);
+            }
+            $this->bill->delete($billCard1['id']);
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCard2, $billCard2);
+
+        $order->setData('vindi_bill_id', $billCard1['id'] . ',' . $billCard2['id']);
+        $this->savePaymentSplitRecord(
+            $order,
+            $billCard1,
+            $billCard2,
+            $amountCredit,
+            $amountSecondCard,
+            PaymentMethod::CREDIT_CARD,
+            PaymentMethod::CREDIT_CARD
+        );
+        $order->getPayment()->setMethod('vindi_cardcard');
+        $this->orderRepository->save($order);
+        return $billCard1['id'] . '|' . $billCard2['id'];
+    }
+
+    protected function processCardBankslipPix(InfoInterface $payment, Order $order)
+    {
+        $customerId   = $this->customer->findOrCreate($order);
+        $productList  = $this->productManagement->findOrCreateProductsFromOrder($order);
+
+        $amountCredit      = $payment->getAdditionalInformation('amount_credit');
+        $amountBankslipPix = $payment->getAdditionalInformation('amount_bankslippix');
+        if (!$amountCredit || !$amountBankslipPix) {
+            return $this->handleError($order);
+        }
+
+        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+
+        $bodyCredit = [
+            'customer_id'         => $customerId,
+            'payment_method_code' => PaymentMethod::CREDIT_CARD,
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-01',
+        ];
+        $bodyCredit['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount'     => -((float)$amountBankslipPix),
+        ];
+
+        $paymentProfile = null;
+        $profileId = $payment->getAdditionalInformation('payment_profile');
+        
+        // Try to get existing payment profile if ID is provided
+        if ($profileId) {
+            $paymentProfile = $this->getPaymentProfileFromVindi((int)$profileId);
+        }
+        
+        // If profile not found or not provided, create new one
+        if (!$paymentProfile) {
+            $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+            if (!$paymentProfile) {
+                $this->psrLogger->error("Failed to create payment profile for CardBankslipPix. Using null profile.");
+                // Continue processing without profile, API will handle this case
+            }
+        }
+
+        $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+
+        $installments = $payment->getAdditionalInformation('cc_installments')
+            ?: $payment->getAdditionalInformation('installments')
+                ?: $payment->getInstallments();
+        if ($installments) {
+            $bodyCredit['installments'] = (int)$installments;
+        }
+
+        $billCredit = $this->bill->create($bodyCredit);
+        if (!$billCredit || !$this->successfullyPaid($bodyCredit, $billCredit)) {
+            if ($billCredit && isset($billCredit['id'])) {
+                $this->bill->delete($billCredit['id']);
+            }
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
+
+        $bodyBankslipPix = [
+            'customer_id'         => $customerId,
+            'payment_method_code' => PaymentMethod::BANK_SLIP_PIX,
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-02',
+        ];
+        $bodyBankslipPix['bill_items'][] = [
+            'product_id' => $multiPaymentDiscountProductId,
+            'amount'     => -((float)$amountCredit),
+        ];
+
+        $billBankslipPix = $this->bill->create($bodyBankslipPix);
+        if (!$billBankslipPix || !$this->successfullyPaid($bodyBankslipPix, $billBankslipPix)) {
+            if ($billBankslipPix && isset($billBankslipPix['id'])) {
+                $this->bill->delete($billBankslipPix['id']);
+            }
+            $this->bill->delete($billCredit['id']);
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $bodyBankslipPix, $billBankslipPix);
+
+        $order->setData('vindi_bill_id', $billCredit['id'] . ',' . $billBankslipPix['id']);
+        $this->savePaymentSplitRecord(
+            $order,
+            $billCredit,
+            $billBankslipPix,
+            $amountCredit,
+            $amountBankslipPix,
+            PaymentMethod::CREDIT_CARD,
+            PaymentMethod::BANK_SLIP_PIX
+        );
+        $order->getPayment()->setMethod('vindi_cardbankslippix');
+        $this->orderRepository->save($order);
+
+        return $billCredit['id'] . '|' . $billBankslipPix['id'];
+    }
+
+    protected function processSingleMethodSubscriptionPayment(InfoInterface $payment, OrderItemInterface $orderItem)
+    {
+        try {
+            $order = $payment->getOrder();
+            $customerId = $this->customer->findOrCreate($order);
+            $vindiPlan = null;
+            $options = $orderItem->getProductOptions();
+            if (!empty($options['info_buyRequest']['selected_plan_id'])) {
+                $planId = $options['info_buyRequest']['selected_plan_id'];
+                $vindiPlan = $this->vindiPlanRepository->getById($planId);
+                $planId = $vindiPlan->getVindiId();
+            } else {
+                $planId = $this->planManagement->create($orderItem->getProductId());
+            }
+            $productItems = $this->productManagement->findOrCreateProductsToSubscription($order);
+            $body = [
+                'customer_id' => $customerId,
+                'payment_method_code' => $this->getPaymentMethodCode(),
+                'plan_id' => $planId,
+                'product_items' => $productItems,
+                'code' => $order->getIncrementId(),
+                'bill_items' => []
+            ];
+            $installments = $payment->getAdditionalInformation('installments');
+            if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
+                $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
+                    ? $this->getPaymentProfileFromVindi((int)$payment->getAdditionalInformation('payment_profile'))
+                    : $this->createPaymentProfile($order, $payment, $customerId);
+
+                if ($paymentProfile) {
+                    $body['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+                }
+                if ($vindiPlan && $vindiPlan->getInstallments() != null) {
+                    if ((int)$installments > (int)$vindiPlan->getInstallments()) {
+                        throw new LocalizedException(__('The number of installments cannot be greater than the number of installments of the plan.'));
+                    }
+                }
+            }
+            if ($installments) {
+                $body['installments'] = (int)$installments;
+            }
+            $responseData = $this->subscriptionRepository->create($body);
+            if ($responseData) {
+                if (!isset($responseData['bill'])) {
+                    $order->setData('vindi_subscription_can_create_new_order', true);
+                }
+                $bill = $responseData['bill'];
+                $subscription = $responseData['subscription'];
+                $billId = !$bill ? null : $bill['id'];
+                if ($subscription) {
+                    $this->saveSubscriptionToDatabase($subscription, $order, $billId);
+                }
+                if ($bill) {
+                    $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
+                }
+                if ($this->successfullyPaid($body, $bill, $subscription)) {
+                    $billId = $bill['id'] ?? 0;
+                    $subscriptionId = $responseData['subscription']['id'];
+                    
+                    $this->psrLogger->info('Setting vindi_bill_id: ' . $billId . ' for order: ' . $order->getIncrementId());
+                    $order->setData('vindi_bill_id', $billId);
+                    
+                    $this->psrLogger->info('Setting vindi_subscription_id: ' . $subscriptionId . ' for order: ' . $order->getIncrementId());
+                    $order->setData('vindi_subscription_id', $subscriptionId);
+                    
+                    $this->psrLogger->info('Saving order to subscription orders table...');
+                    $this->saveOrderToSubscriptionOrdersTable($order);
+                    
+                    $this->psrLogger->info('Saving order via repository...');
+                    // Save the order to persist subscription_id and bill_id
+                    $this->orderRepository->save($order);
+                    
+                    $this->psrLogger->info('Order saved successfully. Verifying saved data...');
+                    // Verify the data was saved
+                    $savedSubscriptionId = $order->getData('vindi_subscription_id');
+                    $this->psrLogger->info('Verified subscription_id after save: ' . ($savedSubscriptionId ?: 'NULL'));
+                    
+                    return $billId;
+                } else {
+                    $this->subscriptionRepository->deleteAndCancelBills($subscription['id']);
+                    $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+                    $sub = $objectManager->create(\Vindi\Payment\Model\Subscription::class)->load($subscription['id']);
+                    $sub->setStatus('canceled');
+                    $sub->save();
+                    if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
+                        $paymentProfileId = $paymentProfile['id'] ?? null;
+                        if ($paymentProfileId) {
+                            $this->profile->deletePaymentProfile($paymentProfileId);
+                            $paymentProfileRepositoryModel = $this->paymentProfileRepository->getByProfileId($paymentProfileId);
+                            $this->paymentProfileRepository->delete($paymentProfileRepositoryModel);
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            return $this->handleError($order);
+        }
+        return $this->handleError($order);
+    }
+
+    /**
+     * MÉTODO DEPRECADO - NÃO MAIS USADO
+     * 
+     * Este método processava split payment para assinaturas, mas foi deprecado porque
+     * multimeios de pagamento não são mais suportados para assinaturas.
+     * 
+     * @deprecated A partir de junho 2025
+     * @see processPayment() - agora bloqueia multimeios para assinaturas
+     */
+    protected function processMultiMethodSubscriptionPayment(InfoInterface $payment, $amount, OrderItemInterface $orderItem)
+    {
+        // MÉTODO DEPRECADO - Lança exceção para indicar que não deve ser usado
+        throw new \Exception('Multimeios de pagamento não são mais suportados para assinaturas. Este método foi deprecado.');
     }
 
     /**

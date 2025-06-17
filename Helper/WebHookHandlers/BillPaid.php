@@ -92,15 +92,9 @@ class BillPaid
                 return true;
             }
 
-            // Verificar se é multimeios
-            $isMultiMeios = ($originalOrder->getPayment()->getMethod() === 'vindi_cardcard');
-            
-            if ($isMultiMeios) {
-                $this->logInfo('MULTIMEIOS_RENEWAL: Processing multimeios bill_paid for subscription ' . $subscriptionId . ', cycle ' . $currentCycle . ', bill ' . $bill['id']);
-                return $this->handleMultiMeiosSubscriptionFlow($bill, $data, $currentCycle, $originalOrder);
-            } else {
-                return $this->handleSingleCardSubscriptionFlow($bill, $data, $originalOrder);
-            }
+            // REFATORAÇÃO: Multimeios não é mais suportado para assinaturas
+            // Todas as assinaturas são tratadas como single method
+            return $this->handleSingleCardSubscriptionFlow($bill, $data, $originalOrder);
 
         } finally {
             $this->dbAdapter->query("SELECT RELEASE_LOCK(?)", [$lockName]);
@@ -109,43 +103,14 @@ class BillPaid
 
     /**
      * Handle bill_paid for multimeios (2 cards) subscriptions
+     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
+     * Método mantido apenas para evitar erros de referência.
      */
     private function handleMultiMeiosSubscriptionFlow($bill, $data, $currentCycle, $originalOrder)
     {
-        $subscriptionId = $bill['subscription']['id'];
-        $billId = $bill['id'];
-        
-        // Atualizar/criar payment split para esta bill
-        $this->updatePaymentSplitForRenewal($billId, 'paid', $subscriptionId, $currentCycle, $originalOrder);
-        
-        // Verificar se AMBAS as bills do ciclo atual foram pagas
-        $cycleBillsStatus = $this->getCycleBillsStatus($subscriptionId, $currentCycle);
-        
-        $this->logInfo('MULTIMEIOS_RENEWAL: Cycle status for subscription ' . $subscriptionId . ', cycle ' . $currentCycle . ': ' . $cycleBillsStatus['paid_bills'] . ' paid, ' . $cycleBillsStatus['total_bills'] . ' total');
-        
-        if ($cycleBillsStatus['total_bills'] < 2) {
-            $this->logInfo('MULTIMEIOS_RENEWAL: Waiting for second bill of cycle ' . $currentCycle);
-            return true; // Aguardar a outra bill
-        }
-        
-        if ($cycleBillsStatus['paid_bills'] === 2) {
-            $this->logInfo('MULTIMEIOS_RENEWAL: Both bills of cycle ' . $currentCycle . ' are paid. Generating invoice.');
-            
-            // Enfileirar criação de nova order/invoice
-            $queueItem = $this->orderCreationQueueFactory->create();
-            $queueItem->setData([
-                'bill_data' => json_encode($data),
-                'status' => 'pending',
-                'type' => 'bill_paid_multimeios',
-                'cycle' => $currentCycle
-            ]);
-            $this->orderCreationQueueRepository->save($queueItem);
-            
-            return true;
-        }
-        
-        $this->logInfo('MULTIMEIOS_RENEWAL: Not all bills of cycle ' . $currentCycle . ' are paid yet (' . $cycleBillsStatus['paid_bills'] . '/' . $cycleBillsStatus['total_bills'] . ')');
-        return true;
+        $this->logError('DEPRECATED: handleMultiMeiosSubscriptionFlow called. Multimeios is no longer supported for subscriptions.');
+        // Redirecionar para o fluxo padrão de single card
+        return $this->handleSingleCardSubscriptionFlow($bill, $data, $originalOrder);
     }
 
     /**
@@ -241,68 +206,42 @@ class BillPaid
 
     /**
      * Get status of all bills for a specific subscription cycle
+     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
+     * Método mantido apenas para evitar erros de referência.
      */
     private function getCycleBillsStatus($subscriptionId, $cycle)
     {
-        // Buscar todas as bills do ciclo atual
-        $splits = $this->paymentSplitFactory->create()
-            ->getCollection()
-            ->addFieldToFilter('subscription_id', $subscriptionId)
-            ->addFieldToFilter('cycle', $cycle);
+        $this->logError('DEPRECATED: getCycleBillsStatus called. This method is no longer used as multimeios is not supported for subscriptions.');
         
-        $totalBills = $splits->getSize();
-        $paidBills = 0;
-        $failedBills = 0;
-        
-        foreach ($splits as $split) {
-            if ($split->getStatus() === 'paid') {
-                $paidBills++;
-            } elseif ($split->getStatus() === 'failed') {
-                $failedBills++;
-            }
-        }
-        
+        // Retornar estrutura mínima para evitar erros
         return [
-            'total_bills' => $totalBills,
-            'paid_bills' => $paidBills,
-            'failed_bills' => $failedBills,
-            'pending_bills' => $totalBills - $paidBills - $failedBills
+            'total_bills' => 1,
+            'paid_bills' => 1,
+            'failed_bills' => 0,
+            'pending_bills' => 0
         ];
     }
 
     /**
      * Update or create payment split for renewal bills
+     * @deprecated Esta funcionalidade foi removida. Multimeios não é mais suportado para assinaturas.
+     * Método mantido apenas para evitar erros de referência.
      */
     private function updatePaymentSplitForRenewal($billId, $status, $subscriptionId, $cycle, $originalOrder)
     {
-        // Primeiro, tentar encontrar split existente
+        $this->logError('DEPRECATED: updatePaymentSplitForRenewal called. This method is no longer used as multimeios is not supported for subscriptions.');
+        
+        // Implementação mínima para evitar erros críticos
+        // Atualizar apenas o split existente se existir
         $existingSplit = $this->paymentSplitFactory->create()
             ->getCollection()
             ->addFieldToFilter('bill_id', $billId)
             ->getFirstItem();
         
         if ($existingSplit->getId()) {
-            // Atualizar split existente
             $existingSplit->setStatus($status);
-            $existingSplit->setSubscriptionId($subscriptionId);
-            $existingSplit->setCycle($cycle);
             $existingSplit->save();
-            $this->logInfo('MULTIMEIOS_RENEWAL: Payment split updated for bill ' . $billId);
-        } else {
-            // Criar novo split para bill de renovação
-            $split = $this->paymentSplitFactory->create();
-            $split->setData([
-                'bill_id' => $billId,
-                'subscription_id' => $subscriptionId,
-                'cycle' => $cycle,
-                'status' => $status,
-                'payment_method' => 'credit_card',
-                'order_id' => $originalOrder->getId(),
-                'order_increment_id' => $originalOrder->getIncrementId(),
-                'created_at' => date('Y-m-d H:i:s')
-            ]);
-            $split->save();
-            $this->logInfo('MULTIMEIOS_RENEWAL: New payment split created for bill ' . $billId);
+            $this->logInfo('Updated existing payment split for bill ' . $billId);
         }
     }
 
