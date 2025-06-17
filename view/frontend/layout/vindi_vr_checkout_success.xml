@@ -9,7 +9,18 @@
 <page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" layout="1column" xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">
     <head>
         <css src="Vindi_Payment::css/payment-link-checkout.css"/>
+        <css src="Vindi_Payment::css/vindi-success.css"/>
         <script src="Vindi_Payment::js/payments.js" />
+        <script>
+            // Adicionar feedback visual melhorado para copiar
+            document.addEventListener('DOMContentLoaded', function() {
+                // Pequena animação de sucesso no ícone principal
+                const successIcon = document.querySelector('.vindi-success-icon');
+                if (successIcon) {
+                    successIcon.style.animation = 'vindiPulse 2s ease-in-out infinite';
+                }
+            });
+        </script>
     </head>
     <body>
         <referenceContainer name="header.container">

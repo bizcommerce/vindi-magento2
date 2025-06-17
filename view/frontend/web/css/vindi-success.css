@@ -1,0 +1,806 @@
+/**
+ * Página de Sucesso Vindi - Design System
+ * Paleta de cores neutras com hierarquia tipográfica clara
+ * Mobile-first e acessível
+ */
+
+/* ==========================================================================
+   RESET E VARIÁVEIS CSS
+   ========================================================================== */
+
+:root {
+    /* Cores principais */
+    --vindi-primary: #D2691E;  /* Laranja queimado para CTAs */
+    --vindi-primary-hover: #B5501A;
+    
+    /* Cores neutras */
+    --vindi-text-primary: #2A2A2A;    /* Cinza escuro para texto principal */
+    --vindi-text-secondary: #666666;   /* Cinza médio para texto secundário */
+    --vindi-text-muted: #898989;      /* Cinza claro para texto terciário */
+    
+    /* Fundos */
+    --vindi-bg-light: #F8F9FA;        /* Fundo claro para seções */
+    --vindi-bg-white: #FFFFFF;        /* Fundo branco para cards */
+    --vindi-border: #E5E5E5;          /* Bordas suaves */
+    --vindi-border-light: #F0F0F0;    /* Bordas mais claras */
+    
+    /* Cores de status */
+    --vindi-success: #7CC245;         /* Verde para sucesso */
+    --vindi-success-bg: #F0F8EA;      /* Fundo verde claro */
+    --vindi-info: #0EA5E9;           /* Azul para informação */
+    --vindi-info-bg: #EFF6FF;        /* Fundo azul claro */
+    
+    /* Sombras */
+    --vindi-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --vindi-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+    --vindi-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    
+    /* Tipografia */
+    --vindi-font-size-xs: 0.75rem;     /* 12px */
+    --vindi-font-size-sm: 0.875rem;    /* 14px */
+    --vindi-font-size-base: 1rem;      /* 16px */
+    --vindi-font-size-lg: 1.125rem;    /* 18px */
+    --vindi-font-size-xl: 1.25rem;     /* 20px */
+    --vindi-font-size-2xl: 1.5rem;     /* 24px */
+    --vindi-font-size-3xl: 1.875rem;   /* 30px */
+    
+    /* Espaçamentos */
+    --vindi-space-1: 0.25rem;   /* 4px */
+    --vindi-space-2: 0.5rem;    /* 8px */
+    --vindi-space-3: 0.75rem;   /* 12px */
+    --vindi-space-4: 1rem;      /* 16px */
+    --vindi-space-5: 1.25rem;   /* 20px */
+    --vindi-space-6: 1.5rem;    /* 24px */
+    --vindi-space-8: 2rem;      /* 32px */
+    --vindi-space-10: 2.5rem;   /* 40px */
+    --vindi-space-12: 3rem;     /* 48px */
+    
+    /* Raios de borda */
+    --vindi-radius-sm: 0.375rem;  /* 6px */
+    --vindi-radius: 0.5rem;       /* 8px */
+    --vindi-radius-lg: 0.75rem;   /* 12px */
+    
+    /* Larguras máximas */
+    --vindi-max-width: 800px;
+}
+
+/* ==========================================================================
+   CONTAINER PRINCIPAL
+   ========================================================================== */
+
+.vindi-success-page {
+    min-height: 60vh;
+    padding: var(--vindi-space-6) var(--vindi-space-4);
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    line-height: 1.6;
+    color: var(--vindi-text-primary);
+}
+
+.vindi-success-container {
+    max-width: var(--vindi-max-width);
+    margin: 0 auto;
+    padding: 0;
+}
+
+/* ==========================================================================
+   HEADER DE SUCESSO
+   ========================================================================== */
+
+.vindi-success-header {
+    text-align: center;
+    margin-bottom: var(--vindi-space-10);
+    padding: var(--vindi-space-8) var(--vindi-space-4);
+    background: var(--vindi-bg-white);
+    border-radius: var(--vindi-radius-lg);
+    box-shadow: var(--vindi-shadow);
+}
+
+.vindi-success-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--vindi-space-5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vindi-success-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.vindi-success-title {
+    font-size: var(--vindi-font-size-3xl);
+    font-weight: 700;
+    color: var(--vindi-text-primary);
+    margin: 0 0 var(--vindi-space-4);
+    line-height: 1.2;
+}
+
+.vindi-success-subtitle {
+    font-size: var(--vindi-font-size-lg);
+    color: var(--vindi-text-secondary);
+    margin: 0 0 var(--vindi-space-3);
+    font-weight: 500;
+}
+
+.vindi-order-number {
+    color: var(--vindi-primary);
+    font-weight: 600;
+}
+
+.vindi-success-message {
+    font-size: var(--vindi-font-size-base);
+    color: var(--vindi-text-muted);
+    margin: 0;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   SPLIT DE PAGAMENTOS
+   ========================================================================== */
+
+.vindi-split-summary {
+    margin-bottom: var(--vindi-space-8);
+    background: var(--vindi-bg-white);
+    border-radius: var(--vindi-radius-lg);
+    padding: var(--vindi-space-6);
+    box-shadow: var(--vindi-shadow);
+}
+
+.vindi-split-title {
+    font-size: var(--vindi-font-size-xl);
+    font-weight: 600;
+    color: var(--vindi-text-primary);
+    margin: 0 0 var(--vindi-space-6);
+    text-align: center;
+}
+
+.vindi-split-items {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--vindi-space-4);
+}
+
+.vindi-split-item {
+    display: flex;
+    align-items: center;
+    gap: var(--vindi-space-4);
+    padding: var(--vindi-space-5);
+    background: var(--vindi-bg-light);
+    border-radius: var(--vindi-radius);
+    border: 1px solid var(--vindi-border-light);
+    transition: all 0.2s ease;
+}
+
+.vindi-split-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--vindi-shadow);
+}
+
+.vindi-split-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--vindi-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.vindi-icon-card {
+    background: linear-gradient(135deg, #3B82F6, #1E40AF);
+    color: white;
+}
+
+.vindi-icon-pix {
+    background: linear-gradient(135deg, #10B981, #047857);
+    color: white;
+}
+
+.vindi-icon-bankslip {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    color: white;
+}
+
+.vindi-split-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.vindi-split-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.vindi-split-label {
+    display: block;
+    font-weight: 600;
+    color: var(--vindi-text-primary);
+    font-size: var(--vindi-font-size-sm);
+    margin-bottom: var(--vindi-space-1);
+}
+
+.vindi-split-amount {
+    display: block;
+    font-size: var(--vindi-font-size-lg);
+    font-weight: 700;
+    color: var(--vindi-primary);
+    margin-bottom: var(--vindi-space-1);
+}
+
+.vindi-split-installments,
+.vindi-split-card-info {
+    display: block;
+    font-size: var(--vindi-font-size-xs);
+    color: var(--vindi-text-muted);
+    margin-bottom: var(--vindi-space-1);
+}
+
+.vindi-split-card-info {
+    font-weight: 500;
+}
+
+/* ==========================================================================
+   CARDS DE PAGAMENTO
+   ========================================================================== */
+
+.vindi-payment-card {
+    background: var(--vindi-bg-white);
+    border-radius: var(--vindi-radius-lg);
+    box-shadow: var(--vindi-shadow);
+    margin-bottom: var(--vindi-space-6);
+    overflow: hidden;
+    border: 1px solid var(--vindi-border);
+}
+
+.vindi-payment-header {
+    padding: var(--vindi-space-6);
+    text-align: center;
+    border-bottom: 1px solid var(--vindi-border-light);
+}
+
+.vindi-payment-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto var(--vindi-space-4);
+    border-radius: var(--vindi-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vindi-icon-success {
+    background: var(--vindi-success-bg);
+    color: var(--vindi-success);
+}
+
+.vindi-icon-info {
+    background: var(--vindi-info-bg);
+    color: var(--vindi-info);
+}
+
+.vindi-payment-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.vindi-payment-title {
+    font-size: var(--vindi-font-size-xl);
+    font-weight: 600;
+    color: var(--vindi-text-primary);
+    margin: 0 0 var(--vindi-space-2);
+}
+
+.vindi-payment-subtitle {
+    font-size: var(--vindi-font-size-base);
+    color: var(--vindi-text-secondary);
+    margin: 0;
+}
+
+.vindi-payment-subtitle strong {
+    color: var(--vindi-primary);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   SEÇÃO QR CODE
+   ========================================================================== */
+
+.vindi-qr-section {
+    padding: var(--vindi-space-6);
+}
+
+.vindi-qr-container {
+    text-align: center;
+    margin-bottom: var(--vindi-space-6);
+}
+
+.vindi-qr-code {
+    width: 180px;
+    height: 180px;
+    max-width: 100%;
+    border-radius: var(--vindi-radius);
+    border: 2px solid var(--vindi-border-light);
+    background: var(--vindi-bg-white);
+    padding: var(--vindi-space-2);
+    display: block;
+    margin: 0 auto;
+}
+
+.vindi-qr-fallback {
+    padding: var(--vindi-space-8);
+    text-align: center;
+    color: var(--vindi-text-muted);
+}
+
+.vindi-qr-fallback p {
+    margin: 0 0 var(--vindi-space-4);
+}
+
+/* ==========================================================================
+   SEÇÃO CÓDIGO PIX
+   ========================================================================== */
+
+.vindi-pix-code-section {
+    margin-top: var(--vindi-space-6);
+}
+
+.vindi-field-label {
+    display: block;
+    font-weight: 600;
+    color: var(--vindi-text-primary);
+    font-size: var(--vindi-font-size-sm);
+    margin-bottom: var(--vindi-space-3);
+}
+
+.vindi-pix-code-container {
+    background: var(--vindi-bg-light);
+    border: 1px solid var(--vindi-border);
+    border-radius: var(--vindi-radius);
+    padding: var(--vindi-space-4);
+}
+
+.vindi-pix-code {
+    word-break: break-all;
+    font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+    font-size: var(--vindi-font-size-sm);
+    color: var(--vindi-text-primary);
+    margin-bottom: var(--vindi-space-4);
+    background: var(--vindi-bg-white);
+    padding: var(--vindi-space-3);
+    border-radius: var(--vindi-radius-sm);
+    border: 1px solid var(--vindi-border-light);
+    overflow-wrap: break-word;
+    hyphens: auto;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+/* ==========================================================================
+   BOTÕES
+   ========================================================================== */
+
+.vindi-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vindi-space-2);
+    padding: var(--vindi-space-3) var(--vindi-space-6);
+    border-radius: var(--vindi-radius);
+    font-weight: 600;
+    font-size: var(--vindi-font-size-base);
+    text-decoration: none;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    line-height: 1.4;
+    min-height: 44px; /* Para facilitar toque em mobile */
+}
+
+.vindi-btn-primary {
+    background: var(--vindi-primary);
+    color: white;
+    border-color: var(--vindi-primary);
+}
+
+.vindi-btn-primary:hover {
+    background: var(--vindi-primary-hover);
+    border-color: var(--vindi-primary-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--vindi-shadow-lg);
+    color: white;
+    text-decoration: none;
+}
+
+.vindi-btn-outline {
+    background: transparent;
+    color: var(--vindi-primary);
+    border-color: var(--vindi-primary);
+}
+
+.vindi-btn-outline:hover {
+    background: var(--vindi-primary);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: var(--vindi-shadow);
+    text-decoration: none;
+}
+
+.vindi-btn-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.vindi-copy-btn {
+    background: var(--vindi-bg-white);
+    color: var(--vindi-text-primary);
+    border-color: var(--vindi-border);
+    width: 100%;
+    justify-content: center;
+}
+
+.vindi-copy-btn:hover {
+    background: var(--vindi-bg-light);
+    border-color: var(--vindi-primary);
+    color: var(--vindi-primary);
+    transform: none;
+}
+
+.vindi-copy-btn.vindi-copied {
+    background: var(--vindi-success);
+    color: white;
+    border-color: var(--vindi-success);
+    transform: scale(1.02);
+    box-shadow: var(--vindi-shadow-lg);
+}
+
+.vindi-copy-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* ==========================================================================
+   SEÇÕES ESPECÍFICAS
+   ========================================================================== */
+
+.vindi-info-content {
+    padding: var(--vindi-space-6);
+    text-align: center;
+}
+
+.vindi-info-content p {
+    margin: 0;
+    color: var(--vindi-text-secondary);
+    font-size: var(--vindi-font-size-base);
+}
+
+.vindi-bankslip-section {
+    padding: var(--vindi-space-6);
+    text-align: center;
+}
+
+.vindi-payment-methods {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--vindi-space-6);
+}
+
+.vindi-success-actions {
+    text-align: center;
+    margin-top: var(--vindi-space-10);
+    padding-top: var(--vindi-space-6);
+}
+
+/* ==========================================================================
+   RESPONSIVIDADE - TABLET
+   ========================================================================== */
+
+@media (min-width: 768px) {
+    .vindi-success-page {
+        padding: var(--vindi-space-8) var(--vindi-space-6);
+    }
+    
+    .vindi-success-title {
+        font-size: 2.5rem; /* 40px */
+    }
+    
+    .vindi-split-items {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .vindi-payment-methods {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .vindi-qr-code {
+        width: 200px;
+        height: 200px;
+    }
+    
+    /* Ajuste para telas médias */
+    .vindi-btn {
+        width: auto;
+        min-width: 160px;
+    }
+}
+
+/* ==========================================================================
+   RESPONSIVIDADE - DESKTOP
+   ========================================================================== */
+
+@media (min-width: 1024px) {
+    .vindi-success-page {
+        padding: var(--vindi-space-12) var(--vindi-space-8);
+    }
+    
+    .vindi-success-header {
+        padding: var(--vindi-space-10) var(--vindi-space-6);
+    }
+    
+    .vindi-success-icon {
+        width: 80px;
+        height: 80px;
+    }
+    
+    .vindi-split-items {
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+    
+    .vindi-payment-methods {
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    }
+    
+    /* Hover states mais sofisticados em desktop */
+    .vindi-payment-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--vindi-shadow-lg);
+    }
+}
+
+/* ==========================================================================
+   ACESSIBILIDADE
+   ========================================================================== */
+
+/* Foco visível para navegação por teclado */
+.vindi-btn:focus,
+.vindi-copy-btn:focus {
+    outline: 2px solid var(--vindi-primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(210, 105, 30, 0.2);
+}
+
+/* Alto contraste para leitores de tela */
+@media (prefers-contrast: high) {
+    :root {
+        --vindi-text-primary: #000000;
+        --vindi-text-secondary: #2A2A2A;
+        --vindi-border: #000000;
+    }
+}
+
+/* Respeitar preferência de animação reduzida */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .vindi-split-item:hover,
+    .vindi-payment-card:hover,
+    .vindi-btn:hover {
+        transform: none;
+    }
+}
+
+/* ==========================================================================
+   ESTADOS DE CARREGAMENTO E FEEDBACK
+   ========================================================================== */
+
+.vindi-copy-btn[data-copied="true"] {
+    background: var(--vindi-success-bg);
+    color: var(--vindi-success);
+    border-color: var(--vindi-success);
+}
+
+.vindi-copy-btn[data-copied="true"]::after {
+    content: attr(data-text);
+    position: absolute;
+    top: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--vindi-text-primary);
+    color: white;
+    padding: var(--vindi-space-2) var(--vindi-space-3);
+    border-radius: var(--vindi-radius-sm);
+    font-size: var(--vindi-font-size-xs);
+    white-space: nowrap;
+    z-index: 1000;
+}
+
+/* ==========================================================================
+   COMPATIBILIDADE E FALLBACKS
+   ========================================================================== */
+
+/* Fallback para navegadores que não suportam CSS Grid */
+@supports not (display: grid) {
+    .vindi-split-items,
+    .vindi-payment-methods {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .vindi-split-item,
+    .vindi-payment-card {
+        margin-bottom: var(--vindi-space-4);
+    }
+}
+
+/* Fallback para navegadores que não suportam CSS Custom Properties */
+@supports not (--css: variables) {
+    .vindi-success-page {
+        color: #2A2A2A;
+        background: #f8f9fa;
+    }
+    
+    .vindi-btn-primary {
+        background: #D2691E;
+        color: white;
+    }
+    
+    .vindi-btn-primary:hover {
+        background: #B5501A;
+    }
+}
+
+/* ==========================================================================
+   AJUSTES ESPECÍFICOS PARA MELHOR UX
+   ========================================================================== */
+
+/* Melhorar o comportamento de QR Codes em dispositivos móveis */
+.vindi-qr-code {
+    display: block;
+    margin: 0 auto;
+}
+
+/* Garantir que text-overflow funcione corretamente no código PIX */
+.vindi-pix-code {
+    overflow-wrap: break-word;
+    -webkit-hyphens: auto;
+    hyphens: auto;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+/* Ajuste para melhor toque em dispositivos móveis */
+@media (max-width: 767px) {
+    .vindi-btn {
+        width: 100%;
+        justify-content: center;
+        padding: var(--vindi-space-4) var(--vindi-space-5);
+        font-size: var(--vindi-font-size-base);
+    }
+    
+    .vindi-success-page {
+        padding: var(--vindi-space-4);
+    }
+    
+    .vindi-success-header {
+        padding: var(--vindi-space-6) var(--vindi-space-4);
+    }
+    
+    .vindi-success-title {
+        font-size: var(--vindi-font-size-2xl);
+    }
+    
+    .vindi-qr-code {
+        width: 160px;
+        height: 160px;
+    }
+    
+    .vindi-split-items {
+        gap: var(--vindi-space-3);
+    }
+    
+    .vindi-split-item {
+        padding: var(--vindi-space-4);
+    }
+    
+    .vindi-payment-card {
+        margin-bottom: var(--vindi-space-5);
+    }
+    
+    .vindi-payment-header,
+    .vindi-qr-section,
+    .vindi-bankslip-section {
+        padding: var(--vindi-space-5);
+    }
+}
+
+/* ==========================================================================
+   ANIMAÇÕES SUAVES PARA FEEDBACK
+   ========================================================================== */
+
+@keyframes vindi-success-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.vindi-success-icon svg {
+    animation: vindi-success-pulse 2s ease-in-out infinite;
+}
+
+@keyframes vindi-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.vindi-payment-card,
+.vindi-split-summary {
+    animation: vindi-slide-up 0.6s ease-out forwards;
+}
+
+.vindi-payment-card:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.vindi-payment-card:nth-child(3) {
+    animation-delay: 0.2s;
+}
+
+/* ==========================================================================
+   ESTADOS ADICIONAIS
+   ========================================================================== */
+
+/* Loading state para botões */
+.vindi-btn[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Estado de sucesso para copy */
+.vindi-copy-btn.copied {
+    background: var(--vindi-success-bg);
+    color: var(--vindi-success);
+    border-color: var(--vindi-success);
+}
+
+/* ==========================================================================
+   PRINT STYLES
+   ========================================================================== */
+
+@media print {
+    .vindi-success-page {
+        background: white;
+        box-shadow: none;
+    }
+    
+    .vindi-btn,
+    .vindi-copy-btn {
+        display: none;
+    }
+    
+    .vindi-qr-code,
+    .vindi-pix-code {
+        border: 1px solid #000;
+    }
+    
+    .vindi-success-icon svg circle {
+        stroke: #000;
+    }
+    
+    .vindi-success-icon svg path {
+        stroke: #000;
+    }
+}

@@ -5,62 +5,149 @@ use Vindi\Payment\Block\Onepage\Bankslippix;
 ?>
 
 <?php if ($block->canShowBankSlipPix()) : ?>
-    <div class="checkout-success qr-code">
-        <?php if ($block->getQrCodePix()) : ?>
-            <p>
-                <?= $block->getInfoMessageOnepageSuccess() ?>
-            </p>
-            <object data="<?= $block->getQrCodePix() ?>" type="image/svg+xml" class="qr-code" id="qrcode">
-                <button
-                    id="vindi-pix-button-open"
-                    type="button"
-                    class="action primary checkout"
-                    title="Open QR Code Pix"
-                    onclick="window.open('<?= $block->getQrCodePix() ?>', '_blank')">
-                    <?= __('Open QR Code') ?>
-                </button>
-            </object>
-
-            <div class="checkout-success qr-code">
-                <span>QRCode</span>
-                <p style="word-break: break-all;"><?= $block->getQrcodeOriginalPath() ?></p>
+    <div class="vindi-success-page">
+        <div class="vindi-success-container">
+            <!-- Header com ícone de sucesso -->
+            <div class="vindi-success-header">
+                <div class="vindi-success-icon">
+                    <svg viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="26" cy="26" r="25" fill="none" stroke="#7CC245" stroke-width="2"/>
+                        <path fill="none" stroke="#7CC245" stroke-width="3" stroke-linecap="round" 
+                              stroke-linejoin="round" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                    </svg>
+                </div>
+                <h1 class="vindi-success-title"><?= __('Pedido realizado com sucesso!') ?></h1>
+                <p class="vindi-success-message"><?= $block->getInfoMessageOnepageSuccess() ?></p>
             </div>
 
-            <div data-bind="scope: 'vindiPix'" class="box-qr">
-                <!-- ko template: getTemplate() --><!-- /ko -->
-            </div>
-            <div id="copied-success" class="copied" style="display: none">
-                <span><?= __('QR Code Key copied') ?></span>
-            </div>
+            <?php if ($block->getQrCodePix()) : ?>
+                <!-- Métodos de pagamento disponíveis -->
+                <div class="vindi-payment-methods">
+                    <!-- PIX -->
+                    <div class="vindi-payment-card vindi-pix-card">
+                        <div class="vindi-payment-header">
+                            <div class="vindi-payment-icon vindi-icon-pix">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 2L2 12L12 22L22 12L12 2Z" fill="currentColor"/>
+                                    <path d="M8 12H16M12 8V16" stroke="white" stroke-width="2"/>
+                                </svg>
+                            </div>
+                            <h3 class="vindi-payment-title"><?= __('Opção 1: PIX') ?></h3>
+                        </div>
+                        
+                        <div class="vindi-qr-section">
+                            <div class="vindi-qr-container">
+                                <object data="<?= $block->getQrCodePix() ?>" type="image/svg+xml" class="vindi-qr-code">
+                                    <div class="vindi-qr-fallback">
+                                        <p><?= __('QR Code não disponível.') ?></p>
+                                        <button type="button" class="vindi-btn vindi-btn-outline"
+                                                onclick="window.open('<?= $block->getQrCodePix() ?>', '_blank')">
+                                            <?= __('Abrir QR Code') ?>
+                                        </button>
+                                    </div>
+                                </object>
+                            </div>
+                            
+                            <div class="vindi-pix-code-section">
+                                <label class="vindi-field-label"><?= __('Código PIX:') ?></label>
+                                <div class="vindi-pix-code-container">
+                                    <div class="vindi-pix-code"><?= $block->getQrcodeOriginalPath() ?></div>
+                                    <button class="vindi-copy-btn" 
+                                            data-text="<?= $block->escapeHtml(__('Copiado!')) ?>"
+                                            onclick="vindiVr.copyCode(this, '.vindi-pix-code', false)">
+                                        <svg class="vindi-copy-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M8 4V16C8 17.1046 8.89543 18 10 18H18C19.1046 18 20 17.1046 20 16V7.41421C20 6.88378 19.7893 6.37507 19.4142 6L17 3.58579C16.6249 3.21071 16.1162 3 15.5858 3H10C8.89543 3 8 3.89543 8 5Z" stroke="currentColor" stroke-width="2"/>
+                                            <path d="M16 18V20C16 21.1046 15.1046 22 14 22H6C4.89543 22 4 21.1046 4 20V9C4 7.89543 4.89543 7 6 7H8" stroke="currentColor" stroke-width="2"/>
+                                        </svg>
+                                        <?= __('Copiar código') ?>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-            <div class="container-button-print">
-                <button
-                    id="vindi-bankslip-button-print"
-                    type="button"
-                    class="action primary checkout"
-                    title="Print Vindi Bankslip"
-                    onclick="window.open('<?= $block->getBankslipPrintUrl() ?>', '_blank')"
-                >
-                    <?= __('Print your Bankslip') ?>
-                </button>
+                    <!-- Boleto -->
+                    <div class="vindi-payment-card vindi-bankslip-card">
+                        <div class="vindi-payment-header">
+                            <div class="vindi-payment-icon vindi-icon-bankslip">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M14 2V8H20" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M16 13H8" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M16 17H8" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M10 9H9H8" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                            </div>
+                            <h3 class="vindi-payment-title"><?= __('Opção 2: Boleto Bancário') ?></h3>
+                        </div>
+                        
+                        <div class="vindi-bankslip-section">
+                            <p class="vindi-bankslip-message"><?= __('Prefere pagar com boleto? Clique no botão abaixo para visualizar e imprimir.') ?></p>
+                            <a href="<?= $block->getBankslipPrintUrl() ?>" target="_blank" class="vindi-btn vindi-btn-primary">
+                                <svg class="vindi-btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M16 13H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M16 17H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M10 9H9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <?= __('Ver boleto') ?>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mantém compatibilidade com o componente JavaScript existente -->
+                <div data-bind="scope: 'vindiPix'" class="box-qr" style="display: none;">
+                    <!-- ko template: getTemplate() --><!-- /ko -->
+                    <div id="copied-success" class="copied" style="display: none">
+                        <span><?= __('QR Code Key copied') ?></span>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="vindi-payment-card vindi-info-card">
+                    <div class="vindi-payment-header">
+                        <div class="vindi-payment-icon vindi-icon-info">
+                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                                <path d="M12 16V12" stroke="currentColor" stroke-width="2"/>
+                                <path d="M12 8H12.01" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <h3 class="vindi-payment-title"><?= __('Processando seu pagamento') ?></h3>
+                    </div>
+                    
+                    <div class="vindi-info-content">
+                        <h4><?= __('Como funciona?') ?></h4>
+                        <?php $nextBillingDate = $block->getNextBillingDate(); ?>
+                        <?php if ($nextBillingDate): ?>
+                            <p><?= __('Você receberá as opções de pagamento (PIX e Boleto) conforme a data agendada da sua próxima recorrência, no dia'); ?>&nbsp;<strong><?= $nextBillingDate ?></strong>.</p>
+                        <?php else: ?>
+                            <p><?= __('Você receberá as opções de pagamento conforme a data agendada da sua próxima recorrência.') ?></p>
+                        <?php endif; ?>
+                        
+                        <h4><?= __('Por que essa espera?') ?></h4>
+                        <p><?= __('Isso garante que a cobrança esteja alinhada com o ciclo da sua assinatura.') ?></p>
+                        
+                        <h4><?= __('O que fazer agora?') ?></h4>
+                        <p><?= __('Nenhuma ação adicional é necessária agora. Fique atento ao seu email na data mencionada.') ?></p>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <!-- Botão de ação final -->
+            <div class="vindi-success-actions">
+                <a href="<?= $block->getBaseUrl() . 'sales/order/history' ?>" class="vindi-btn vindi-btn-primary">
+                    <svg class="vindi-btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 7H21L19 19H5L3 7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M3 7L2 3H1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="9" cy="21" r="1" stroke="currentColor" stroke-width="2"/>
+                        <circle cx="19" cy="21" r="1" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <?= __('Ver meus pedidos') ?>
+                </a>
             </div>
-        <?php else: ?>
-            <div class="pix-subscription-info" style="text-align: justify; display: flex; justify-content: center; flex-direction: column; align-items: center;">
-                <p><?= __('We are finalizing the processing of your payment via Pix.') ?></p>
-                <h2><?= __('How does it work?') ?></h2>
-                <?php $nextBillingDate = $block->getNextBillingDate(); ?>
-                <?php if ($nextBillingDate): ?>
-                    <p><?= __('You will receive the BankSlip to make the payment according to the scheduled date of your next recurrence, on the day'); ?>&nbsp;<?= "<strong>" . $nextBillingDate . ".</strong>" ?>&nbsp;<?= __('This BankSlip will be sent to your registered email and will also be available in your client area on our website.') ?></p>
-                <?php else: ?>
-                    <p><?= __('You will receive the BankSlip to make the payment according to the scheduled date of your next recurrence. This BankSlip will be sent to your registered email and will also be available in your client area on our website.') ?></p>
-                <?php endif; ?>
-                <h2><?= __('Why this wait?') ?></h2>
-                <p><?= __('This ensures that the charge is aligned with the cycle of your subscription and that you always have full control over the payments.') ?></p>
-                <h2><?= __('What to do now?') ?></h2>
-                <p><?= __('No further action is needed now. Just stay tuned to your email and our website on the mentioned date to make the payment. If you have any questions or need assistance, we are always available to help!') ?></p>
-                <p><?= __('We appreciate your trust and are looking forward to continuing to offer you the best service.') ?></p>
-            </div>
-        <?php endif; ?>
+        </div>
     </div>
 
     <?php if ($block->getQrCodePix()): ?>
