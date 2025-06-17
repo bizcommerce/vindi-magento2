@@ -458,7 +458,7 @@ class OrderCreator
             'payment_profile' => ['id' => $profileId1],
             'bill_items' => $billItemsCard1,
             'installments' => (int)$installments1,
-            'code' => $incrementId . '-' . $cycle . '-01',
+            'code' => $incrementId . '-C' . str_pad($cycle, 2, '0', STR_PAD_LEFT) . '-01', // Formato: 123456-C02-01
         ];
         $bodyCard2 = [
             'customer_id' => $customerId,
@@ -467,7 +467,7 @@ class OrderCreator
             'payment_profile' => ['id' => $profileId2],
             'bill_items' => $billItemsCard2,
             'installments' => (int)$installments2,
-            'code' => $incrementId . '-' . $cycle . '-02',
+            'code' => $incrementId . '-C' . str_pad($cycle, 2, '0', STR_PAD_LEFT) . '-02', // Formato: 123456-C02-02
         ];
 
         $objectManager = \Magento\Framework\App\ObjectManager::getInstance();

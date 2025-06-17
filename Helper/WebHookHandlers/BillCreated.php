@@ -108,14 +108,46 @@ class BillCreated
                 }
             }
             if ($isMultiMeios) {
-                try {
-                    $this->logger->info('Cancelando bill automática da Vindi para assinatura multimeios. Bill ID: ' . $bill['id']);
-                    $this->orderCreator->cancelVindiBill($bill['id']);
-                } catch (\Exception $e) {
-                    $this->logger->error('Erro ao cancelar bill automática: ' . $e->getMessage());
+                // Verificar se é renovação ou criação inicial
+                $isRenewalBill = $this->isRenewalBill($bill);
+                $billId = $bill['id'] ?? null;
+                $billCode = $bill['code'] ?? '';
+                
+                // Verificar se é uma bill manual já criada com sufixo identificador
+                // Padrões: {order}-01, {order}-02 (criação inicial) ou {order}-C{cycle}-01, {order}-C{cycle}-02 (renovações)
+                $isManualBillWithSuffix = (preg_match('/-0[12]$/', $billCode) || preg_match('/-C\d+-0[12]$/', $billCode));
+                
+                if ($isRenewalBill) {
+                    // Para renovações: cancelar apenas bills automáticas (sem sufixo), criar bills manuais
+                    if (!$isManualBillWithSuffix) {
+                        try {
+                            $this->orderCreator->cancelVindiBill($billId);
+                            error_log('VINDI_MULTIMEIOS: Cancelled automatic renewal bill: ' . $billId);
+                        } catch (\Exception $e) {
+                            error_log('VINDI_MULTIMEIOS: Error cancelling automatic renewal bill: ' . $e->getMessage());
+                        }
+                        
+                        $this->orderCreator->enqueueManualBillsForMultiMeios($originalOrder, $subscriptionId, $bill);
+                    } else {
+                        error_log('VINDI_MULTIMEIOS: Skipping processing for manual bill with suffix: ' . $billCode);
+                    }
+                } else {
+                    // Para criação inicial: verificar se bill já foi tratada no AbstractMethod
+                    if (!$isManualBillWithSuffix) {
+                        // É uma bill automática criada apesar do novo fluxo
+                        if ($billId) {
+                            try {
+                                $this->orderCreator->cancelVindiBill($billId);
+                                error_log('VINDI_MULTIMEIOS: Cancelled unexpected automatic bill: ' . $billId);
+                            } catch (\Exception $e) {
+                                error_log('VINDI_MULTIMEIOS: Error cancelling unexpected automatic bill: ' . $e->getMessage());
+                            }
+                        }
+                    } else {
+                        error_log('VINDI_MULTIMEIOS: Processing manual bill from new strategy: ' . $billCode);
+                    }
                 }
-                $this->logger->info('Preparar criação das duas bills manuais para assinatura multimeios. Subscription ID: ' . $subscriptionId);
-                $this->orderCreator->enqueueManualBillsForMultiMeios($originalOrder, $subscriptionId, $bill);
+                
                 return true;
             }
 
@@ -150,5 +182,29 @@ class BillCreated
         } finally {
             $this->dbAdapter->query("SELECT RELEASE_LOCK(?)", [$lockName]);
         }
+    }
+
+    /**
+     * Check if bill is from a renewal cycle (not the initial creation)
+     */
+    private function isRenewalBill($bill)
+    {
+        // Verificar se existe informação de período/ciclo
+        if (isset($bill['period']) && isset($bill['period']['cycle'])) {
+            // Se o ciclo é maior que 1, é renovação
+            return (int)$bill['period']['cycle'] > 1;
+        }
+        
+        // Verificar pela data de criação da bill vs data da assinatura
+        if (isset($bill['subscription']) && isset($bill['subscription']['created_at']) && isset($bill['created_at'])) {
+            $subscriptionCreated = strtotime($bill['subscription']['created_at']);
+            $billCreated = strtotime($bill['created_at']);
+            
+            // Se a bill foi criada mais de 1 dia após a assinatura, é renovação
+            return ($billCreated - $subscriptionCreated) > 86400; // 24 horas
+        }
+        
+        // Se não conseguir determinar, assumir que é renovação (mais seguro)
+        return true;
     }
 }
