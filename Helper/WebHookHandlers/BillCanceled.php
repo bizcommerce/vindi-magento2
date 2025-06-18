@@ -113,18 +113,18 @@ class BillCanceled
         if (!empty($paidSplits)) {
             $this->logger->info('Found paid splits that need refund for order: ' . $order->getIncrementId());
             
-            // Verificar se é estorno parcial em pedido com invoice
-            if ($this->orderHasInvoice($order) && !$this->areAllSplitsBeingCanceled($allSplits, $currentSplit)) {
-                return $this->handlePartialRefundWithInvoice($order, $currentSplit, $paidSplits);
-            }
-            
-            // Estornar splits já pagos (cancelamento total)
+            // CORREÇÃO: Se há splits pagos, sempre estornar e cancelar pedido
+            // Não importa se é "parcial" - em multimeios, se um método é cancelado 
+            // e outro já foi pago, devemos estornar o pago e cancelar o pedido
             $refundSuccess = $this->refundPaidSplits($paidSplits, $order);
             
             if (!$refundSuccess) {
                 $this->logger->error('Failed to refund paid splits for order: ' . $order->getIncrementId());
                 return false;
             }
+            
+            // Após estornar splits pagos, marcar o split atual como refunded também
+            // para que o fluxo continue para cancelamento total
         }
         
         // Se chegou aqui, todos os splits estão cancelados/refundados - cancelar pedido
