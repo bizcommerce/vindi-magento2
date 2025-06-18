@@ -273,6 +273,16 @@ class CardPix extends \Magento\Payment\Block\Info
     }
 
     /**
+     * Get card amount from split payment (alias for getCreditAmount)
+     *
+     * @return float
+     */
+    public function getCardAmount()
+    {
+        return $this->getCreditAmount();
+    }
+
+    /**
      * Get PIX amount from split payment
      *
      * @return float
@@ -292,6 +302,17 @@ class CardPix extends \Magento\Payment\Block\Info
     public function formatCurrency($amount)
     {
         return $this->currency->currency($amount, true, false);
+    }
+
+    /**
+     * Format price (alias for formatCurrency)
+     *
+     * @param float $amount
+     * @return string
+     */
+    public function formatPrice($amount)
+    {
+        return $this->formatCurrency($amount);
     }
 
     /**
