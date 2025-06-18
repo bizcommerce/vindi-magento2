@@ -148,6 +148,17 @@ class CardCard extends \Magento\Payment\Block\Info
     }
 
     /**
+     * Format price (alias for formatCurrency)
+     *
+     * @param float $amount
+     * @return string
+     */
+    public function formatPrice($amount)
+    {
+        return $this->formatCurrency($amount);
+    }
+
+    /**
      * Get reorder URL for the order
      *
      * @return string

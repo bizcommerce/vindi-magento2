@@ -297,6 +297,37 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     }
 
     /**
+     * Get card amount from split payment (alias for getCreditAmount)
+     *
+     * @return float
+     */
+    public function getCardAmount()
+    {
+        return $this->getCreditAmount();
+    }
+
+    /**
+     * Get bankslip amount from split payment (alias for getBolepixAmount)
+     *
+     * @return float
+     */
+    public function getBankslipAmount()
+    {
+        return $this->getBolepixAmount();
+    }
+
+    /**
+     * Get PIX amount from split payment
+     *
+     * @return float
+     */
+    public function getPixAmount()
+    {
+        $payment = $this->getOrder()->getPayment();
+        return (float) $payment->getAdditionalInformation('amount_pix');
+    }
+
+    /**
      * Format currency value
      *
      * @param float $amount
@@ -305,5 +336,16 @@ class CardBankslipPix extends \Magento\Payment\Block\Info
     public function formatCurrency($amount)
     {
         return $this->currency->currency($amount, true, false);
+    }
+
+    /**
+     * Format price (alias for formatCurrency)
+     *
+     * @param float $amount
+     * @return string
+     */
+    public function formatPrice($amount)
+    {
+        return $this->formatCurrency($amount);
     }
 }
