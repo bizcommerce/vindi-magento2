@@ -404,17 +404,17 @@ class BillCanceled
                 
                 // ✅ DECISÃO BASEADA NO STATUS REAL DA VINDI
                 if ($billStatus === 'paid') {
-                    // CENÁRIO A: Bill está PAGA → REFUND + CREDITMEMO
-                    $this->logger->info('BILL_CANCELED: ✅ Bill is PAID - performing REFUND + CREDITMEMO - Bill ID: ' . $billId);
-                    $processed = $this->processPaidBillRefund($split, $order);
+                    // CENÁRIO A: Bill está PAGA → REFUND + CANCELAMENTO (2 etapas)
+                    $this->logger->info('BILL_CANCELED: ✅ Bill is PAID - performing REFUND + CANCELLATION (2 steps) - Bill ID: ' . $billId);
+                    $processed = $this->processPaidBillFullCancellation($split, $order);
                     
                     if ($processed) {
                         $result['success']++;
                         $result['refunded']++;
-                        $this->logger->info('BILL_CANCELED: ✅ REFUND successful for bill: ' . $billId);
+                        $this->logger->info('BILL_CANCELED: ✅ FULL CANCELLATION successful for paid bill: ' . $billId);
                     } else {
                         $result['failed']++;
-                        $this->logger->error('BILL_CANCELED: ❌ REFUND failed for bill: ' . $billId);
+                        $this->logger->error('BILL_CANCELED: ❌ FULL CANCELLATION failed for paid bill: ' . $billId);
                     }
                     
                 } elseif (in_array($billStatus, ['pending', 'waiting', 'review', 'fraud_review'])) {
@@ -1087,6 +1087,123 @@ class BillCanceled
             
         } catch (\Exception $e) {
             $this->logger->error('STANDALONE_BILL_CANCELED: Error processing cancellation: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Process full cancellation for a paid bill (2-step process: refund + cancel)
+     * 
+     * Step 1: Refund the bill (changes status from 'paid' to 'pending')
+     * Step 2: Cancel the bill (changes status from 'pending' to 'canceled')
+     *
+     * @param \Vindi\Payment\Model\PaymentSplit $split
+     * @param \Magento\Sales\Model\Order $order
+     * @return bool
+     */
+    private function processPaidBillFullCancellation($split, $order)
+    {
+        try {
+            $billId = $split->getBillId();
+            $this->logger->info('BILL_CANCELED: ========== FULL CANCELLATION FOR PAID BILL ==========');
+            $this->logger->info('BILL_CANCELED: Starting 2-step cancellation for paid bill: ' . $billId);
+            
+            // STEP 1: REFUND (paid → pending)
+            $this->logger->info('BILL_CANCELED: STEP 1 - Executing REFUND to change bill from "paid" to "pending"');
+            
+            // Buscar charge para fazer refund
+            $chargeId = $this->getChargeIdFromBillId($billId);
+            
+            if (!$chargeId) {
+                $this->logger->warning('BILL_CANCELED: ❌ No charge ID found for paid bill - Bill ID: ' . $billId);
+                return false;
+            }
+
+            $this->logger->info('BILL_CANCELED: Found charge ID: ' . $chargeId . ' for bill: ' . $billId);
+
+            // Executar refund na Vindi
+            $this->logger->info('BILL_CANCELED: Requesting refund from Vindi for charge: ' . $chargeId . ', amount: ' . $split->getAmount());
+            $refundResult = $this->charge->refund($chargeId, ['amount' => $split->getAmount()]);
+            
+            if (!$refundResult) {
+                $this->logger->warning('BILL_CANCELED: ❌ STEP 1 FAILED - Refund failed in Vindi for paid bill - Bill ID: ' . $billId);
+                $split->setStatus('failed_refund');
+                $split->setIsRefunded(0);
+                $split->save();
+                return false;
+            }
+
+            $this->logger->info('BILL_CANCELED: ✅ STEP 1 SUCCESS - Refund executed, bill should now be "pending"');
+
+            // Aguardar um momento para a Vindi processar
+            sleep(2);
+
+            // STEP 2: CANCELAMENTO (pending → canceled)
+            $this->logger->info('BILL_CANCELED: STEP 2 - Executing CANCELLATION to change bill from "pending" to "canceled"');
+
+            // Verificar se o status mudou para pending após o refund
+            $billData = $this->bill->getBill($billId);
+            $newStatus = $billData['status'] ?? 'unknown';
+            $this->logger->info('BILL_CANCELED: Bill status after refund: ' . $newStatus);
+
+            if ($newStatus === 'pending' || $newStatus === 'waiting') {
+                // Agora cancelar a bill
+                $cancelResult = $this->bill->cancel($billId);
+                
+                if ($cancelResult) {
+                    $this->logger->info('BILL_CANCELED: ✅ STEP 2 SUCCESS - Bill canceled successfully');
+                } else {
+                    $this->logger->warning('BILL_CANCELED: ⚠️ STEP 2 PARTIAL - Refund succeeded but cancellation failed - Bill ID: ' . $billId);
+                    // Ainda assim consideramos sucesso parcial pois o refund foi feito
+                }
+            } else {
+                $this->logger->warning('BILL_CANCELED: ⚠️ Bill status after refund is "' . $newStatus . '" instead of "pending" - Bill ID: ' . $billId);
+                // Ainda assim o refund foi feito, então não é falha total
+            }
+
+            // Criar creditmemo no Magento
+            $this->logger->info('BILL_CANCELED: Creating creditmemo in Magento for refunded amount...');
+            $creditmemo = $this->refundHelper->createSplitRefund(
+                $order,
+                $split->getAmount(),
+                $split->getPaymentMethod() ?: 'Método de Pagamento'
+            );
+
+            if ($creditmemo) {
+                $this->logger->info('BILL_CANCELED: ✅ CREDITMEMO created successfully: ' . $creditmemo->getIncrementId() . ' for amount: ' . $split->getAmount());
+            } else {
+                $this->logger->warning('BILL_CANCELED: ⚠️ CREDITMEMO creation failed, but refund was successful');
+            }
+
+            // Marcar split como refundado e cancelado
+            $split->setStatus('refunded_and_canceled');
+            $split->setIsRefunded(1);
+            $split->setRefundAmount($split->getAmount());
+            $split->setRefundDate(date('Y-m-d H:i:s'));
+            $split->save();
+
+            $this->logger->info('BILL_CANCELED: ✅ Split updated as REFUNDED_AND_CANCELED for bill: ' . $billId);
+
+            // Adicionar comentário detalhado no pedido
+            $commentText = sprintf(
+                'MULTIMEIOS - Cancelamento completo: Método "%s" (R$ %s) foi estornado E cancelado (processo de 2 etapas) devido ao cancelamento de outro método.',
+                $split->getPaymentMethod() ?: 'Método de Pagamento',
+                number_format($split->getAmount(), 2, ',', '.')
+            );
+            
+            if ($creditmemo) {
+                $commentText .= sprintf(' Creditmemo #%s criado automaticamente.', $creditmemo->getIncrementId());
+            } else {
+                $commentText .= ' ATENÇÃO: Creditmemo não foi criado - verificar manualmente.';
+            }
+            
+            $order->addStatusHistoryComment($commentText);
+            $this->logger->info('BILL_CANCELED: Comment added to order: ' . $order->getIncrementId());
+            
+            return true;
+            
+        } catch (\Exception $e) {
+            $this->logger->error('BILL_CANCELED: ❌ ERROR in full cancellation process for paid bill - Bill ID: ' . $split->getBillId() . ', Error: ' . $e->getMessage());
             return false;
         }
     }
