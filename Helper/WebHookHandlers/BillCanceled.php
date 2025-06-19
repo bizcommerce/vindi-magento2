@@ -13,6 +13,7 @@ use Magento\Sales\Model\Order\CreditmemoFactory;
 use Magento\Framework\DB\Transaction;
 use Magento\Sales\Api\CreditmemoManagementInterface;
 use Magento\Framework\Api\SearchCriteriaBuilder;
+use Vindi\Payment\Helper\RefundHelper;
 
 /**
  * Class BillCanceled
@@ -31,6 +32,7 @@ class BillCanceled
     protected $transaction;
     protected $creditmemoManagement;
     protected $searchCriteriaBuilder;
+    protected $refundHelper;
 
     public function __construct(
         LoggerInterface $logger,
@@ -42,7 +44,8 @@ class BillCanceled
         CreditmemoService $creditmemoService,
         Transaction $transaction,
         CreditmemoManagementInterface $creditmemoManagement,
-        SearchCriteriaBuilder $searchCriteriaBuilder
+        SearchCriteriaBuilder $searchCriteriaBuilder,
+        RefundHelper $refundHelper
     ) {
         $this->logger = $logger;
         $this->paymentSplitFactory = $paymentSplitFactory;
@@ -54,6 +57,7 @@ class BillCanceled
         $this->transaction = $transaction;
         $this->creditmemoManagement = $creditmemoManagement;
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
+        $this->refundHelper = $refundHelper;
     }
 
     public function billCanceled(array $data): bool
@@ -116,28 +120,46 @@ class BillCanceled
             return true;
         }
 
-        // Obter charge para refund
+        // Obter charge para refund do split atual
         $chargeId = isset($bill['charges'][0]['id']) ? $bill['charges'][0]['id'] : null;
         if (!$chargeId) {
             $this->logger->error('No charge ID found for bill: ' . $billId);
-            return false;
+            // CORREÇÃO: Não bloquear cancelamento por falta de charge ID
+            // Marcar split como cancelado e continuar para lógica de cancelamento
+            $currentSplit->setStatus('canceled')
+                ->setIsRefunded(0)
+                ->save();
+            
+            $this->logger->warning('BILL_CANCELED: No charge ID but continuing with cancellation logic');
+        } else {
+            // Tentar executar refund na Vindi
+            $refundResult = $this->charge->refund($chargeId, ['amount' => $currentSplit->getAmount()]);
+            if (!$refundResult) {
+                $this->logger->warning('Refund failed for bill: ' . $billId . ' - but continuing with cancellation');
+                // CORREÇÃO: Não bloquear cancelamento por falha de refund
+                // Marcar split como failed_refund e continuar
+                $currentSplit->setStatus('failed_refund')
+                    ->setIsRefunded(0)
+                    ->save();
+            } else {
+                // ✅ NOVO: Criar creditmemo no Magento para o refund
+                $creditmemo = $this->refundHelper->createSplitRefund(
+                    $this->orderRepository->get($currentSplit->getOrderId()),
+                    $currentSplit->getAmount(),
+                    $currentSplit->getPaymentMethod() ?: 'Método de Pagamento'
+                );
+                
+                // Refund bem-sucedido - marcar split como refundado
+                $currentSplit->setStatus('refunded')
+                    ->setIsRefunded(1)
+                    ->setRefundAmount($currentSplit->getAmount())
+                    ->setRefundDate(date('Y-m-d H:i:s'))
+                    ->save();
+
+                $this->logger->info('Split refunded successfully for bill: ' . $billId . 
+                    ($creditmemo ? ' with creditmemo: ' . $creditmemo->getIncrementId() : ' without creditmemo'));
+            }
         }
-
-        // Executar refund na Vindi
-        $refundResult = $this->charge->refund($chargeId, ['amount' => $currentSplit->getAmount()]);
-        if (!$refundResult) {
-            $this->logger->error('Refund failed for bill: ' . $billId);
-            return false;
-        }
-
-        // Marcar split como refundado
-        $currentSplit->setStatus('refunded')
-            ->setIsRefunded(1)
-            ->setRefundAmount($currentSplit->getAmount())
-            ->setRefundDate(date('Y-m-d H:i:s'))
-            ->save();
-
-        $this->logger->info('Split refunded successfully for bill: ' . $billId);
 
         // Buscar todos os splits do pedido
         $order = $this->orderRepository->get($currentSplit->getOrderId());
@@ -167,21 +189,50 @@ class BillCanceled
         if (!empty($paidSplits)) {
             $this->logger->info('Found paid splits that need refund for order: ' . $order->getIncrementId());
             
-            // CORREÇÃO: Se há splits pagos, sempre estornar e cancelar pedido
-            // Não importa se é "parcial" - em multimeios, se um método é cancelado 
-            // e outro já foi pago, devemos estornar o pago e cancelar o pedido
-            $refundSuccess = $this->refundPaidSplits($paidSplits, $order);
+            // REGRA CRÍTICA: Tentar estornar splits pagos, mas SEMPRE cancelar pedido
+            // mesmo se o estorno falhar (consistente com handleStandaloneBillCancellation)
+            $refundResult = $this->refundPaidSplits($paidSplits, $order);
             
-            if (!$refundSuccess) {
-                $this->logger->error('Failed to refund paid splits for order: ' . $order->getIncrementId());
-                return false;
+            if ($refundResult['success'] == $refundResult['total']) {
+                // Todos os estornos bem-sucedidos
+                $order->addStatusHistoryComment(sprintf(
+                    'Multimeios cancelado com estorno: Bill %d cancelada. %d pagamentos estornados automaticamente.',
+                    $billId,
+                    $refundResult['success']
+                ));
+                $this->logger->info('BILL_CANCELED: All refunds successful - proceeding with order cancellation');
+            } elseif ($refundResult['success'] > 0) {
+                // Estornos parcialmente bem-sucedidos
+                $order->addStatusHistoryComment(sprintf(
+                    'Multimeios cancelado com estorno parcial: Bill %d cancelada. %d/%d pagamentos estornados. ATENÇÃO: %d NÃO puderam ser estornados - verificar manualmente.',
+                    $billId,
+                    $refundResult['success'],
+                    $refundResult['total'],
+                    $refundResult['failed']
+                ));
+                $this->logger->warning('BILL_CANCELED: Partial refund success but order will be canceled anyway - manual intervention may be needed');
+            } else {
+                // Todos os estornos falharam
+                $order->addStatusHistoryComment(sprintf(
+                    'Multimeios cancelado com falha no estorno: Bill %d cancelada. ATENÇÃO: %d pagamentos NÃO puderam ser estornados automaticamente - verificar manualmente.',
+                    $billId,
+                    $refundResult['failed']
+                ));
+                $this->logger->warning('BILL_CANCELED: All refunds failed but order will be canceled anyway - manual intervention may be needed');
             }
             
-            // Após estornar splits pagos, marcar o split atual como refunded também
-            // para que o fluxo continue para cancelamento total
+            // Continuar para cancelamento do pedido independente do resultado do estorno
+        } else {
+            // Não há splits pagos - cancelamento simples
+            $this->logger->info('BILL_CANCELED: No paid splits found - simple cancellation');
+            $order->addStatusHistoryComment(sprintf(
+                'Multimeios cancelado: Bill %d cancelada. Nenhum pagamento havia sido processado.',
+                $billId
+            ));
         }
         
-        // Se chegou aqui, todos os splits estão cancelados/refundados - cancelar pedido
+        // SEMPRE cancelar o pedido, independente do resultado do estorno
+        $this->logger->info('BILL_CANCELED: ALWAYS proceeding with order cancellation (regardless of refund result)');
         $this->logger->info('All splits processed for order: ' . $order->getIncrementId() . ' - proceeding with full cancellation');
         
         // Verificar se o pedido já tem invoice gerada
@@ -235,14 +286,16 @@ class BillCanceled
     }
 
     /**
-     * Refund all paid splits
+     * Refund all paid splits - NEVER blocks cancellation
      *
      * @param array $paidSplits
      * @param \Magento\Sales\Model\Order $order
-     * @return bool
+     * @return array ['success' => int, 'failed' => int, 'total' => int]
      */
     private function refundPaidSplits($paidSplits, $order)
     {
+        $result = ['success' => 0, 'failed' => 0, 'total' => count($paidSplits)];
+        
         try {
             foreach ($paidSplits as $split) {
                 $this->logger->info(sprintf(
@@ -256,7 +309,8 @@ class BillCanceled
                 $chargeId = $this->getChargeIdFromBillId($split->getBillId());
                 
                 if (!$chargeId) {
-                    $this->logger->error('No charge ID found for paid split - Bill ID: ' . $split->getBillId());
+                    $this->logger->warning('No charge ID found for paid split - Bill ID: ' . $split->getBillId() . ' - counting as failed but continuing');
+                    $result['failed']++;
                     continue;
                 }
 
@@ -264,9 +318,21 @@ class BillCanceled
                 $refundResult = $this->charge->refund($chargeId, ['amount' => $split->getAmount()]);
                 
                 if (!$refundResult) {
-                    $this->logger->error('Refund failed for paid split - Bill ID: ' . $split->getBillId());
-                    return false;
+                    $this->logger->warning('Refund failed for paid split - Bill ID: ' . $split->getBillId() . ' - marking as failed but continuing');
+                    // Marcar como failed e continuar
+                    $split->setStatus('failed_refund')
+                        ->setIsRefunded(0)
+                        ->save();
+                    $result['failed']++;
+                    continue;
                 }
+
+                // ✅ NOVO: Criar creditmemo no Magento para o refund do split
+                $creditmemo = $this->refundHelper->createSplitRefund(
+                    $order,
+                    $split->getAmount(),
+                    $split->getPaymentMethod()
+                );
 
                 // Marcar split como refundado
                 $split->setStatus('refunded')
@@ -275,21 +341,30 @@ class BillCanceled
                     ->setRefundDate(date('Y-m-d H:i:s'))
                     ->save();
 
-                $this->logger->info('Paid split refunded successfully - Bill ID: ' . $split->getBillId());
+                $this->logger->info('Paid split refunded successfully with creditmemo - Bill ID: ' . $split->getBillId() . 
+                    ($creditmemo ? ', Creditmemo: ' . $creditmemo->getIncrementId() : ', No creditmemo created'));
+                $result['success']++;
 
                 // Adicionar comentário detalhado no pedido
-                $order->addStatusHistoryComment(sprintf(
+                $commentText = sprintf(
                     'Estorno realizado: Método "%s" (R$ %s) foi estornado devido ao cancelamento de outro método do multimeios.',
                     $split->getPaymentMethod() ?: 'Método de Pagamento',
                     number_format($split->getAmount(), 2, ',', '.')
-                ));
+                );
+                
+                if ($creditmemo) {
+                    $commentText .= sprintf(' Creditmemo #%s criado.', $creditmemo->getIncrementId());
+                }
+                
+                $order->addStatusHistoryComment($commentText);
             }
 
-            return true;
+            return $result;
             
         } catch (\Exception $e) {
             $this->logger->error('Error refunding paid splits: ' . $e->getMessage());
-            return false;
+            // Mesmo com exceção, retornar resultado parcial sem bloquear cancelamento
+            return $result;
         }
     }
 
@@ -364,14 +439,12 @@ class BillCanceled
                 'Creditmemo gerado automaticamente para reembolso.'
             );
 
-            // Criar creditmemo para valor total do pedido
+            // Criar creditmemo para valor total do pedido usando RefundHelper
             if ($order->canCreditmemo()) {
-                $invoice = $order->getInvoiceCollection()->getFirstItem();
-                if ($invoice && $invoice->getId()) {
-                    $creditmemo = $this->creditmemoFactory->createByInvoice($invoice);
-                    $this->creditmemoService->refund($creditmemo);
-                    
-                    $this->logger->info('REFUND_WITH_INVOICE: Creditmemo created for order: ' . $order->getIncrementId());
+                $creditmemo = $this->refundHelper->createFullRefund($order->getId());
+                
+                if ($creditmemo) {
+                    $this->logger->info('REFUND_WITH_INVOICE: Full creditmemo created for order: ' . $order->getIncrementId());
                     
                     $order->addStatusHistoryComment(
                         sprintf(
@@ -379,6 +452,9 @@ class BillCanceled
                             $creditmemo->getIncrementId()
                         )
                     );
+                } else {
+                    $this->logger->warning('REFUND_WITH_INVOICE: Failed to create creditmemo for order: ' . $order->getIncrementId());
+                    $order->addStatusHistoryComment('Erro ao criar creditmemo automático - verificar manualmente.');
                 }
             }
 
@@ -464,6 +540,13 @@ class BillCanceled
                         $refundResult = $this->charge->refund($chargeId, ['amount' => $paidSplit->getAmount()]);
                         
                         if ($refundResult) {
+                            // ✅ NOVO: Criar creditmemo no Magento para o refund do split
+                            $creditmemo = $this->refundHelper->createSplitRefund(
+                                $order,
+                                $paidSplit->getAmount(),
+                                $paidSplit->getPaymentMethod()
+                            );
+                            
                             // Marcar split como refundado
                             $paidSplit->setStatus('refunded')
                                      ->setIsRefunded(1)
@@ -471,7 +554,8 @@ class BillCanceled
                                      ->setRefundDate(date('Y-m-d H:i:s'))
                                      ->save();
 
-                            $this->logger->info('PARTIAL_REFUND_WITH_INVOICE: Split refunded - Bill ID: ' . $paidSplit->getBillId());
+                            $this->logger->info('PARTIAL_REFUND_WITH_INVOICE: Split refunded - Bill ID: ' . $paidSplit->getBillId() . 
+                                ($creditmemo ? ', Creditmemo: ' . $creditmemo->getIncrementId() : ', No creditmemo created'));
                         }
                     }
                 }
@@ -504,8 +588,8 @@ class BillCanceled
     }
 
     /**
-     * Detect if this is a multimethod standalone bill (not subscription)
-     * based on bill items and other indicators
+     * Detect if this is a multimethod standalone bill by checking the database
+     * for other splits with the same order, with fallback to legacy indicators
      *
      * @param array $bill
      * @return bool
@@ -513,6 +597,44 @@ class BillCanceled
     private function isMultimethodStandaloneBill($bill)
     {
         try {
+            $billId = $bill['id'] ?? null;
+            $billCode = $bill['code'] ?? '';
+            
+            $this->logger->info('MULTIMETHOD_DETECTION: Checking bill ' . $billId . ' (' . $billCode . ')');
+            
+            // MÉTODO 1 (PREFERIDO): Verificar se há outros splits para o mesmo pedido
+            $order = $this->findOrderForStandaloneBill($bill);
+            
+            if ($order) {
+                $this->logger->info('MULTIMETHOD_DETECTION: Found order ' . $order->getIncrementId() . ' - checking splits');
+                
+                // Buscar todos os splits para este pedido
+                $allSplits = $this->paymentSplitFactory->create()
+                    ->getCollection()
+                    ->addFieldToFilter('order_increment_id', $order->getIncrementId());
+
+                $splitCount = $allSplits->getSize();
+                $this->logger->info('MULTIMETHOD_DETECTION: Found ' . $splitCount . ' splits for order ' . $order->getIncrementId());
+
+                // Se há mais de 1 split, é multimeios
+                if ($splitCount > 1) {
+                    $this->logger->info('MULTIMETHOD_DETECTION: Confirmed multimethod - Order has ' . $splitCount . ' payment splits');
+                    
+                    // Log detalhado dos splits para debug
+                    foreach ($allSplits as $split) {
+                        $this->logger->info('MULTIMETHOD_DETECTION: Split found - Bill ID: ' . $split->getBillId() . ', Status: ' . $split->getStatus() . ', Amount: ' . $split->getAmount());
+                    }
+                    
+                    return true;
+                }
+                
+                $this->logger->info('MULTIMETHOD_DETECTION: Single payment method - Order has only ' . $splitCount . ' split');
+                return false;
+            }
+            
+            // MÉTODO 2 (FALLBACK): Usar indicadores legacy se não encontrou pedido
+            $this->logger->info('MULTIMETHOD_DETECTION: No order found, falling back to legacy indicators');
+            
             // Indicador 1: Código da bill sugere sequência (ex: BIZ-VINDI-000006563-02)
             if (isset($bill['code']) && preg_match('/-\d{2}$/', $bill['code'])) {
                 $this->logger->info('MULTIMETHOD_DETECTION: Bill code suggests sequence: ' . $bill['code']);
@@ -558,6 +680,7 @@ class BillCanceled
                 }
             }
             
+            $this->logger->info('MULTIMETHOD_DETECTION: No multimethod indicators found');
             return false;
             
         } catch (\Exception $e) {
@@ -669,24 +792,42 @@ class BillCanceled
             $paidSplits = $this->getPaidSplits($allSplits);
             
             if (!empty($paidSplits)) {
-                // REGRA 2: Há bills pagas → ESTORNAR + CANCELAR
-                $this->logger->info('STANDALONE_BILL_CANCELED: REGRA 2 - Found ' . count($paidSplits) . ' paid splits - will refund and cancel order');
+                // REGRA 2: Há bills pagas → TENTAR ESTORNAR + SEMPRE CANCELAR
+                $this->logger->info('STANDALONE_BILL_CANCELED: REGRA 2 - Found ' . count($paidSplits) . ' paid splits - will try to refund and ALWAYS cancel order');
                 
-                // Estornar todas as bills pagas
-                $refundSuccess = $this->refundPaidSplits($paidSplits, $order);
+                // TENTAR estornar todas as bills pagas (sem bloquear cancelamento)
+                $refundResult = $this->refundPaidSplits($paidSplits, $order);
                 
-                if (!$refundSuccess) {
-                    $this->logger->error('STANDALONE_BILL_CANCELED: Failed to refund paid splits');
-                    return false;
+                if ($refundResult['success'] == $refundResult['total']) {
+                    // Todos os estornos bem-sucedidos
+                    $order->addStatusHistoryComment(sprintf(
+                        'Multimeios cancelado com estorno: Bill %d (%s) cancelada. %d pagamentos estornados automaticamente.',
+                        $billId,
+                        $bill['code'] ?? 'sem código',
+                        $refundResult['success']
+                    ));
+                    $this->logger->info('STANDALONE_BILL_CANCELED: All refunds successful - proceeding with order cancellation');
+                } elseif ($refundResult['success'] > 0) {
+                    // Estornos parcialmente bem-sucedidos
+                    $order->addStatusHistoryComment(sprintf(
+                        'Multimeios cancelado com estorno parcial: Bill %d (%s) cancelada. %d/%d pagamentos estornados. ATENÇÃO: %d NÃO puderam ser estornados - verificar manualmente.',
+                        $billId,
+                        $bill['code'] ?? 'sem código',
+                        $refundResult['success'],
+                        $refundResult['total'],
+                        $refundResult['failed']
+                    ));
+                    $this->logger->warning('STANDALONE_BILL_CANCELED: Partial refund success but order will be canceled anyway - manual intervention may be needed');
+                } else {
+                    // Todos os estornos falharam
+                    $order->addStatusHistoryComment(sprintf(
+                        'Multimeios cancelado com falha no estorno: Bill %d (%s) cancelada. ATENÇÃO: %d pagamentos NÃO puderam ser estornados automaticamente - verificar manualmente.',
+                        $billId,
+                        $bill['code'] ?? 'sem código',
+                        $refundResult['failed']
+                    ));
+                    $this->logger->warning('STANDALONE_BILL_CANCELED: All refunds failed but order will be canceled anyway - manual intervention may be needed');
                 }
-                
-                // Adicionar comentário específico para estorno
-                $order->addStatusHistoryComment(sprintf(
-                    'Multimeios cancelado com estorno: Bill %d (%s) cancelada. %d pagamentos estornados automaticamente.',
-                    $billId,
-                    $bill['code'] ?? 'sem código',
-                    count($paidSplits)
-                ));
                 
             } else {
                 // REGRA 1: NÃO há bills pagas → APENAS CANCELAR
@@ -700,15 +841,15 @@ class BillCanceled
                 ));
             }
             
-            // Em ambos os casos, cancelar o pedido
-            $this->logger->info('STANDALONE_BILL_CANCELED: Proceeding with order cancellation');
+            // SEMPRE cancelar o pedido, independente do resultado do estorno
+            $this->logger->info('STANDALONE_BILL_CANCELED: ALWAYS proceeding with order cancellation (regardless of refund result)');
             
             // Verificar se o pedido já tem invoice gerada
             $hasInvoice = $this->orderHasInvoice($order);
             
             if ($hasInvoice) {
-                // CENÁRIO A: Invoice já existe - gerar creditmemo se houve estorno
-                $this->logger->info('STANDALONE_BILL_CANCELED: Order has invoice - creating creditmemo');
+                // CENÁRIO A: Invoice já existe - gerar creditmemo e cancelar
+                $this->logger->info('STANDALONE_BILL_CANCELED: Order has invoice - creating creditmemo and canceling');
                 return $this->handleRefundWithInvoice($order);
             } else {
                 // CENÁRIO B: Invoice não existe - cancelamento direto
