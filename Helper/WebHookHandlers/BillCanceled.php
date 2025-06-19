@@ -70,11 +70,13 @@ class BillCanceled
         $billId = $bill['id'];
 
         // Log detalhado para debug
+        $this->logger->info('BILL_CANCELED: ========== NOVO WEBHOOK ==========');
         $this->logger->info('BILL_CANCELED: Processing bill ' . $billId);
         $this->logger->info('BILL_CANCELED: Bill data - ' . json_encode([
             'id' => $billId,
             'status' => $bill['status'] ?? 'unknown',
             'amount' => $bill['amount'] ?? 'unknown',
+            'code' => $bill['code'] ?? 'unknown',
             'has_subscription' => isset($bill['subscription']) ? 'yes' : 'no',
             'subscription_id' => isset($bill['subscription']['id']) ? $bill['subscription']['id'] : 'none',
             'charges_count' => isset($bill['charges']) ? count($bill['charges']) : 0
@@ -113,6 +115,15 @@ class BillCanceled
         }
 
         $this->logger->info('BILL_CANCELED: Split found for bill ' . $billId . ' - Order: ' . $currentSplit->getOrderIncrementId());
+        $this->logger->info('BILL_CANCELED: Current split data - ' . json_encode([
+            'split_id' => $currentSplit->getId(),
+            'order_id' => $currentSplit->getOrderId(),
+            'order_increment_id' => $currentSplit->getOrderIncrementId(),
+            'amount' => $currentSplit->getAmount(),
+            'status' => $currentSplit->getStatus(),
+            'is_refunded' => $currentSplit->getIsRefunded(),
+            'payment_method' => $currentSplit->getPaymentMethod()
+        ]));
 
         // Verificar se já foi refundado
         if ($currentSplit->getIsRefunded()) {
@@ -167,7 +178,17 @@ class BillCanceled
             ->getCollection()
             ->addFieldToFilter('order_increment_id', $order->getIncrementId());
 
+        $this->logger->info('BILL_CANCELED: ========== MULTIMEIOS DETECTION ==========');
         $this->logger->info('BILL_CANCELED: Found ' . $allSplits->getSize() . ' splits for order ' . $order->getIncrementId());
+
+        // Verificar se é realmente multimeios
+        if ($allSplits->getSize() <= 1) {
+            $this->logger->info('BILL_CANCELED: Only 1 split found - NOT a multimethod payment, processing as simple cancellation');
+            // Processar como pagamento simples
+            return $this->handleSinglePaymentCancellation($order, $currentSplit, $bill);
+        }
+
+        $this->logger->info('BILL_CANCELED: MULTIMETHOD PAYMENT DETECTED - ' . $allSplits->getSize() . ' splits found');
 
         // Log detalhado de todos os splits
         foreach ($allSplits as $split) {
@@ -181,17 +202,23 @@ class BillCanceled
             ]));
         }
 
-        // Verificar se há splits já pagos (precisam ser estornados)
-        $paidSplits = $this->getPaidSplits($allSplits);
+        // Buscar splits que NÃO são o atual e que precisam ser processados
+        $otherSplits = [];
+        foreach ($allSplits as $split) {
+            if ($split->getId() !== $currentSplit->getId()) {
+                $otherSplits[] = $split;
+            }
+        }
         
-        $this->logger->info('BILL_CANCELED: Found ' . count($paidSplits) . ' paid splits that need refund');
+        $this->logger->info('BILL_CANCELED: Found ' . count($otherSplits) . ' OTHER splits that need processing (excluding current split)');
         
-        if (!empty($paidSplits)) {
-            $this->logger->info('Found splits that need processing for order: ' . $order->getIncrementId());
+        if (!empty($otherSplits)) {
+            $this->logger->info('BILL_CANCELED: ========== PROCESSING OTHER SPLITS ==========');
+            $this->logger->info('Found ' . count($otherSplits) . ' other splits that need processing for order: ' . $order->getIncrementId());
             
             // REGRA CRÍTICA: Processar splits (refund se pagos, cancelar se pendentes), mas SEMPRE cancelar pedido
             // mesmo se algum processamento falhar (consistente com handleStandaloneBillCancellation)
-            $processResult = $this->refundPaidSplits($paidSplits, $order);
+            $processResult = $this->processOtherSplits($otherSplits, $order);
             
             if ($processResult['success'] == $processResult['total']) {
                 // Todos os processamentos bem-sucedidos
@@ -233,10 +260,10 @@ class BillCanceled
             
             // Continuar para cancelamento do pedido independente do resultado do estorno
         } else {
-            // Não há splits pagos - cancelamento simples
-            $this->logger->info('BILL_CANCELED: No paid splits found - simple cancellation');
+            // Não há outros splits - cancelamento simples
+            $this->logger->info('BILL_CANCELED: No other splits found - simple cancellation');
             $order->addStatusHistoryComment(sprintf(
-                'Multimeios cancelado: Bill %d cancelada. Nenhum pagamento havia sido processado.',
+                'Multimeios cancelado: Bill %d cancelada. Nenhum outro pagamento havia sido processado.',
                 $billId
             ));
         }
@@ -296,14 +323,50 @@ class BillCanceled
     }
 
     /**
-     * Process all splits that need action - refund if paid, cancel if pending
+     * Handle single payment cancellation (not multimethod)
+     *
+     * @param \Magento\Sales\Model\Order $order
+     * @param \Vindi\Payment\Model\PaymentSplit $currentSplit
+     * @param array $bill
+     * @return bool
+     */
+    private function handleSinglePaymentCancellation($order, $currentSplit, $bill)
+    {
+        $this->logger->info('BILL_CANCELED: ========== SINGLE PAYMENT CANCELLATION ==========');
+        $this->logger->info('BILL_CANCELED: Processing single payment for order: ' . $order->getIncrementId());
+        
+        // Marcar split como cancelado
+        $currentSplit->setStatus('canceled');
+        $currentSplit->save();
+        
+        // Adicionar comentário no pedido
+        $order->addStatusHistoryComment(sprintf(
+            'Pagamento cancelado: Bill %d foi cancelada. Não há outros métodos de pagamento.',
+            $bill['id']
+        ));
+        
+        // Cancelar o pedido diretamente
+        if ($order->canCancel()) {
+            $order->cancel();
+            $order->addStatusHistoryComment('Pedido cancelado devido ao cancelamento do pagamento.');
+            $this->logger->info('BILL_CANCELED: Single payment order canceled successfully');
+        } else {
+            $this->logger->warning('BILL_CANCELED: Cannot cancel single payment order - current state: ' . $order->getState());
+        }
+        
+        $order->save();
+        return true;
+    }
+
+    /**
+     * Process all other splits that need action - refund if paid, cancel if pending
      * NEVER blocks cancellation
      *
-     * @param array $splits All splits that need processing 
+     * @param array $splits All other splits that need processing (excluding the current one)
      * @param \Magento\Sales\Model\Order $order
      * @return array ['success' => int, 'failed' => int, 'total' => int, 'refunded' => int, 'canceled' => int]
      */
-    private function refundPaidSplits($splits, $order)
+    private function processOtherSplits($splits, $order)
     {
         $result = [
             'success' => 0, 
@@ -316,72 +379,81 @@ class BillCanceled
         try {
             foreach ($splits as $split) {
                 $billId = $split->getBillId();
+                $this->logger->info('BILL_CANCELED: ========== PROCESSING OTHER SPLIT ==========');
                 $this->logger->info(sprintf(
-                    'Processing split - Bill ID: %s, Current Status: %s, Amount: %s, Order: %s',
+                    'BILL_CANCELED: Processing OTHER split - Bill ID: %s, Current Status: %s, Amount: %s, Order: %s',
                     $billId,
                     $split->getStatus(),
                     $split->getAmount(),
                     $order->getIncrementId()
                 ));
 
-                // ✅ NOVA LÓGICA: Verificar status atual da bill na Vindi
+                // ✅ VERIFICAÇÃO CRÍTICA: Consultar status atual da bill na Vindi
+                $this->logger->info('BILL_CANCELED: Checking bill status in Vindi API for bill: ' . $billId);
                 $billData = $this->bill->getBill($billId);
                 
                 if (!$billData) {
-                    $this->logger->warning('Could not fetch bill data from Vindi - Bill ID: ' . $billId . ' - counting as failed');
+                    $this->logger->warning('BILL_CANCELED: Could not fetch bill data from Vindi - Bill ID: ' . $billId . ' - counting as failed');
                     $result['failed']++;
                     continue;
                 }
                 
                 $billStatus = $billData['status'] ?? 'unknown';
-                $this->logger->info('Bill status from Vindi API - Bill ID: ' . $billId . ', Status: ' . $billStatus);
+                $billAmount = $billData['amount'] ?? 0;
+                $this->logger->info('BILL_CANCELED: Bill status from Vindi API - Bill ID: ' . $billId . ', Status: ' . $billStatus . ', Amount: ' . $billAmount);
                 
-                // DECISÃO: Refund se paga, Cancelamento se pendente
+                // ✅ DECISÃO BASEADA NO STATUS REAL DA VINDI
                 if ($billStatus === 'paid') {
-                    // CENÁRIO A: Bill está paga → REFUND
-                    $this->logger->info('Bill is PAID - performing refund - Bill ID: ' . $billId);
+                    // CENÁRIO A: Bill está PAGA → REFUND + CREDITMEMO
+                    $this->logger->info('BILL_CANCELED: ✅ Bill is PAID - performing REFUND + CREDITMEMO - Bill ID: ' . $billId);
                     $processed = $this->processPaidBillRefund($split, $order);
                     
                     if ($processed) {
                         $result['success']++;
                         $result['refunded']++;
+                        $this->logger->info('BILL_CANCELED: ✅ REFUND successful for bill: ' . $billId);
                     } else {
                         $result['failed']++;
+                        $this->logger->error('BILL_CANCELED: ❌ REFUND failed for bill: ' . $billId);
                     }
                     
                 } elseif (in_array($billStatus, ['pending', 'waiting', 'review', 'fraud_review'])) {
-                    // CENÁRIO B: Bill está pendente → CANCELAMENTO  
-                    $this->logger->info('Bill is PENDING - performing cancellation - Bill ID: ' . $billId . ', Status: ' . $billStatus);
+                    // CENÁRIO B: Bill está PENDENTE → CANCELAMENTO  
+                    $this->logger->info('BILL_CANCELED: ⏳ Bill is PENDING - performing CANCELLATION - Bill ID: ' . $billId . ', Status: ' . $billStatus);
                     $processed = $this->processPendingBillCancellation($split, $order);
                     
                     if ($processed) {
                         $result['success']++;
                         $result['canceled']++;
+                        $this->logger->info('BILL_CANCELED: ✅ CANCELLATION successful for bill: ' . $billId);
                     } else {
                         $result['failed']++;
+                        $this->logger->error('BILL_CANCELED: ❌ CANCELLATION failed for bill: ' . $billId);
                     }
                     
                 } elseif ($billStatus === 'canceled') {
-                    // CENÁRIO C: Bill já cancelada → marcar como sucesso sem ação
-                    $this->logger->info('Bill already canceled - Bill ID: ' . $billId . ' - marking split as canceled');
+                    // CENÁRIO C: Bill já CANCELADA → marcar como sucesso sem ação
+                    $this->logger->info('BILL_CANCELED: ℹ️ Bill already CANCELED - Bill ID: ' . $billId . ' - marking split as canceled');
                     $split->setStatus('canceled');
                     $split->save();
                     $result['success']++;
                     $result['canceled']++;
                     
                 } else {
-                    // CENÁRIO D: Status desconhecido 
-                    $this->logger->warning('Bill has unexpected status - Bill ID: ' . $billId . ', Status: ' . $billStatus . ' - marking as failed');
+                    // CENÁRIO D: Status DESCONHECIDO 
+                    $this->logger->warning('BILL_CANCELED: ⚠️ Bill has UNEXPECTED status - Bill ID: ' . $billId . ', Status: ' . $billStatus . ' - marking as failed');
                     $split->setStatus('unknown_status');
                     $split->save();
                     $result['failed']++;
                 }
             }
 
+            $this->logger->info('BILL_CANCELED: ========== PROCESSING SUMMARY ==========');
+            $this->logger->info('BILL_CANCELED: Total: ' . $result['total'] . ', Success: ' . $result['success'] . ', Failed: ' . $result['failed'] . ', Refunded: ' . $result['refunded'] . ', Canceled: ' . $result['canceled']);
             return $result;
             
         } catch (\Exception $e) {
-            $this->logger->error('Error processing splits: ' . $e->getMessage());
+            $this->logger->error('BILL_CANCELED: ❌ ERROR processing other splits: ' . $e->getMessage());
             // Mesmo com exceção, retornar resultado parcial sem bloquear cancelamento
             return $result;
         }
@@ -398,20 +470,25 @@ class BillCanceled
     {
         try {
             $billId = $split->getBillId();
+            $this->logger->info('BILL_CANCELED: ========== REFUNDING PAID BILL ==========');
+            $this->logger->info('BILL_CANCELED: Starting refund process for paid bill: ' . $billId);
             
             // Buscar charge para fazer refund
             $chargeId = $this->getChargeIdFromBillId($billId);
             
             if (!$chargeId) {
-                $this->logger->warning('No charge ID found for paid bill - Bill ID: ' . $billId);
+                $this->logger->warning('BILL_CANCELED: ❌ No charge ID found for paid bill - Bill ID: ' . $billId);
                 return false;
             }
 
-            // Executar refund na Vindi
+            $this->logger->info('BILL_CANCELED: Found charge ID: ' . $chargeId . ' for bill: ' . $billId);
+
+            // ✅ STEP 1: Executar refund na Vindi
+            $this->logger->info('BILL_CANCELED: Requesting refund from Vindi for charge: ' . $chargeId . ', amount: ' . $split->getAmount());
             $refundResult = $this->charge->refund($chargeId, ['amount' => $split->getAmount()]);
             
             if (!$refundResult) {
-                $this->logger->warning('Refund failed for paid bill - Bill ID: ' . $billId);
+                $this->logger->warning('BILL_CANCELED: ❌ Refund FAILED in Vindi for paid bill - Bill ID: ' . $billId);
                 // Marcar como failed
                 $split->setStatus('failed_refund');
                 $split->setIsRefunded(0);
@@ -419,40 +496,51 @@ class BillCanceled
                 return false;
             }
 
-            // Criar creditmemo no Magento para o refund
+            $this->logger->info('BILL_CANCELED: ✅ Refund SUCCESSFUL in Vindi for bill: ' . $billId);
+
+            // ✅ STEP 2: Criar creditmemo no Magento para o refund
+            $this->logger->info('BILL_CANCELED: Creating creditmemo in Magento for split refund...');
             $creditmemo = $this->refundHelper->createSplitRefund(
                 $order,
                 $split->getAmount(),
-                $split->getPaymentMethod()
+                $split->getPaymentMethod() ?: 'Método de Pagamento'
             );
 
-            // Marcar split como refundado
+            if ($creditmemo) {
+                $this->logger->info('BILL_CANCELED: ✅ CREDITMEMO created successfully: ' . $creditmemo->getIncrementId() . ' for amount: ' . $split->getAmount());
+            } else {
+                $this->logger->warning('BILL_CANCELED: ⚠️ CREDITMEMO creation failed, but continuing with split update');
+            }
+
+            // ✅ STEP 3: Marcar split como refundado
             $split->setStatus('refunded');
             $split->setIsRefunded(1);
             $split->setRefundAmount($split->getAmount());
             $split->setRefundDate(date('Y-m-d H:i:s'));
             $split->save();
 
-            $this->logger->info('Paid bill refunded successfully - Bill ID: ' . $billId . 
-                ($creditmemo ? ', Creditmemo: ' . $creditmemo->getIncrementId() : ', No creditmemo created'));
+            $this->logger->info('BILL_CANCELED: ✅ Split updated as REFUNDED for bill: ' . $billId);
 
-            // Adicionar comentário no pedido
+            // ✅ STEP 4: Adicionar comentário detalhado no pedido
             $commentText = sprintf(
-                'Estorno realizado: Método "%s" (R$ %s) foi estornado devido ao cancelamento de outro método do multimeios.',
+                'MULTIMEIOS - Estorno realizado: Método "%s" (R$ %s) foi estornado devido ao cancelamento de outro método.',
                 $split->getPaymentMethod() ?: 'Método de Pagamento',
                 number_format($split->getAmount(), 2, ',', '.')
             );
             
             if ($creditmemo) {
-                $commentText .= sprintf(' Creditmemo #%s criado.', $creditmemo->getIncrementId());
+                $commentText .= sprintf(' Creditmemo #%s criado automaticamente.', $creditmemo->getIncrementId());
+            } else {
+                $commentText .= ' ATENÇÃO: Creditmemo não foi criado - verificar manualmente.';
             }
             
             $order->addStatusHistoryComment($commentText);
+            $this->logger->info('BILL_CANCELED: Comment added to order: ' . $order->getIncrementId());
             
             return true;
             
         } catch (\Exception $e) {
-            $this->logger->error('Error processing paid bill refund - Bill ID: ' . $split->getBillId() . ', Error: ' . $e->getMessage());
+            $this->logger->error('BILL_CANCELED: ❌ ERROR processing paid bill refund - Bill ID: ' . $split->getBillId() . ', Error: ' . $e->getMessage());
             return false;
         }
     }
@@ -936,7 +1024,7 @@ class BillCanceled
                 $this->logger->info('STANDALONE_BILL_CANCELED: REGRA 2 - Found ' . count($paidSplits) . ' paid splits - will try to refund and ALWAYS cancel order');
                 
                 // TENTAR estornar todas as bills pagas (sem bloquear cancelamento)
-                $refundResult = $this->refundPaidSplits($paidSplits, $order);
+                $refundResult = $this->processOtherSplits($paidSplits, $order);
                 
                 if ($refundResult['success'] == $refundResult['total']) {
                     // Todos os estornos bem-sucedidos
