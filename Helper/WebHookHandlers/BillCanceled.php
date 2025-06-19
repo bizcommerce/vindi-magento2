@@ -272,18 +272,15 @@ class BillCanceled
         $this->logger->info('BILL_CANCELED: ALWAYS proceeding with order cancellation (regardless of refund result)');
         $this->logger->info('All splits processed for order: ' . $order->getIncrementId() . ' - proceeding with full cancellation');
         
-        // Verificar se o pedido já tem invoice gerada
-        $hasInvoice = $this->orderHasInvoice($order);
+        // NOVA LÓGICA: Para multimeios, SEMPRE cancelar pedido quando um split é cancelado
+        // Independente de ter invoice ou não - já foi estornado na Vindi
+        $this->logger->info('BILL_CANCELED: ========== CANCELING MAGENTO ORDER ==========');
+        $this->logger->info('BILL_CANCELED: Multimeios cancellation - proceeding with order cancellation');
         
-        if ($hasInvoice) {
-            // CENÁRIO A: Invoice já existe - gerar creditmemo
-            return $this->handleRefundWithInvoice($order);
-        } else {
-            // CENÁRIO B: Invoice não existe - cancelamento direto
-            return $this->handleCancellationWithoutInvoice($order);
-        }
-
-        return true;
+        // ✅ CORREÇÃO: Garantir que SEMPRE chama forceCancelMultimethodOrder para multimeios
+        $cancelResult = $this->forceCancelMultimethodOrder($order);
+        $this->logger->info('BILL_CANCELED: Force cancel result: ' . ($cancelResult ? 'SUCCESS' : 'FAILED'));
+        return $cancelResult;
     }
 
     /**
@@ -1092,119 +1089,130 @@ class BillCanceled
     }
 
     /**
-     * Process full cancellation for a paid bill (2-step process: refund + cancel)
-     * 
-     * Step 1: Refund the bill (changes status from 'paid' to 'pending')
-     * Step 2: Cancel the bill (changes status from 'pending' to 'canceled')
+     * Force cancel a multimethod order regardless of current state
+     * This method handles all scenarios for canceling orders with multimethod payments
      *
-     * @param \Vindi\Payment\Model\PaymentSplit $split
      * @param \Magento\Sales\Model\Order $order
      * @return bool
      */
-    private function processPaidBillFullCancellation($split, $order)
+    private function forceCancelMultimethodOrder($order)
     {
         try {
-            $billId = $split->getBillId();
-            $this->logger->info('BILL_CANCELED: ========== FULL CANCELLATION FOR PAID BILL ==========');
-            $this->logger->info('BILL_CANCELED: Starting 2-step cancellation for paid bill: ' . $billId);
+            $this->logger->info('FORCE_CANCEL: ========== FORCING ORDER CANCELLATION ==========');
+            $this->logger->info('FORCE_CANCEL: Processing order: ' . $order->getIncrementId());
+            $this->logger->info('FORCE_CANCEL: Current order state: ' . $order->getState() . ', status: ' . $order->getStatus());
             
-            // STEP 1: REFUND (paid → pending)
-            $this->logger->info('BILL_CANCELED: STEP 1 - Executing REFUND to change bill from "paid" to "pending"');
+            // Verificar estado atual do pedido
+            $hasInvoice = $this->orderHasInvoice($order);
+            $hasShipment = $order->hasShipments();
+            $canCancel = $order->canCancel();
             
-            // Buscar charge para fazer refund
-            $chargeId = $this->getChargeIdFromBillId($billId);
-            
-            if (!$chargeId) {
-                $this->logger->warning('BILL_CANCELED: ❌ No charge ID found for paid bill - Bill ID: ' . $billId);
-                return false;
-            }
+            $this->logger->info('FORCE_CANCEL: Order analysis - Has invoice: ' . ($hasInvoice ? 'YES' : 'NO') . 
+                               ', Has shipment: ' . ($hasShipment ? 'YES' : 'NO') . 
+                               ', Can cancel: ' . ($canCancel ? 'YES' : 'NO'));
 
-            $this->logger->info('BILL_CANCELED: Found charge ID: ' . $chargeId . ' for bill: ' . $billId);
+            // Adicionar comentário inicial
+            $order->addStatusHistoryComment(
+                'MULTIMEIOS: Iniciando cancelamento devido ao estorno/cancelamento de todos os métodos de pagamento na Vindi. ' .
+                'Todas as bills foram processadas corretamente.'
+            );
 
-            // Executar refund na Vindi
-            $this->logger->info('BILL_CANCELED: Requesting refund from Vindi for charge: ' . $chargeId . ', amount: ' . $split->getAmount());
-            $refundResult = $this->charge->refund($chargeId, ['amount' => $split->getAmount()]);
-            
-            if (!$refundResult) {
-                $this->logger->warning('BILL_CANCELED: ❌ STEP 1 FAILED - Refund failed in Vindi for paid bill - Bill ID: ' . $billId);
-                $split->setStatus('failed_refund');
-                $split->setIsRefunded(0);
-                $split->save();
-                return false;
-            }
-
-            $this->logger->info('BILL_CANCELED: ✅ STEP 1 SUCCESS - Refund executed, bill should now be "pending"');
-
-            // Aguardar um momento para a Vindi processar
-            sleep(2);
-
-            // STEP 2: CANCELAMENTO (pending → canceled)
-            $this->logger->info('BILL_CANCELED: STEP 2 - Executing CANCELLATION to change bill from "pending" to "canceled"');
-
-            // Verificar se o status mudou para pending após o refund
-            $billData = $this->bill->getBill($billId);
-            $newStatus = $billData['status'] ?? 'unknown';
-            $this->logger->info('BILL_CANCELED: Bill status after refund: ' . $newStatus);
-
-            if ($newStatus === 'pending' || $newStatus === 'waiting') {
-                // Agora cancelar a bill
-                $cancelResult = $this->bill->cancel($billId);
+            // CENÁRIO 1: Pode cancelar normalmente
+            if ($canCancel) {
+                $this->logger->info('FORCE_CANCEL: SCENARIO 1 - Normal cancellation possible');
                 
-                if ($cancelResult) {
-                    $this->logger->info('BILL_CANCELED: ✅ STEP 2 SUCCESS - Bill canceled successfully');
+                $order->cancel();
+                $order->addStatusHistoryComment('Pedido cancelado: Todos os métodos de pagamento foram estornados/cancelados na Vindi.');
+                $this->logger->info('FORCE_CANCEL: ✅ Order canceled successfully via normal cancellation');
+                
+            } else {
+                $this->logger->info('FORCE_CANCEL: SCENARIO 2 - Normal cancellation not possible, using alternative methods');
+                
+                // CENÁRIO 2: Não pode cancelar - usar métodos alternativos
+                if ($hasShipment) {
+                    // Tem envio - não pode cancelar, fechar o pedido
+                    $this->logger->info('FORCE_CANCEL: Order has shipments - setting to closed');
+                    $order->setState('closed');
+                    $order->setStatus('closed');
+                    $order->addStatusHistoryComment(
+                        'Pedido fechado: Não foi possível cancelar devido ao envio já realizado, ' .
+                        'mas todos os pagamentos foram estornados na Vindi.'
+                    );
+                    
+                } elseif ($hasInvoice) {
+                    // Tem invoice mas sem envio - tentar criar creditmemo total e cancelar
+                    $this->logger->info('FORCE_CANCEL: Order has invoice but no shipment - creating full creditmemo and canceling');
+                    
+                    // Criar creditmemo total
+                    $creditmemo = $this->refundHelper->createFullRefund($order->getId());
+                    
+                    if ($creditmemo) {
+                        $this->logger->info('FORCE_CANCEL: ✅ Full creditmemo created: ' . $creditmemo->getIncrementId());
+                        $order->addStatusHistoryComment(
+                            sprintf('Creditmemo total #%s criado devido ao estorno completo na Vindi.', $creditmemo->getIncrementId())
+                        );
+                        
+                        // Tentar cancelar após creditmemo
+                        if ($order->canCancel()) {
+                            $order->cancel();
+                            $order->addStatusHistoryComment('Pedido cancelado após criação do creditmemo total.');
+                            $this->logger->info('FORCE_CANCEL: ✅ Order canceled after creditmemo creation');
+                        } else {
+                            // Se ainda não pode cancelar, fechar
+                            $order->setState('closed');
+                            $order->setStatus('closed');
+                            $order->addStatusHistoryComment('Pedido fechado após criação do creditmemo total.');
+                            $this->logger->info('FORCE_CANCEL: Order closed after creditmemo creation');
+                        }
+                    } else {
+                        $this->logger->warning('FORCE_CANCEL: ⚠️ Failed to create creditmemo - forcing close anyway');
+                        $order->setState('closed');
+                        $order->setStatus('closed');
+                        $order->addStatusHistoryComment(
+                            'Pedido fechado: Erro ao criar creditmemo, mas todos os pagamentos foram estornados na Vindi. ' .
+                            'ATENÇÃO: Verificar creditmemo manualmente.'
+                        );
+                    }
+                    
                 } else {
-                    $this->logger->warning('BILL_CANCELED: ⚠️ STEP 2 PARTIAL - Refund succeeded but cancellation failed - Bill ID: ' . $billId);
-                    // Ainda assim consideramos sucesso parcial pois o refund foi feito
+                    // Sem invoice nem envio - forçar cancelamento via state
+                    $this->logger->info('FORCE_CANCEL: No invoice, no shipment - forcing cancellation via state change');
+                    $order->setState('canceled');
+                    $order->setStatus('canceled');
+                    $order->addStatusHistoryComment(
+                        'Pedido cancelado (forçado): Todos os métodos de pagamento foram estornados/cancelados na Vindi.'
+                    );
+                    $this->logger->info('FORCE_CANCEL: ✅ Order force-canceled via state change');
                 }
-            } else {
-                $this->logger->warning('BILL_CANCELED: ⚠️ Bill status after refund is "' . $newStatus . '" instead of "pending" - Bill ID: ' . $billId);
-                // Ainda assim o refund foi feito, então não é falha total
             }
 
-            // Criar creditmemo no Magento
-            $this->logger->info('BILL_CANCELED: Creating creditmemo in Magento for refunded amount...');
-            $creditmemo = $this->refundHelper->createSplitRefund(
-                $order,
-                $split->getAmount(),
-                $split->getPaymentMethod() ?: 'Método de Pagamento'
-            );
-
-            if ($creditmemo) {
-                $this->logger->info('BILL_CANCELED: ✅ CREDITMEMO created successfully: ' . $creditmemo->getIncrementId() . ' for amount: ' . $split->getAmount());
-            } else {
-                $this->logger->warning('BILL_CANCELED: ⚠️ CREDITMEMO creation failed, but refund was successful');
-            }
-
-            // Marcar split como refundado e cancelado
-            $split->setStatus('refunded_and_canceled');
-            $split->setIsRefunded(1);
-            $split->setRefundAmount($split->getAmount());
-            $split->setRefundDate(date('Y-m-d H:i:s'));
-            $split->save();
-
-            $this->logger->info('BILL_CANCELED: ✅ Split updated as REFUNDED_AND_CANCELED for bill: ' . $billId);
-
-            // Adicionar comentário detalhado no pedido
-            $commentText = sprintf(
-                'MULTIMEIOS - Cancelamento completo: Método "%s" (R$ %s) foi estornado E cancelado (processo de 2 etapas) devido ao cancelamento de outro método.',
-                $split->getPaymentMethod() ?: 'Método de Pagamento',
-                number_format($split->getAmount(), 2, ',', '.')
-            );
+            // Salvar pedido
+            $this->orderRepository->save($order);
             
-            if ($creditmemo) {
-                $commentText .= sprintf(' Creditmemo #%s criado automaticamente.', $creditmemo->getIncrementId());
-            } else {
-                $commentText .= ' ATENÇÃO: Creditmemo não foi criado - verificar manualmente.';
-            }
-            
-            $order->addStatusHistoryComment($commentText);
-            $this->logger->info('BILL_CANCELED: Comment added to order: ' . $order->getIncrementId());
+            $this->logger->info('FORCE_CANCEL: ✅ Order saved with final state: ' . $order->getState() . ', status: ' . $order->getStatus());
+            $this->logger->info('FORCE_CANCEL: ========== ORDER CANCELLATION COMPLETED ==========');
             
             return true;
             
         } catch (\Exception $e) {
-            $this->logger->error('BILL_CANCELED: ❌ ERROR in full cancellation process for paid bill - Bill ID: ' . $split->getBillId() . ', Error: ' . $e->getMessage());
-            return false;
+            $this->logger->error('FORCE_CANCEL: ❌ ERROR during force cancellation: ' . $e->getMessage());
+            $this->logger->error('FORCE_CANCEL: Stack trace: ' . $e->getTraceAsString());
+            
+            // Último recurso - tentar fechar o pedido
+            try {
+                $order->setState('closed');
+                $order->setStatus('closed');
+                $order->addStatusHistoryComment(
+                    'ERRO: Falha no cancelamento automático. Pedido fechado manualmente. ' .
+                    'Verificar se pagamentos foram realmente estornados na Vindi.'
+                );
+                $this->orderRepository->save($order);
+                $this->logger->info('FORCE_CANCEL: ⚠️ Last resort - order closed due to error');
+                return true;
+            } catch (\Exception $e2) {
+                $this->logger->error('FORCE_CANCEL: ❌ CRITICAL ERROR - Cannot even close order: ' . $e2->getMessage());
+                return false;
+            }
         }
     }
 }

@@ -84,12 +84,8 @@ class RefundHelper extends AbstractHelper
             // Marcar como offline (já processado externamente na Vindi)
             $creditmemo->setOfflineRequested(true);
 
-            // Registrar e salvar em transação
-            $creditmemo->register();
-            $this->transaction
-                ->addObject($creditmemo)
-                ->addObject($creditmemo->getOrder())
-                ->save();
+            // ✅ CORREÇÃO: Usar creditmemoService em vez de register() deprecated
+            $this->creditmemoService->refund($creditmemo);
 
             $this->logger->info('REFUND_HELPER: Full creditmemo created - Order: ' . $order->getIncrementId() . ', Creditmemo: ' . $creditmemo->getIncrementId());
 
@@ -151,12 +147,8 @@ class RefundHelper extends AbstractHelper
             // Marcar como offline (já processado externamente na Vindi)
             $creditmemo->setOfflineRequested(true);
 
-            // Registrar e salvar em transação
-            $creditmemo->register();
-            $this->transaction
-                ->addObject($creditmemo)
-                ->addObject($creditmemo->getOrder())
-                ->save();
+            // ✅ CORREÇÃO: Usar creditmemoService em vez de register() deprecated
+            $this->creditmemoService->refund($creditmemo);
 
             $this->logger->info('REFUND_HELPER: Partial creditmemo created - Order: ' . $order->getIncrementId() . ', Amount: ' . $amount . ', Creditmemo: ' . $creditmemo->getIncrementId());
 
@@ -212,12 +204,8 @@ class RefundHelper extends AbstractHelper
             // Marcar como offline (já processado externamente na Vindi)
             $creditmemo->setOfflineRequested(true);
 
-            // Registrar e salvar em transação
-            $creditmemo->register();
-            $this->transaction
-                ->addObject($creditmemo)
-                ->addObject($creditmemo->getOrder())
-                ->save();
+            // ✅ CORREÇÃO: Usar creditmemoService em vez de register() deprecated
+            $this->creditmemoService->refund($creditmemo);
 
             $this->logger->info('REFUND_HELPER: Split creditmemo created - Order: ' . $order->getIncrementId() . ', Amount: ' . $splitAmount . ', Method: ' . $paymentMethod . ', Creditmemo: ' . $creditmemo->getIncrementId());
 
