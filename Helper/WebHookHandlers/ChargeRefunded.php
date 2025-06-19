@@ -167,14 +167,17 @@ class ChargeRefunded
     private function findOrderForBill($billCode)
     {
         try {
-            // Extrair número base do código (ex: 000006564 de BIZ-VINDI-000006564-01)
-            if (preg_match('/BIZ-VINDI-(\d+)-\d{2}$/', $billCode, $matches)) {
-                $baseOrderNumber = $matches[1];
-                $this->logger->info('CHARGE_REFUNDED: Extracted base order number: ' . $baseOrderNumber);
+            // Verificar se os 3 últimos caracteres são -01 ou -02 (indicativo de multimeios)
+            if (strlen($billCode) >= 4 && in_array(substr($billCode, -3), ['-01', '-02'])) {
+                // Extrair increment_id removendo os 3 últimos caracteres (-01 ou -02)
+                $baseOrderIncrementId = substr($billCode, 0, -3);
+                $suffix = substr($billCode, -3);
+                
+                $this->logger->info('CHARGE_REFUNDED: Detected multimethod pattern - Increment ID: ' . $baseOrderIncrementId . ', Suffix: ' . $suffix . ' from bill: ' . $billCode);
 
-                // Buscar pedido com increment_id que contenha esse número
+                // Buscar pedido exato pelo increment_id base
                 $searchCriteria = $this->searchCriteriaBuilder
-                    ->addFilter('increment_id', '%' . $baseOrderNumber . '%', 'like')
+                    ->addFilter('increment_id', $baseOrderIncrementId)
                     ->addFilter('state', ['new', 'processing', 'complete', 'canceled'], 'in')
                     ->create();
 
@@ -182,12 +185,15 @@ class ChargeRefunded
 
                 if (!empty($orders)) {
                     $order = reset($orders);
-                    $this->logger->info('CHARGE_REFUNDED: Found order ' . $order->getIncrementId() . ' for bill ' . $billCode);
+                    $this->logger->info('CHARGE_REFUNDED: Found order ' . $order->getIncrementId() . ' for multimethod bill ' . $billCode);
                     return $order;
                 }
+                
+                $this->logger->warning('CHARGE_REFUNDED: No order found with increment_id: ' . $baseOrderIncrementId . ' for bill: ' . $billCode);
+            } else {
+                $this->logger->info('CHARGE_REFUNDED: Bill code does not end with -01 or -02, not a multimethod bill: ' . $billCode);
             }
 
-            $this->logger->warning('CHARGE_REFUNDED: No order found for bill ' . $billCode);
             return null;
 
         } catch (\Exception $e) {

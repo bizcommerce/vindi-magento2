@@ -15,6 +15,8 @@ class Bill
     const REVIEW_STATUS = 'review';
     const FRAUD_REVIEW_STATUS = 'fraud_review';
     const WAITING_STATUS = 'waiting';
+    const CANCELED_STATUS = 'canceled';
+    const PENDING_STATUS = 'pending';
 
     /**
      * @var Api
@@ -65,5 +67,48 @@ class Bill
         }
 
         return $response['bill'];
+    }
+
+    /**
+     * Cancel a bill using DELETE API
+     *
+     * @param int $billId
+     * @return bool
+     */
+    public function cancel($billId)
+    {
+        try {
+            $this->api->request("bills/{$billId}", 'DELETE');
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if bill can be canceled (not paid yet)
+     *
+     * @param int $billId
+     * @return bool
+     */
+    public function canCancel($billId)
+    {
+        $bill = $this->getBill($billId);
+        
+        if (!$bill) {
+            return false;
+        }
+        
+        $status = $bill['status'] ?? '';
+        
+        // Bill pode ser cancelada se não estiver paga nem já cancelada
+        $cancelableStatuses = [
+            self::PENDING_STATUS,
+            self::WAITING_STATUS,
+            self::REVIEW_STATUS,
+            self::FRAUD_REVIEW_STATUS
+        ];
+        
+        return in_array($status, $cancelableStatuses);
     }
 }
