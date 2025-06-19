@@ -12,6 +12,7 @@ use Magento\Sales\Model\Service\CreditmemoService;
 use Magento\Sales\Model\Order\CreditmemoFactory;
 use Magento\Framework\DB\Transaction;
 use Magento\Sales\Api\CreditmemoManagementInterface;
+use Magento\Framework\Api\SearchCriteriaBuilder;
 
 /**
  * Class BillCanceled
@@ -29,6 +30,7 @@ class BillCanceled
     protected $creditmemoService;
     protected $transaction;
     protected $creditmemoManagement;
+    protected $searchCriteriaBuilder;
 
     public function __construct(
         LoggerInterface $logger,
@@ -39,7 +41,8 @@ class BillCanceled
         CreditmemoFactory $creditmemoFactory,
         CreditmemoService $creditmemoService,
         Transaction $transaction,
-        CreditmemoManagementInterface $creditmemoManagement
+        CreditmemoManagementInterface $creditmemoManagement,
+        SearchCriteriaBuilder $searchCriteriaBuilder
     ) {
         $this->logger = $logger;
         $this->paymentSplitFactory = $paymentSplitFactory;
@@ -50,6 +53,7 @@ class BillCanceled
         $this->creditmemoService = $creditmemoService;
         $this->transaction = $transaction;
         $this->creditmemoManagement = $creditmemoManagement;
+        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
     }
 
     public function billCanceled(array $data): bool
@@ -61,6 +65,17 @@ class BillCanceled
         $bill = $data['bill'];
         $billId = $bill['id'];
 
+        // Log detalhado para debug
+        $this->logger->info('BILL_CANCELED: Processing bill ' . $billId);
+        $this->logger->info('BILL_CANCELED: Bill data - ' . json_encode([
+            'id' => $billId,
+            'status' => $bill['status'] ?? 'unknown',
+            'amount' => $bill['amount'] ?? 'unknown',
+            'has_subscription' => isset($bill['subscription']) ? 'yes' : 'no',
+            'subscription_id' => isset($bill['subscription']['id']) ? $bill['subscription']['id'] : 'none',
+            'charges_count' => isset($bill['charges']) ? count($bill['charges']) : 0
+        ]));
+
         // Buscar split correspondente a esta bill
         $currentSplit = $this->paymentSplitFactory->create()
             ->getCollection()
@@ -68,13 +83,36 @@ class BillCanceled
             ->getFirstItem();
 
         if (!$currentSplit->getId()) {
-            $this->logger->info('No split found for bill: ' . $billId . ' - assuming single payment flow');
-            return true; // Fluxo simples, não é multimeios
+            $this->logger->info('BILL_CANCELED: No split found for bill: ' . $billId . ' - investigating further');
+            
+            // Verificar se é fatura avulsa multimeios baseado em indicadores
+            $isMultimethodStandalone = $this->isMultimethodStandaloneBill($bill);
+            
+            if ($isMultimethodStandalone) {
+                $this->logger->info('BILL_CANCELED: Detected multimethod standalone bill without split - trying alternative search');
+                
+                // Tentar buscar pedido para fatura avulsa multimeios
+                $order = $this->findOrderForStandaloneBill($bill);
+                
+                if ($order) {
+                    $this->logger->info('BILL_CANCELED: Found order ' . $order->getIncrementId() . ' for standalone bill ' . $billId);
+                    return $this->handleStandaloneBillCancellation($order, $bill);
+                } else {
+                    $this->logger->error('BILL_CANCELED: Could not find order for standalone multimethod bill ' . $billId);
+                    return false;
+                }
+            }
+            
+            // Se chegou aqui, é realmente um fluxo simples (não é multimeios)
+            $this->logger->info('BILL_CANCELED: No multimethod indicators found - assuming simple single payment flow');
+            return true;
         }
+
+        $this->logger->info('BILL_CANCELED: Split found for bill ' . $billId . ' - Order: ' . $currentSplit->getOrderIncrementId());
 
         // Verificar se já foi refundado
         if ($currentSplit->getIsRefunded()) {
-            $this->logger->info('Split already refunded for bill: ' . $billId);
+            $this->logger->info('BILL_CANCELED: Split already refunded for bill: ' . $billId);
             return true;
         }
 
@@ -107,8 +145,24 @@ class BillCanceled
             ->getCollection()
             ->addFieldToFilter('order_increment_id', $order->getIncrementId());
 
+        $this->logger->info('BILL_CANCELED: Found ' . $allSplits->getSize() . ' splits for order ' . $order->getIncrementId());
+
+        // Log detalhado de todos os splits
+        foreach ($allSplits as $split) {
+            $this->logger->info('BILL_CANCELED: Split details - ' . json_encode([
+                'split_id' => $split->getId(),
+                'bill_id' => $split->getBillId(),
+                'status' => $split->getStatus(),
+                'is_refunded' => $split->getIsRefunded(),
+                'amount' => $split->getAmount(),
+                'payment_method' => $split->getPaymentMethod()
+            ]));
+        }
+
         // Verificar se há splits já pagos (precisam ser estornados)
         $paidSplits = $this->getPaidSplits($allSplits);
+        
+        $this->logger->info('BILL_CANCELED: Found ' . count($paidSplits) . ' paid splits that need refund');
         
         if (!empty($paidSplits)) {
             $this->logger->info('Found paid splits that need refund for order: ' . $order->getIncrementId());
@@ -445,6 +499,225 @@ class BillCanceled
 
         } catch (\Exception $e) {
             $this->logger->error('PARTIAL_REFUND_WITH_INVOICE: Error processing partial refund: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Detect if this is a multimethod standalone bill (not subscription)
+     * based on bill items and other indicators
+     *
+     * @param array $bill
+     * @return bool
+     */
+    private function isMultimethodStandaloneBill($bill)
+    {
+        try {
+            // Indicador 1: Código da bill sugere sequência (ex: BIZ-VINDI-000006563-02)
+            if (isset($bill['code']) && preg_match('/-\d{2}$/', $bill['code'])) {
+                $this->logger->info('MULTIMETHOD_DETECTION: Bill code suggests sequence: ' . $bill['code']);
+                return true;
+            }
+            
+            // Indicador 2: Produto de desconto multimeios
+            if (isset($bill['bill_items']) && is_array($bill['bill_items'])) {
+                foreach ($bill['bill_items'] as $item) {
+                    if (isset($item['product']['name']) && 
+                        strpos(strtolower($item['product']['name']), 'desconto multimeios') !== false) {
+                        $this->logger->info('MULTIMETHOD_DETECTION: Found multimethod discount product: ' . $item['product']['name']);
+                        return true;
+                    }
+                    
+                    if (isset($item['product']['code']) && 
+                        strpos(strtolower($item['product']['code']), 'discount_multipayment') !== false) {
+                        $this->logger->info('MULTIMETHOD_DETECTION: Found multimethod discount code: ' . $item['product']['code']);
+                        return true;
+                    }
+                }
+            }
+            
+            // Indicador 3: Bill amount é 0.0 ou próximo de zero (devido aos descontos)
+            if (isset($bill['amount']) && abs(floatval($bill['amount'])) < 0.01) {
+                $this->logger->info('MULTIMETHOD_DETECTION: Bill amount is near zero: ' . $bill['amount']);
+                
+                // Verificar se há itens com valores que sugerem desconto
+                $hasPositiveItems = false;
+                $hasNegativeItems = false;
+                
+                if (isset($bill['bill_items'])) {
+                    foreach ($bill['bill_items'] as $item) {
+                        $amount = floatval($item['amount'] ?? 0);
+                        if ($amount > 0) $hasPositiveItems = true;
+                        if ($amount < 0) $hasNegativeItems = true;
+                    }
+                }
+                
+                if ($hasPositiveItems && $hasNegativeItems) {
+                    $this->logger->info('MULTIMETHOD_DETECTION: Found positive and negative items with zero total - likely multimethod');
+                    return true;
+                }
+            }
+            
+            return false;
+            
+        } catch (\Exception $e) {
+            $this->logger->error('MULTIMETHOD_DETECTION: Error detecting multimethod bill: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Find order for standalone multimethod bill using various strategies
+     *
+     * @param array $bill
+     * @return \Magento\Sales\Model\Order|null
+     */
+    private function findOrderForStandaloneBill($bill)
+    {
+        try {
+            $billCode = $bill['code'] ?? '';
+            $billId = $bill['id'] ?? '';
+            
+            $this->logger->info('STANDALONE_ORDER_SEARCH: Searching for order with bill code: ' . $billCode);
+            
+            // Estratégia 1: Extrair número base do código da bill
+            if (preg_match('/BIZ-VINDI-(\d+)-\d{2}$/', $billCode, $matches)) {
+                $baseOrderNumber = $matches[1];
+                $this->logger->info('STANDALONE_ORDER_SEARCH: Extracted base order number: ' . $baseOrderNumber);
+                
+                // Buscar pedido com increment_id que contenha esse número
+                $searchCriteria = $this->searchCriteriaBuilder
+                    ->addFilter('increment_id', '%' . $baseOrderNumber . '%', 'like')
+                    ->addFilter('state', ['new', 'processing', 'complete', 'canceled'], 'in')
+                    ->create();
+                
+                $orders = $this->orderRepository->getList($searchCriteria)->getItems();
+                
+                if (!empty($orders)) {
+                    $order = reset($orders);
+                    $this->logger->info('STANDALONE_ORDER_SEARCH: Found order by base number: ' . $order->getIncrementId());
+                    return $order;
+                }
+            }
+            
+            // Estratégia 2: Buscar splits relacionados sem bill_id específico (pode ter sido perdido)
+            // Tentar buscar pelo bill_id em outros splits do mesmo pedido
+            $relatedSplits = $this->paymentSplitFactory->create()
+                ->getCollection()
+                ->addFieldToFilter('created_at', ['gteq' => date('Y-m-d H:i:s', strtotime('-1 hour'))])
+                ->setOrder('created_at', 'DESC')
+                ->setPageSize(50);
+            
+            foreach ($relatedSplits as $split) {
+                $order = $this->orderRepository->get($split->getOrderId());
+                $allOrderSplits = $this->paymentSplitFactory->create()
+                    ->getCollection()
+                    ->addFieldToFilter('order_increment_id', $order->getIncrementId());
+                
+                // Se o pedido tem múltiplos splits (multimeios) e um dos bills pode ser o nosso
+                if ($allOrderSplits->getSize() > 1) {
+                    $this->logger->info('STANDALONE_ORDER_SEARCH: Found potential multimethod order: ' . $order->getIncrementId());
+                    return $order;
+                }
+            }
+            
+            $this->logger->warning('STANDALONE_ORDER_SEARCH: No order found for bill ' . $billCode);
+            return null;
+            
+        } catch (\Exception $e) {
+            $this->logger->error('STANDALONE_ORDER_SEARCH: Error finding order: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Handle cancellation of standalone multimethod bill
+     * REGRAS:
+     * 1. Se a outra bill NÃO foi paga → Cancelar pedido no Magento
+     * 2. Se a outra bill JÁ foi paga → Estornar a bill paga + Cancelar pedido no Magento
+     *
+     * @param \Magento\Sales\Model\Order $order
+     * @param array $bill
+     * @return bool
+     */
+    private function handleStandaloneBillCancellation($order, $bill)
+    {
+        try {
+            $billId = $bill['id'];
+            $this->logger->info('STANDALONE_BILL_CANCELED: Processing cancellation for order ' . $order->getIncrementId() . ', bill ' . $billId);
+            
+            // Buscar todos os splits do pedido
+            $allSplits = $this->paymentSplitFactory->create()
+                ->getCollection()
+                ->addFieldToFilter('order_increment_id', $order->getIncrementId());
+            
+            $this->logger->info('STANDALONE_BILL_CANCELED: Found ' . $allSplits->getSize() . ' splits for order');
+            
+            // Log detalhado de todos os splits para debug
+            foreach ($allSplits as $split) {
+                $this->logger->info('STANDALONE_BILL_CANCELED: Split details - ' . json_encode([
+                    'split_id' => $split->getId(),
+                    'bill_id' => $split->getBillId(),
+                    'status' => $split->getStatus(),
+                    'is_refunded' => $split->getIsRefunded(),
+                    'amount' => $split->getAmount(),
+                    'payment_method' => $split->getPaymentMethod()
+                ]));
+            }
+            
+            // REGRA 1 & 2: Verificar se há splits pagos (outras bills do multimeios)
+            $paidSplits = $this->getPaidSplits($allSplits);
+            
+            if (!empty($paidSplits)) {
+                // REGRA 2: Há bills pagas → ESTORNAR + CANCELAR
+                $this->logger->info('STANDALONE_BILL_CANCELED: REGRA 2 - Found ' . count($paidSplits) . ' paid splits - will refund and cancel order');
+                
+                // Estornar todas as bills pagas
+                $refundSuccess = $this->refundPaidSplits($paidSplits, $order);
+                
+                if (!$refundSuccess) {
+                    $this->logger->error('STANDALONE_BILL_CANCELED: Failed to refund paid splits');
+                    return false;
+                }
+                
+                // Adicionar comentário específico para estorno
+                $order->addStatusHistoryComment(sprintf(
+                    'Multimeios cancelado com estorno: Bill %d (%s) cancelada. %d pagamentos estornados automaticamente.',
+                    $billId,
+                    $bill['code'] ?? 'sem código',
+                    count($paidSplits)
+                ));
+                
+            } else {
+                // REGRA 1: NÃO há bills pagas → APENAS CANCELAR
+                $this->logger->info('STANDALONE_BILL_CANCELED: REGRA 1 - No paid splits found - will only cancel order');
+                
+                // Adicionar comentário específico para cancelamento simples
+                $order->addStatusHistoryComment(sprintf(
+                    'Multimeios cancelado: Bill %d (%s) cancelada. Nenhum pagamento havia sido processado.',
+                    $billId,
+                    $bill['code'] ?? 'sem código'
+                ));
+            }
+            
+            // Em ambos os casos, cancelar o pedido
+            $this->logger->info('STANDALONE_BILL_CANCELED: Proceeding with order cancellation');
+            
+            // Verificar se o pedido já tem invoice gerada
+            $hasInvoice = $this->orderHasInvoice($order);
+            
+            if ($hasInvoice) {
+                // CENÁRIO A: Invoice já existe - gerar creditmemo se houve estorno
+                $this->logger->info('STANDALONE_BILL_CANCELED: Order has invoice - creating creditmemo');
+                return $this->handleRefundWithInvoice($order);
+            } else {
+                // CENÁRIO B: Invoice não existe - cancelamento direto
+                $this->logger->info('STANDALONE_BILL_CANCELED: Order has no invoice - direct cancellation');
+                return $this->handleCancellationWithoutInvoice($order);
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error('STANDALONE_BILL_CANCELED: Error processing cancellation: ' . $e->getMessage());
             return false;
         }
     }

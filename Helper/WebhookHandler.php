@@ -7,6 +7,7 @@ use Vindi\Payment\Logger\Logger;
 use Vindi\Payment\Helper\WebHookHandlers\BillCreated;
 use Vindi\Payment\Helper\WebHookHandlers\BillPaid;
 use Vindi\Payment\Helper\WebHookHandlers\ChargeRejected;
+use Vindi\Payment\Helper\WebHookHandlers\ChargeRefunded;
 use Vindi\Payment\Helper\WebHookHandlers\BillCanceled;
 use Vindi\Payment\Helper\WebHookHandlers\Subscription;
 use Vindi\Payment\Model\LogFactory;
@@ -23,6 +24,7 @@ class WebhookHandler
     protected $billCreated;
     protected $billPaid;
     protected $chargeRejected;
+    protected $chargeRefunded;
     protected $billCanceled;
     private $subscription;
     private $logFactory;
@@ -35,6 +37,7 @@ class WebhookHandler
         BillCreated $billCreated,
         BillPaid $billPaid,
         ChargeRejected $chargeRejected,
+        ChargeRefunded $chargeRefunded,
         BillCanceled $billCanceled,
         Subscription $subscription,
         LogFactory $logFactory,
@@ -46,6 +49,7 @@ class WebhookHandler
         $this->billCreated = $billCreated;
         $this->billPaid = $billPaid;
         $this->chargeRejected = $chargeRejected;
+        $this->chargeRefunded = $chargeRefunded;
         $this->billCanceled = $billCanceled;
         $this->subscription = $subscription;
         $this->logFactory = $logFactory;
@@ -93,6 +97,10 @@ class WebhookHandler
             case 'charge_rejected':
                 $result = $this->chargeRejected->chargeRejected($data);
                 $description = 'Charge rejected event';
+                break;
+            case 'charge_refunded':
+                $result = $this->chargeRefunded->chargeRefunded($data);
+                $description = 'Charge refunded event';
                 break;
             case 'bill_canceled':
                 $result = $this->billCanceled->billCanceled($data);
