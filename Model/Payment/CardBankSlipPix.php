@@ -144,13 +144,13 @@ class CardBankslipPix extends AbstractMethod
         if (!is_object($additionalData)) {
             $additionalData = new DataObject($additionalData ?: []);
         }
-        
-        // Debug log all additional data received
+
+
         $this->psrLogger->info('VINDI_CARDBANKSLIPPIX assignData: ' . json_encode($additionalData->getData()));
-        
+
         $info = $this->getInfoInstance();
 
-        // Ensure additional_information is array
+
         $additionalInfo = $info->getAdditionalInformation();
         if (!is_array($additionalInfo)) {
             $additionalInfo = [];
@@ -158,15 +158,15 @@ class CardBankslipPix extends AbstractMethod
 
         if ($additionalData->getData("payment_profile")) {
             $profileId = $additionalData->getData("payment_profile");
-            
-            // Get real card type from saved profile or use type from frontend
+
+
             $ccType = $additionalData->getData('cc_type') ?: $this->getCardTypeFromProfile($profileId);
-            
+
             $this->psrLogger->info('VINDI_CARDBANKSLIPPIX: Profile ID: ' . $profileId . ', cc_type from frontend: ' . ($additionalData->getData('cc_type') ?: 'EMPTY') . ', final ccType: ' . $ccType);
-            
+
             $additionalInfo['cc_type'] = (string) $this->getCardTypeCode($ccType);
-            $additionalInfo['cc_owner'] = 'Card Owner'; // Default owner  
-            $additionalInfo['cc_last_4'] = '****'; // Default last 4
+            $additionalInfo['cc_owner'] = 'Card Owner';
+            $additionalInfo['cc_last_4'] = '****';
             $additionalInfo['cc_installments'] = (string) $additionalData->getData("cc_installments");
         } else {
             $ccType  = $additionalData->getData("cc_type");
@@ -191,7 +191,7 @@ class CardBankslipPix extends AbstractMethod
         $additionalInfo['bankslip_pix_code'] = $additionalData->getBankslipPixCode();
         $additionalInfo['amount_credit'] = $additionalData->getAmountCredit();
         $additionalInfo['amount_bankslippix'] = $additionalData->getAmountBankslippix();
-        
+
         $info->setAdditionalInformation($additionalInfo);
 
         return $this;
@@ -222,11 +222,11 @@ class CardBankslipPix extends AbstractMethod
     private function getCardTypeFromProfile($profileId)
     {
         if (!$profileId) {
-            return 'VI'; // Default fallback
+            return 'VI';
         }
 
         try {
-            // Use the payment profile repository to get the profile
+
             $paymentProfile = $this->paymentProfileRepository->getById($profileId);
             if ($paymentProfile && $paymentProfile->getCcType()) {
                 return $paymentProfile->getCcType();
@@ -235,7 +235,7 @@ class CardBankslipPix extends AbstractMethod
             $this->psrLogger->error('VINDI_CARDBANKSLIPPIX: Error getting card type from profile: ' . $e->getMessage());
         }
 
-        return 'VI'; // Default fallback
+        return 'VI';
     }
 
     /**

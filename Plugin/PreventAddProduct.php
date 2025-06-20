@@ -53,7 +53,7 @@ class PreventAddProduct
                 $this->checkSubscriptionQuantity($requestInfo);
             }
         } catch (NoSuchEntityException $e) {
-            // Handle the case where the product does not exist.
+
         }
 
         $items = $subject->getQuote()->getItems() ?? [];
@@ -70,7 +70,7 @@ class PreventAddProduct
                     $hasNonSubscriptionProduct = true;
                 }
             } catch (NoSuchEntityException $e) {
-                // Continue silently if product does not exist.
+
             }
         }
 

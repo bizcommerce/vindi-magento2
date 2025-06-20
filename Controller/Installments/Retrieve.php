@@ -75,7 +75,7 @@ class Retrieve extends Action implements HttpPostActionInterface, CsrfAwareActio
 
     public function execute()
     {
-        //Salvar todas as formas de pagamento disponíveis
+
         $result = $this->resultJsonFactory->create();
         $result->setHttpResponseCode(401);
 

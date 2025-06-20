@@ -263,18 +263,6 @@ class Data extends AbstractHelper
     }
 
     /**
-     * Verifica se multimeios de pagamento são permitidos para assinaturas
-     * 
-     * @return bool - Sempre retorna false (multimeios não são mais suportados para assinaturas)
-     */
-    public function isMultiMethodAllowedForSubscriptions()
-    {
-        // POLÍTICA: Multimeios de pagamento não são mais suportados para assinaturas
-        // Apenas compras avulsas (bills) podem usar multimeios
-        return false;
-    }
-
-    /**
      * Sanitize sensitive data in the log entries.
      *
      * @param string $data

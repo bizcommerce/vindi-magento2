@@ -114,7 +114,7 @@ class Profile
             ? ($payment->getAdditionalInformation('cc_type2')       ?: $payment->getCcType())
             : ($payment->getAdditionalInformation('cc_type1')       ?: $payment->getAdditionalInformation('cc_type') ?: $payment->getCcType());
 
-        // Log debug para verificar se o ccType está sendo capturado
+
         error_log('VINDI_PROFILE_DEBUG: Building credit card data for ' . $whichCard . ' card');
         error_log('VINDI_PROFILE_DEBUG: cc_type found: ' . ($ccType ?: 'EMPTY'));
         error_log('VINDI_PROFILE_DEBUG: Available payment data: ' . json_encode([
@@ -135,7 +135,7 @@ class Profile
 
         $ccTypeCode = $this->paymentMethod->getCreditCardApiCode($ccType);
 
-        // Log debug para verificar o mapeamento do ccType
+
         error_log('VINDI_PROFILE_DEBUG: Original ccType: ' . ($ccType ?: 'EMPTY'));
         error_log('VINDI_PROFILE_DEBUG: Mapped ccTypeCode: ' . ($ccTypeCode ?: 'EMPTY'));
 
@@ -249,18 +249,18 @@ class Profile
      */
     public function getPaymentProfileById($paymentProfileId)
     {
-        // Make the API request and capture both response and any potential error info
+
         $response = $this->api->request("payment_profiles/{$paymentProfileId}", 'GET');
-        
-        // If response is false, it means there was an error
-        // For 404 errors, we want to return a special indicator
+
+
+
         if ($response === false) {
-            // Since we can't easily access the specific error details from the API helper,
-            // we'll assume that if a GET request for a specific resource fails,
-            // it's likely a 404 (not found) scenario
+
+
+
             return ['not_found' => true];
         }
-        
+
         return $response;
     }
 }

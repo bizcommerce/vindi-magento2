@@ -161,18 +161,17 @@ class Details extends Template
             $orderCollection = $this->orderCollectionFactory->create();
             $orderCollection->addFieldToFilter('vindi_subscription_id', $subscription->getId());
 
-            // Debug logging
             $items = $orderCollection->getItems();
             $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/vindi_subscription_orders_debug.log');
             $logger = new \Zend_Log();
             $logger->addWriter($writer);
-            
+
             $logger->info('getBillingDetails() - Frontend Block Debug:');
             $logger->info('  Subscription ID from getSubscription(): ' . $subscription->getId());
             $logger->info('  Collection size: ' . $orderCollection->getSize());
             $logger->info('  Collection SQL: ' . $orderCollection->getSelectSql());
             $logger->info('  Items count: ' . count($items));
-            
+
             foreach ($items as $item) {
                 $logger->info('  Order data: ID=' . $item->getId() . ', Increment=' . $item->getIncrementId() . ', VindiSubId=' . $item->getData('vindi_subscription_id'));
             }
@@ -573,18 +572,17 @@ class Details extends Template
         $collection = $this->subscriptionsOrderCollectionFactory->create();
         $collection->addFieldToFilter('subscription_id', $subscriptionId);
 
-        // Debug logging
         $items = $collection->getItems();
         $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/vindi_subscription_orders_debug.log');
         $logger = new \Zend_Log();
         $logger->addWriter($writer);
-        
+
         $logger->info('getLinkedOrders() - Frontend Block Debug:');
         $logger->info('  Subscription ID from getSubscriptionId(): ' . $subscriptionId);
         $logger->info('  Collection size: ' . $collection->getSize());
         $logger->info('  Collection SQL: ' . $collection->getSelectSql());
         $logger->info('  Items count: ' . count($items));
-        
+
         foreach ($items as $item) {
             $logger->info('  SubscriptionOrder data: ' . json_encode($item->getData()));
         }
@@ -621,7 +619,6 @@ class Details extends Template
         if ($this->subscriptionData === null) {
             $id = $this->getRequest()->getParam('id');
 
-            // Debug logging
             $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/vindi_subscription_orders_debug.log');
             $logger = new \Zend_Log();
             $logger->addWriter($writer);
@@ -644,7 +641,7 @@ class Details extends Template
                     $subscriptionModel->save();
                 }
             }
-            
+
             $logger->info('  Final subscription data ID: ' . ($this->subscriptionData['id'] ?? 'NULL'));
         }
 

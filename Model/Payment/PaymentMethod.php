@@ -67,7 +67,7 @@ class PaymentMethod
     public function getCreditCardApiCode(string $ccType): string
     {
         error_log('VINDI_PAYMENT_METHOD_DEBUG: getCreditCardApiCode called with: ' . $ccType);
-        
+
         $methods = $this->get();
         if ($methods) {
             foreach ($methods['credit_card'] as $type) {

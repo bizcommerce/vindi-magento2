@@ -94,21 +94,21 @@ class Bill
     public function canCancel($billId)
     {
         $bill = $this->getBill($billId);
-        
+
         if (!$bill) {
             return false;
         }
-        
+
         $status = $bill['status'] ?? '';
-        
-        // Bill pode ser cancelada se não estiver paga nem já cancelada
+
+
         $cancelableStatuses = [
             self::PENDING_STATUS,
             self::WAITING_STATUS,
             self::REVIEW_STATUS,
             self::FRAUD_REVIEW_STATUS
         ];
-        
+
         return in_array($status, $cancelableStatuses);
     }
 }

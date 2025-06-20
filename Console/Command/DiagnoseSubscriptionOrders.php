@@ -29,7 +29,7 @@ class DiagnoseSubscriptionOrders extends Command
 
         $output->writeln("=== DIAGNÓSTICO DE PEDIDOS E ASSINATURAS ===");
 
-        // 1. Verificar pedidos com vindi_subscription_id
+
         $output->writeln("\n1. Verificando pedidos com vindi_subscription_id...");
         try {
             $ordersWithSubscription = $connection->select()
@@ -37,9 +37,9 @@ class DiagnoseSubscriptionOrders extends Command
                 ->where('vindi_subscription_id IS NOT NULL')
                 ->order('created_at DESC')
                 ->limit(10);
-            
+
             $orders = $connection->fetchAll($ordersWithSubscription);
-            
+
             if (!empty($orders)) {
                 $output->writeln("✅ Encontrados " . count($orders) . " pedidos com vindi_subscription_id:");
                 foreach ($orders as $order) {
@@ -52,16 +52,16 @@ class DiagnoseSubscriptionOrders extends Command
             $output->writeln("❌ Erro ao consultar pedidos: " . $e->getMessage());
         }
 
-        // 2. Verificar entradas na tabela vindi_subscription_orders
+
         $output->writeln("\n2. Verificando entradas na tabela vindi_subscription_orders...");
         try {
             $subscriptionOrders = $connection->select()
                 ->from($connection->getTableName('vindi_subscription_orders'))
                 ->order('created_at DESC')
                 ->limit(10);
-            
+
             $subOrders = $connection->fetchAll($subscriptionOrders);
-            
+
             if (!empty($subOrders)) {
                 $output->writeln("✅ Encontradas " . count($subOrders) . " entradas na tabela vindi_subscription_orders:");
                 foreach ($subOrders as $subOrder) {
@@ -74,7 +74,7 @@ class DiagnoseSubscriptionOrders extends Command
             $output->writeln("❌ Erro ao consultar vindi_subscription_orders: " . $e->getMessage());
         }
 
-        // 3. Verificar discrepâncias
+
         $output->writeln("\n3. Verificando discrepâncias entre pedidos e tabela de associação...");
         try {
             $orphanedOrders = $connection->select()
@@ -86,9 +86,9 @@ class DiagnoseSubscriptionOrders extends Command
                 )
                 ->where('so.vindi_subscription_id IS NOT NULL')
                 ->where('vso.entity_id IS NULL');
-            
+
             $orphanedOrdersResult = $connection->fetchAll($orphanedOrders);
-            
+
             if (!empty($orphanedOrdersResult)) {
                 $output->writeln("⚠️  Encontrados " . count($orphanedOrdersResult) . " pedidos com vindi_subscription_id mas sem entrada na tabela vindi_subscription_orders:");
                 foreach ($orphanedOrdersResult as $orphan) {

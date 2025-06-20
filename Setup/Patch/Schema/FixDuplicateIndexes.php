@@ -39,7 +39,7 @@ class FixDuplicateIndexes implements SchemaPatchInterface
         $connection = $this->schemaSetup->getConnection();
         $tableName = $this->schemaSetup->getTable('vindi_payment_split');
 
-        // Remove duplicate indexes if they exist
+
         $indexes = [
             'VINDI_PAYMENT_SPLIT_SUBSCRIPTION_ID_CYCLE',
             'VINDI_PAYMENT_SPLIT_SUBSCRIPTION_CYCLE',
@@ -52,7 +52,7 @@ class FixDuplicateIndexes implements SchemaPatchInterface
                     $connection->dropIndex($tableName, $indexName);
                 }
             } catch (\Exception $e) {
-                // Index doesn't exist, continue
+
             }
         }
 

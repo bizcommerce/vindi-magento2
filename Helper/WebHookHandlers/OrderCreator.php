@@ -338,7 +338,7 @@ class OrderCreator
 
             $this->subscriptionOrderRepository->save($subscriptionOrder);
         } catch (\Exception $e) {
-            // Log the error if needed
+
         }
     }
 
@@ -420,9 +420,9 @@ class OrderCreator
     public function enqueueManualBillsForMultiMeios($originalOrder, $subscriptionId, $billData)
     {
         error_log("DEPRECATED: enqueueManualBillsForMultiMeios called. Multimeios is no longer supported for subscriptions.");
-        
-        // Esta funcionalidade foi removida conforme nova política
-        // Multimeios não é mais suportado para assinaturas
+
+
+
         return;
     }
 
@@ -483,7 +483,7 @@ class OrderCreator
     protected function updateOrderAndSplits($originalOrder, $billsResult, $amountCredit, $amountSecondCard)
     {
         error_log("DEPRECATED: updateOrderAndSplits called. This method is no longer used as multimeios is not supported for subscriptions.");
-        // Esta funcionalidade foi removida conforme nova política
+
         return;
     }
 
@@ -500,15 +500,15 @@ class OrderCreator
 
         $masked = $billData;
 
-        // Remover informações sensíveis comuns
+
         $sensitiveFields = ['payment_profile', 'charges'];
         foreach ($sensitiveFields as $field) {
             if (isset($masked[$field])) {
                 if ($field === 'payment_profile' && is_array($masked[$field])) {
-                    // Manter apenas ID do profile
+
                     $masked[$field] = ['id' => $masked[$field]['id'] ?? null];
                 } elseif ($field === 'charges' && is_array($masked[$field])) {
-                    // Remover dados sensíveis dos charges
+
                     foreach ($masked[$field] as &$charge) {
                         if (isset($charge['payment_method'])) {
                             unset($charge['payment_method']);

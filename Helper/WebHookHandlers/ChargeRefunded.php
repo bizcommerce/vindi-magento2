@@ -55,7 +55,6 @@ class ChargeRefunded
         $billId = $billData['id'];
         $billCode = $billData['code'] ?? '';
 
-        // Log informativo para auditoria
         $this->logger->info('CHARGE_REFUNDED: Processing refunded charge ' . $chargeId);
         $this->logger->info('CHARGE_REFUNDED: Charge data - ' . json_encode([
             'charge_id' => $chargeId,
@@ -65,15 +64,14 @@ class ChargeRefunded
             'payment_method' => $charge['payment_method']['code'] ?? 'unknown'
         ]));
 
-        // Verificar se é multimeios para log
         $isMultimethod = $this->isMultimethodBill($billCode, $billId);
 
         if ($isMultimethod) {
             $this->logger->info('CHARGE_REFUNDED: Detected multimethod bill - bill_canceled webhook will handle all logic');
         } else {
             $this->logger->info('CHARGE_REFUNDED: Single payment method - creating creditmemo only');
-            
-            // Para pagamentos simples (não multimeios), criar apenas o creditmemo
+
+
             $order = $this->findOrderForBill($billCode);
             if ($order) {
                 $creditmemo = $this->refundHelper->createSplitRefund(
@@ -81,28 +79,28 @@ class ChargeRefunded
                     $refundAmount,
                     $charge['payment_method']['name'] ?? 'Método de Pagamento'
                 );
-                
+
                 $commentText = sprintf(
                     'Estorno detectado: Charge %d estornado (R$ %s)',
                     $chargeId,
                     number_format($refundAmount, 2, ',', '.')
                 );
-                
+
                 if ($creditmemo) {
                     $commentText .= sprintf('. Creditmemo #%s criado.', $creditmemo->getIncrementId());
                 }
-                
+
                 $order->addStatusHistoryComment($commentText);
                 $this->orderRepository->save($order);
-                
-                $this->logger->info('CHARGE_REFUNDED: Single payment creditmemo created' . 
+
+                $this->logger->info('CHARGE_REFUNDED: Single payment creditmemo created' .
                     ($creditmemo ? ' - Creditmemo: ' . $creditmemo->getIncrementId() : ' - Failed to create creditmemo'));
             }
         }
 
-        // IMPORTANTE: Para multimeios, deixar toda a lógica para o bill_canceled que sempre vem depois
+
         $this->logger->info('CHARGE_REFUNDED: Webhook processed. For multimethod bills, bill_canceled will handle cancellation logic.');
-        
+
         return true;
     }
 
@@ -117,15 +115,15 @@ class ChargeRefunded
     private function isMultimethodBill($billCode, $billId)
     {
         try {
-            // Primeiro, tentar encontrar o pedido para esta bill
+
             $order = $this->findOrderForBill($billCode);
-            
+
             if (!$order) {
                 $this->logger->warning('CHARGE_REFUNDED: Could not find order for bill code: ' . $billCode . ' - cannot determine if multimethod');
                 return false;
             }
 
-            // Buscar todos os splits para este pedido
+
             $allSplits = $this->paymentSplitFactory->create()
                 ->getCollection()
                 ->addFieldToFilter('order_increment_id', $order->getIncrementId());
@@ -133,7 +131,7 @@ class ChargeRefunded
             $splitCount = $allSplits->getSize();
             $this->logger->info('CHARGE_REFUNDED: Found ' . $splitCount . ' splits for order ' . $order->getIncrementId());
 
-            // Se há mais de 1 split, é multimeios
+
             if ($splitCount > 1) {
                 $this->logger->info('CHARGE_REFUNDED: Multimethod detected - Order ' . $order->getIncrementId() . ' has ' . $splitCount . ' payment splits');
                 return true;
@@ -157,15 +155,15 @@ class ChargeRefunded
     private function findOrderForBill($billCode)
     {
         try {
-            // Verificar se os 3 últimos caracteres são -01 ou -02 (indicativo de multimeios)
+
             if (strlen($billCode) >= 4 && in_array(substr($billCode, -3), ['-01', '-02'])) {
-                // Extrair increment_id removendo os 3 últimos caracteres (-01 ou -02)
+
                 $baseOrderIncrementId = substr($billCode, 0, -3);
                 $suffix = substr($billCode, -3);
-                
+
                 $this->logger->info('CHARGE_REFUNDED: Detected multimethod pattern - Increment ID: ' . $baseOrderIncrementId . ', Suffix: ' . $suffix . ' from bill: ' . $billCode);
 
-                // Buscar pedido exato pelo increment_id base
+
                 $searchCriteria = $this->searchCriteriaBuilder
                     ->addFilter('increment_id', $baseOrderIncrementId)
                     ->addFilter('state', ['new', 'processing', 'complete', 'canceled'], 'in')
@@ -178,7 +176,7 @@ class ChargeRefunded
                     $this->logger->info('CHARGE_REFUNDED: Found order ' . $order->getIncrementId() . ' for multimethod bill ' . $billCode);
                     return $order;
                 }
-                
+
                 $this->logger->warning('CHARGE_REFUNDED: No order found with increment_id: ' . $baseOrderIncrementId . ' for bill: ' . $billCode);
             } else {
                 $this->logger->info('CHARGE_REFUNDED: Bill code does not end with -01 or -02, not a multimethod bill: ' . $billCode);

@@ -71,12 +71,12 @@ class DiagnoseMultiPaymentBills extends Command
         $orderIncrement = $input->getArgument('order_increment');
         $connection = $this->resourceConnection->getConnection();
 
-        // 1. Verificar configuração do produto de desconto
+
         $output->writeln("\n1. 📋 Verificando configuração do produto de desconto...");
         $configQuery = $connection->select()
             ->from($connection->getTableName('core_config_data'))
             ->where("path LIKE '%discount_product%' OR path LIKE '%vindi%discount%'");
-        
+
         $configs = $connection->fetchAll($configQuery);
         if (empty($configs)) {
             $output->writeln("   ⚠️  PROBLEMA: Nenhuma configuração de produto de desconto encontrada!");
@@ -87,14 +87,14 @@ class DiagnoseMultiPaymentBills extends Command
             }
         }
 
-        // 2. Verificar últimos logs da API de bills
+
         $output->writeln("\n2. 📊 Verificando logs da API para criação de bills...");
         $logsQuery = $connection->select()
             ->from($connection->getTableName('vindi_api_logs'))
             ->where("endpoint LIKE '%bills%'")
             ->order('created_at DESC')
             ->limit(5);
-        
+
         $logs = $connection->fetchAll($logsQuery);
         if (empty($logs)) {
             $output->writeln("   ⚠️  Nenhum log de API para bills encontrado");
@@ -105,15 +105,15 @@ class DiagnoseMultiPaymentBills extends Command
             }
         }
 
-        // 3. Verificar pedidos com multimeios
+
         $output->writeln("\n3. 🛒 Verificando pedidos com multimeios de pagamento...");
-        
+
         $multiMethods = ['vindi_cardpix', 'vindi_cardcard', 'vindi_cardbankslippix'];
         $whereConditions = [];
         foreach ($multiMethods as $method) {
             $whereConditions[] = "sop.method = '{$method}'";
         }
-        
+
         $ordersQuery = $connection->select()
             ->from(['so' => $connection->getTableName('sales_order')], ['increment_id', 'entity_id', 'status', 'grand_total', 'created_at'])
             ->joinInner(
@@ -124,13 +124,13 @@ class DiagnoseMultiPaymentBills extends Command
             ->where('(' . implode(' OR ', $whereConditions) . ')')
             ->order('so.created_at DESC')
             ->limit($orderIncrement ? 1 : 10);
-        
+
         if ($orderIncrement) {
             $ordersQuery->where('so.increment_id = ?', $orderIncrement);
         }
-        
+
         $orders = $connection->fetchAll($ordersQuery);
-        
+
         if (empty($orders)) {
             $output->writeln("   ⚠️  Nenhum pedido com multimeios encontrado");
         } else {
@@ -140,28 +140,28 @@ class DiagnoseMultiPaymentBills extends Command
                 $output->writeln("      └── Status: {$order['status']}");
                 $output->writeln("      └── Total: R$ {$order['grand_total']}");
                 $output->writeln("      └── Data: {$order['created_at']}");
-                
-                // Verificar additional_information
+
+
                 $additionalInfo = json_decode($order['additional_information'], true);
                 if ($additionalInfo) {
                     $amountCredit = $additionalInfo['amount_credit'] ?? 'N/A';
                     $amountPix = $additionalInfo['amount_pix'] ?? 'N/A';
                     $amountSecond = $additionalInfo['amount_second_card'] ?? 'N/A';
                     $amountBankslip = $additionalInfo['amount_bankslip'] ?? 'N/A';
-                    
+
                     $output->writeln("      └── Valor Cartão: R$ {$amountCredit}");
                     if ($amountPix !== 'N/A') $output->writeln("      └── Valor PIX: R$ {$amountPix}");
                     if ($amountSecond !== 'N/A') $output->writeln("      └── Valor 2º Cartão: R$ {$amountSecond}");
                     if ($amountBankslip !== 'N/A') $output->writeln("      └── Valor Boleto: R$ {$amountBankslip}");
                 }
-                
-                // Verificar payment splits
+
+
                 $splitsQuery = $connection->select()
                     ->from($connection->getTableName('vindi_payment_split'))
                     ->where('order_increment_id = ?', $order['increment_id']);
-                
+
                 $splits = $connection->fetchAll($splitsQuery);
-                
+
                 if (empty($splits)) {
                     $output->writeln("      ❌ PROBLEMA: Nenhum payment split encontrado!");
                 } else {
@@ -171,12 +171,12 @@ class DiagnoseMultiPaymentBills extends Command
                         $output->writeln("         - Método: {$split['payment_method']}, Valor: R$ {$split['amount']}, {$billStatus}, Status: {$split['status']}");
                     }
                 }
-                
-                // Verificar vindi_bill_id no pedido
+
+
                 $billIdQuery = $connection->select()
                     ->from($connection->getTableName('sales_order'), ['vindi_bill_id'])
                     ->where('entity_id = ?', $order['entity_id']);
-                
+
                 $billIds = $connection->fetchOne($billIdQuery);
                 if ($billIds) {
                     $output->writeln("      ✅ Vindi Bill IDs: {$billIds}");
@@ -186,14 +186,14 @@ class DiagnoseMultiPaymentBills extends Command
             }
         }
 
-        // 4. Verificar se há erros específicos nos logs
+
         $output->writeln("\n4. ❌ Verificando erros específicos nos logs da API...");
         $errorLogsQuery = $connection->select()
             ->from($connection->getTableName('vindi_api_logs'))
             ->where("endpoint LIKE '%bills%' AND (status_code != 200 OR description LIKE '%error%')")
             ->order('created_at DESC')
             ->limit(5);
-        
+
         $errorLogs = $connection->fetchAll($errorLogsQuery);
         if (empty($errorLogs)) {
             $output->writeln("   ✅ Nenhum erro específico encontrado nos logs recentes");
@@ -214,7 +214,7 @@ class DiagnoseMultiPaymentBills extends Command
 
         $output->writeln("\n" . str_repeat("=", 70));
         $output->writeln("✅ Diagnóstico concluído!");
-        
+
         return Command::SUCCESS;
     }
 }

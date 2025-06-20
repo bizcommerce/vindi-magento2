@@ -51,7 +51,7 @@ class DiagnoseMultiPayments extends Command
         try {
             $this->appState->setAreaCode(\Magento\Framework\App\Area::AREA_ADMINHTML);
         } catch (\Exception $e) {
-            // Area already set
+
         }
 
         $connection = $this->resourceConnection->getConnection();
@@ -59,9 +59,9 @@ class DiagnoseMultiPayments extends Command
 
         $output->writeln("=== DIAGNÓSTICO DE MULTIMEIOS DE PAGAMENTO ===\n");
 
-        // 1. Verificar pedidos com multimeios
+
         $output->writeln("1. Verificando pedidos com métodos de pagamento múltiplos...");
-        
+
         $orderWhere = [];
         if ($orderIncrementId) {
             $orderWhere[] = "increment_id = '$orderIncrementId'";
@@ -69,13 +69,13 @@ class DiagnoseMultiPayments extends Command
         }
 
         $whereClause = $orderWhere ? ' AND ' . implode(' AND ', $orderWhere) : '';
-        
+
         $multiPaymentMethods = ['vindi_cardcard', 'vindi_cardpix', 'vindi_cardbankslippix'];
-        
+
         foreach ($multiPaymentMethods as $method) {
             $output->writeln("\n--- Método: $method ---");
-            
-            // Buscar pedidos com este método
+
+
             $ordersQuery = $connection->select()
                 ->from(
                     ['o' => $connection->getTableName('sales_order')],
@@ -94,7 +94,7 @@ class DiagnoseMultiPayments extends Command
             }
 
             $orders = $connection->fetchAll($ordersQuery);
-            
+
             if (empty($orders)) {
                 $output->writeln("   ❌ Nenhum pedido encontrado para $method");
                 continue;
@@ -103,15 +103,15 @@ class DiagnoseMultiPayments extends Command
             $output->writeln("   ✅ Encontrados " . count($orders) . " pedidos:");
 
             foreach ($orders as $orderData) {
-                $output->writeln("   
+                $output->writeln("
    📦 Pedido: {$orderData['increment_id']} (ID: {$orderData['entity_id']})
       Status: {$orderData['status']}
       Data: {$orderData['created_at']}
       Vindi Bill ID: " . ($orderData['vindi_bill_id'] ?: 'NENHUM'));
 
-                // Decodificar additional_information
+
                 $additionalInfo = json_decode($orderData['additional_information'], true) ?: [];
-                
+
                 if ($method === 'vindi_cardcard') {
                     $amountCredit = $additionalInfo['amount_credit'] ?? 'N/A';
                     $amountSecondCard = $additionalInfo['amount_second_card'] ?? 'N/A';
@@ -129,13 +129,13 @@ class DiagnoseMultiPayments extends Command
                     $output->writeln("      Valor Boleto PIX: $amountBankslipPix");
                 }
 
-                // Verificar payment splits
+
                 $splitsQuery = $connection->select()
                     ->from($connection->getTableName('vindi_payment_split'))
                     ->where('order_increment_id = ?', $orderData['increment_id']);
 
                 $splits = $connection->fetchAll($splitsQuery);
-                
+
                 if (empty($splits)) {
                     $output->writeln("      ❌ PROBLEMA: Nenhum payment split encontrado!");
                 } else {
@@ -145,14 +145,14 @@ class DiagnoseMultiPayments extends Command
                     }
                 }
 
-                // Verificar bills na Vindi (se tiver bill_id)
+
                 if ($orderData['vindi_bill_id']) {
                     $this->checkVindiBills($orderData['vindi_bill_id'], $orderData['increment_id'], $output);
                 }
             }
         }
 
-        // 2. Verificar logs de API recentes
+
         $output->writeln("\n\n2. Verificando logs de API recentes...");
         $this->checkApiLogs($connection, $output, $orderIncrementId);
 
@@ -162,7 +162,7 @@ class DiagnoseMultiPayments extends Command
     private function checkVindiBills($vindiBillIds, $incrementId, $output)
     {
         $output->writeln("\n      🔍 Verificando bills na Vindi para pedido $incrementId:");
-        
+
         $billIds = explode(',', $vindiBillIds);
         foreach ($billIds as $billId) {
             $billId = trim($billId);
@@ -204,15 +204,15 @@ class DiagnoseMultiPayments extends Command
             foreach ($logs as $log) {
                 $requestBody = json_decode($log['request_body'], true) ?: [];
                 $responseBody = json_decode($log['response_body'], true) ?: [];
-                
+
                 $billCode = $requestBody['code'] ?? 'N/A';
                 $status = $log['status_code'];
-                
+
                 if ($orderIncrementId && strpos($billCode, $orderIncrementId) === false) {
-                    continue; // Pular se não for o pedido específico
+                    continue;
                 }
 
-                $output->writeln("   
+                $output->writeln("
       📝 Log: {$log['created_at']}
          Endpoint: {$log['endpoint']} ({$log['method']})
          Status: $status

@@ -11,7 +11,7 @@ use Magento\Framework\Exception\LocalizedException;
 
 /**
  * Class ValidationHelper
- * 
+ *
  * Helper for additional validations and improvements
  */
 class ValidationHelper extends AbstractHelper
@@ -72,26 +72,23 @@ class ValidationHelper extends AbstractHelper
     public function validateCreditCardData(array $cardData): bool
     {
         $requiredFields = ['card_number', 'card_cvv', 'card_expiration'];
-        
+
         foreach ($requiredFields as $field) {
             if (empty($cardData[$field])) {
                 throw new LocalizedException(__('Credit card field %1 is required', $field));
             }
         }
 
-        // Basic card number validation (remove spaces and check if numeric)
         $cardNumber = preg_replace('/\s+/', '', $cardData['card_number']);
         if (!is_numeric($cardNumber) || strlen($cardNumber) < 13 || strlen($cardNumber) > 19) {
             throw new LocalizedException(__('Invalid credit card number format'));
         }
 
-        // Basic CVV validation
         $cvv = $cardData['card_cvv'];
         if (!is_numeric($cvv) || strlen($cvv) < 3 || strlen($cvv) > 4) {
             throw new LocalizedException(__('Invalid CVV format'));
         }
 
-        // Basic expiration validation (MM/YY format)
         $expiration = $cardData['card_expiration'];
         if (!preg_match('/^\d{2}\/\d{2}$/', $expiration)) {
             throw new LocalizedException(__('Invalid expiration date format. Use MM/YY'));
@@ -111,10 +108,9 @@ class ValidationHelper extends AbstractHelper
     public function validateMultiPaymentSplit(float $totalAmount, array $splitAmounts): bool
     {
         $sumSplits = array_sum($splitAmounts);
-        
-        // Allow for small rounding differences (1 cent)
+
         $difference = abs($totalAmount - $sumSplits);
-        
+
         if ($difference > 0.01) {
             $this->logger->error("VINDI_VALIDATION: Multi-payment split error - Total: {$totalAmount}, Sum: {$sumSplits}, Difference: {$difference}");
             throw new LocalizedException(
@@ -122,7 +118,6 @@ class ValidationHelper extends AbstractHelper
             );
         }
 
-        // Validate each split amount is positive
         foreach ($splitAmounts as $method => $amount) {
             if ($amount <= 0) {
                 throw new LocalizedException(
@@ -144,7 +139,7 @@ class ValidationHelper extends AbstractHelper
     {
         $sensitiveFields = [
             'card_number',
-            'card_cvv', 
+            'card_cvv',
             'cvv',
             'card_token',
             'payment_token',
@@ -179,11 +174,9 @@ class ValidationHelper extends AbstractHelper
     public function validateSubscriptionPeriods(array $planIds): bool
     {
         if (count($planIds) <= 1) {
-            return true; // Single plan or empty is always valid
+            return true;
         }
 
-        // TODO: Implement actual plan period validation by fetching plan data
-        // For now, just ensure all plan IDs are the same
         $firstPlanId = reset($planIds);
         foreach ($planIds as $planId) {
             if ($planId !== $firstPlanId) {

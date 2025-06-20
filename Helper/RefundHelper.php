@@ -53,13 +53,11 @@ class RefundHelper extends AbstractHelper
         try {
             $order = $this->orderRepository->get($orderId);
 
-            // Verificar se pode criar creditmemo
             if (!$order->canCreditmemo()) {
                 $this->logger->warning('REFUND_HELPER: Order cannot have creditmemo - Order ID: ' . $orderId);
                 return null;
             }
 
-            // Obter invoice
             if ($invoiceId) {
                 $invoice = $this->invoiceRepository->get($invoiceId);
             } else {
@@ -70,21 +68,17 @@ class RefundHelper extends AbstractHelper
                 }
             }
 
-            // Todos os itens da invoice
             $qtys = [];
             foreach ($invoice->getAllItems() as $item) {
                 $qtys[$item->getOrderItemId()] = $item->getQty();
             }
 
-            // Criar creditmemo
             $creditmemo = $this->creditmemoFactory->createByInvoice($invoice, [
                 'qtys' => $qtys
             ]);
 
-            // Marcar como offline (já processado externamente na Vindi)
             $creditmemo->setOfflineRequested(true);
 
-            // ✅ CORREÇÃO: Usar creditmemoService em vez de register() deprecated
             $this->creditmemoService->refund($creditmemo);
 
             $this->logger->info('REFUND_HELPER: Full creditmemo created - Order: ' . $order->getIncrementId() . ', Creditmemo: ' . $creditmemo->getIncrementId());
@@ -112,13 +106,11 @@ class RefundHelper extends AbstractHelper
         try {
             $order = $this->orderRepository->get($orderId);
 
-            // Verificar se pode criar creditmemo
             if (!$order->canCreditmemo()) {
                 $this->logger->warning('REFUND_HELPER: Order cannot have creditmemo - Order ID: ' . $orderId);
                 return null;
             }
 
-            // Obter invoice
             if ($invoiceId) {
                 $invoice = $this->invoiceRepository->get($invoiceId);
             } else {
@@ -129,25 +121,19 @@ class RefundHelper extends AbstractHelper
                 }
             }
 
-            // Para refund parcial, vamos criar sem itens específicos
-            // e ajustar manualmente o valor
             $creditmemo = $this->creditmemoFactory->createByInvoice($invoice, []);
 
-            // Definir valor customizado
             $creditmemo->setBaseGrandTotal($amount);
             $creditmemo->setGrandTotal($amount);
             $creditmemo->setBaseSubtotal($amount);
             $creditmemo->setSubtotal($amount);
 
-            // Adicionar comentário explicativo
             if ($reason) {
                 $creditmemo->addComment($reason);
             }
 
-            // Marcar como offline (já processado externamente na Vindi)
             $creditmemo->setOfflineRequested(true);
 
-            // ✅ CORREÇÃO: Usar creditmemoService em vez de register() deprecated
             $this->creditmemoService->refund($creditmemo);
 
             $this->logger->info('REFUND_HELPER: Partial creditmemo created - Order: ' . $order->getIncrementId() . ', Amount: ' . $amount . ', Creditmemo: ' . $creditmemo->getIncrementId());
@@ -171,29 +157,24 @@ class RefundHelper extends AbstractHelper
     public function createSplitRefund($order, $splitAmount, $paymentMethod = '')
     {
         try {
-            // Verificar se pode criar creditmemo
-//            if (!$order->canCreditmemo()) {
-//                $this->logger->warning('REFUND_HELPER: Order cannot have creditmemo for split refund - Order: ' . $order->getIncrementId());
-//                return null;
-//            }
 
-            // Buscar primeira invoice
+
+
+
+
             $invoice = $order->getInvoiceCollection()->getFirstItem();
             if (!$invoice || !$invoice->getId()) {
                 $this->logger->warning('REFUND_HELPER: No invoice found for split refund - Order: ' . $order->getIncrementId());
                 return null;
             }
 
-            // Criar creditmemo para o valor do split
             $creditmemo = $this->creditmemoFactory->createByInvoice($invoice, []);
 
-            // Ajustar valores para o split
             $creditmemo->setBaseGrandTotal($splitAmount);
             $creditmemo->setGrandTotal($splitAmount);
             $creditmemo->setBaseSubtotal($splitAmount);
             $creditmemo->setSubtotal($splitAmount);
 
-            // Adicionar comentário explicativo
             $comment = sprintf(
                 'Estorno parcial de multimeios: %s (R$ %s)',
                 $paymentMethod ?: 'Método de Pagamento',
@@ -201,10 +182,8 @@ class RefundHelper extends AbstractHelper
             );
             $creditmemo->addComment($comment);
 
-            // Marcar como offline (já processado externamente na Vindi)
             $creditmemo->setOfflineRequested(true);
 
-            // ✅ CORREÇÃO: Usar creditmemoService em vez de register() deprecated
             $this->creditmemoService->refund($creditmemo);
 
             $this->logger->info('REFUND_HELPER: Split creditmemo created - Order: ' . $order->getIncrementId() . ', Amount: ' . $splitAmount . ', Method: ' . $paymentMethod . ', Creditmemo: ' . $creditmemo->getIncrementId());
@@ -213,7 +192,7 @@ class RefundHelper extends AbstractHelper
 
         } catch (\Exception $e) {
             $this->logger->error('REFUND_HELPER: Error creating split refund - Order: ' . $order->getIncrementId() . ', Amount: ' . $splitAmount . ', Error: ' . $e->getMessage());
-            return null; // Não relançar exceção para não bloquear cancelamento
+            return null;
         }
     }
 }

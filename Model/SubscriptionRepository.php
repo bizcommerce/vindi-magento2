@@ -121,9 +121,9 @@ class SubscriptionRepository implements SubscriptionRepositoryInterface
             [],
             SubscriptionInterface::class
         );
-        
+
         $subscriptionModel = $this->subscriptionFactory->create()->setData($subscriptionData);
-        
+
         try {
             $this->resource->save($subscriptionModel);
         } catch (Exception $exception) {
@@ -155,22 +155,22 @@ class SubscriptionRepository implements SubscriptionRepositoryInterface
         SearchCriteriaInterface $criteria
     ) {
         $collection = $this->subscriptionCollectionFactory->create();
-        
+
         $this->extensionAttributesJoinProcessor->process(
             $collection,
             SubscriptionInterface::class
         );
-        
+
         $this->collectionProcessor->process($criteria, $collection);
-        
+
         $searchResults = $this->searchResultsFactory->create();
         $searchResults->setSearchCriteria($criteria);
-        
+
         $items = [];
         foreach ($collection as $model) {
             $items[] = $model->getDataModel();
         }
-        
+
         $searchResults->setItems($items);
         $searchResults->setTotalCount($collection->getSize());
         return $searchResults;

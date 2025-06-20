@@ -100,20 +100,14 @@ class BillCreated
 
         try {
             $originalOrder = $this->orderCreator->getOrderFromSubscriptionId($subscriptionId);
-            
-            // REFATORAÇÃO: Multimeios não é mais suportado para assinaturas
-            // Todas as assinaturas são tratadas como método único
+
             if ($originalOrder) {
                 $payment = $originalOrder->getPayment();
                 if ($payment && $payment->getMethod() === 'vindi_cardcard') {
                     error_log('DEPRECATED: vindi_cardcard method detected for subscription. Multimeios is no longer supported for subscriptions.');
-                    // Não fazer nenhum processamento especial para multimeios em assinaturas
                 }
             }
-            
-            // Processar como bill normal de assinatura (método único)
-            // Lógica original para bills de assinatura simples
-            
+
             if ($originalOrder && $originalOrder->getData('vindi_subscription_can_create_new_order') == true) {
                 $originalOrder->setData('vindi_subscription_can_create_new_order', false);
                 $originalOrder->setData('vindi_bill_id', $bill['id']);
@@ -152,22 +146,17 @@ class BillCreated
      */
     private function isRenewalBill($bill)
     {
-        // Verificar se existe informação de período/ciclo
         if (isset($bill['period']) && isset($bill['period']['cycle'])) {
-            // Se o ciclo é maior que 1, é renovação
             return (int)$bill['period']['cycle'] > 1;
         }
-        
-        // Verificar pela data de criação da bill vs data da assinatura
+
         if (isset($bill['subscription']) && isset($bill['subscription']['created_at']) && isset($bill['created_at'])) {
             $subscriptionCreated = strtotime($bill['subscription']['created_at']);
             $billCreated = strtotime($bill['created_at']);
-            
-            // Se a bill foi criada mais de 1 dia após a assinatura, é renovação
-            return ($billCreated - $subscriptionCreated) > 86400; // 24 horas
+
+            return ($billCreated - $subscriptionCreated) > 86400;
         }
-        
-        // Se não conseguir determinar, assumir que é renovação (mais seguro)
+
         return true;
     }
 }

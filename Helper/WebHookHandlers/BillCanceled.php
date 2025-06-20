@@ -102,7 +102,6 @@ class BillCanceled
             return $this->handleSinglePaymentCancellation($order, $currentSplit, $bill);
         }
 
-        // MULTIMETHOD: process the other split (not the current one)
         $otherSplit = null;
         foreach ($allSplits as $split) {
             if ($split->getId() !== $currentSplit->getId()) {
@@ -118,7 +117,6 @@ class BillCanceled
 
         $result = $this->processOtherSplitAndCancel($otherSplit, $order);
 
-        // Always cancel the order after processing the other split
         $this->forceCancelMultimethodOrder($order);
 
         return $result;
@@ -141,7 +139,6 @@ class BillCanceled
         $amount = $split->getAmount();
 
         if ($billStatus === 'paid') {
-            // Refund in Vindi
             $chargeId = $this->getChargeIdFromBillId($billId);
             if ($chargeId) {
                 $refundResult = $this->charge->refund($chargeId, ['amount' => $amount]);
@@ -157,14 +154,8 @@ class BillCanceled
                         ->save();
                 }
             }
-            // Cancel bill in Vindi
             $this->bill->cancel($billId);
-            // Create creditmemo in Magento
-//            $this->refundHelper->createSplitRefund(
-//                $order,
-//                $amount,
-//                $split->getPaymentMethod() ?: 'Método de Pagamento'
-//            );
+
             $order->addStatusHistoryComment(sprintf(
                 'Multimeios: Bill %d paga foi estornada, bill cancelada na Vindi e creditmemo criado.',
                 $billId
@@ -172,7 +163,6 @@ class BillCanceled
             $order->save();
             return true;
         } else {
-            // Just cancel the split and create creditmemo
             $this->bill->cancel($billId);
             $split->setStatus('canceled')
                 ->setIsRefunded(0)

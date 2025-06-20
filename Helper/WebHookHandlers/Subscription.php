@@ -100,7 +100,7 @@ class Subscription
         $order->addCommentToStatusHistory(__('The subscription was canceled')->getText());
         $this->orderRepository->save($order);
 
-        // Cancelar/atualizar assinatura local
+
         $this->markSubscriptionAsCanceled($subscriptionId);
 
         $this->logger->info('SUBSCRIPTION_CANCELED: Successfully processed cancellation for subscription ' . $subscriptionId);
@@ -175,18 +175,18 @@ class Subscription
     private function markSubscriptionAsCanceled($subscriptionId)
     {
         try {
-            // TODO: Implementar atualização do status da assinatura local
-            // Por enquanto apenas log
+
+
             $this->logger->info("SUBSCRIPTION_STATUS: Marking subscription {$subscriptionId} as canceled");
-            
-            // Exemplo de implementação futura:
-            // $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-            // $subscription = $objectManager->create(\Vindi\Payment\Model\Subscription::class)->load($subscriptionId, 'vindi_id');
-            // if ($subscription->getId()) {
-            //     $subscription->setStatus('canceled');
-            //     $subscription->save();
-            // }
-            
+
+
+
+
+
+
+
+
+
         } catch (\Exception $e) {
             $this->logger->error("SUBSCRIPTION_STATUS: Error marking subscription as canceled: " . $e->getMessage());
         }

@@ -96,13 +96,13 @@ class CreditCard extends AbstractMethod
         parent::assignData($data);
 
         $info = $this->getInfoInstance();
-        
-        // Ensure additional_information is array
+
+
         $additionalInfo = $info->getAdditionalInformation();
         if (!is_array($additionalInfo)) {
             $additionalInfo = [];
         }
-        
+
         $additionalInfo['installments'] = $data->getAdditionalData('installments');
         $info->setAdditionalInformation($additionalInfo);
 

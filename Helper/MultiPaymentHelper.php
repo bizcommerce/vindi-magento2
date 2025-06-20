@@ -12,7 +12,7 @@ use Magento\Framework\Exception\LocalizedException;
 
 /**
  * Class MultiPaymentHelper
- * 
+ *
  * Helper for managing multi-payment specific operations
  */
 class MultiPaymentHelper extends AbstractHelper
@@ -55,39 +55,36 @@ class MultiPaymentHelper extends AbstractHelper
      */
     public function getOrCreateDiscountProduct(): int
     {
-        // Return cached value if available
         if ($this->discountProductId !== null) {
             return $this->discountProductId;
         }
 
         $discountProductCode = 'vindi-multipayment-discount';
-        
+
         try {
-            // Try to find existing product
             $existingProductId = $this->vindiProduct->findProductByCode($discountProductCode);
-            
+
             if ($existingProductId) {
                 $this->discountProductId = (int)$existingProductId;
                 $this->logger->info('VINDI_MULTIPAYMENT: Found existing discount product ID: ' . $this->discountProductId);
                 return $this->discountProductId;
             }
 
-            // Create new discount product using the existing method
             $this->logger->info('VINDI_MULTIPAYMENT: Creating new discount product...');
-            
+
             $createdProductId = $this->vindiProduct->findOrCreateProduct(
                 $discountProductCode,
                 'Desconto Multimeios Vindi',
                 'simple'
             );
-            
+
             if (!$createdProductId) {
                 throw new LocalizedException(__('Failed to create discount product in Vindi'));
             }
 
             $this->discountProductId = (int)$createdProductId;
             $this->logger->info('VINDI_MULTIPAYMENT: Created discount product with ID: ' . $this->discountProductId);
-            
+
             return $this->discountProductId;
 
         } catch (\Exception $e) {

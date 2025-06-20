@@ -76,7 +76,7 @@ class BillPaid
     private function handleSubscriptionFlow($bill, $data)
     {
         $subscriptionId = $bill['subscription']['id'];
-        
+
         $lockName = 'vindi_subscription_' . $subscriptionId;
         if (!$this->dbAdapter->query("SELECT GET_LOCK(?, 10)", [$lockName])->fetchColumn()) {
             $this->logError('Could not acquire lock for subscription ID: ' . $subscriptionId);
@@ -90,10 +90,8 @@ class BillPaid
                 return true;
             }
 
-            // ASSINATURAS SÃO SEMPRE SINGLE METHOD
-            // Não há lógica de multimeios para renovações
             $this->logInfo('Processing subscription renewal for order: ' . $originalOrder->getIncrementId() . ', subscription: ' . $subscriptionId);
-            
+
             $queueItem = $this->orderCreationQueueFactory->create();
             $queueItem->setData([
                 'bill_data' => json_encode($data),
@@ -102,7 +100,7 @@ class BillPaid
             ]);
             $this->orderCreationQueueRepository->save($queueItem);
             $this->logInfo('Created order creation queue item for subscription renewal.');
-            
+
             return true;
 
         } finally {
@@ -171,34 +169,34 @@ class BillPaid
             return false;
         }
 
-        // Buscar todos os splits do pedido
+
         $splits = $this->paymentSplitFactory->create()
             ->getCollection()
             ->addFieldToFilter('order_increment_id', $order->getIncrementId());
 
-        // Se NÃO há splits, é um pagamento simples - pode criar invoice
+
         if ($splits->getSize() === 0) {
             $this->logInfo('Single payment method detected for order: ' . $order->getIncrementId());
             return $this->createInvoice($order);
         }
 
-        // Se HÁ splits, é multimeios - precisa verificar se todos foram pagos
+
         $currentSplit = $splits->getItemByColumnValue('bill_id', $bill['id']);
         if ($currentSplit && $currentSplit->getId()) {
             $currentSplit->setStatus('paid')->save();
-            
-            // Limpar QR Code/PIX data se necessário
+
+
             if (in_array($currentSplit->getPaymentMethod(), ['pix', 'pix_bank_slip'])) {
                 $this->clearPixData($order);
             }
         }
 
-        // Verificar se todos splits estão pagos
+
         $allPaid = $this->areAllSplitsPaid($splits);
-        
+
         if (!$allPaid) {
             $this->logInfo('Not all payment splits are paid for order: ' . $order->getIncrementId());
-            return true; // Aguardar outros pagamentos
+            return true;
         }
 
         $this->logInfo('All payment splits paid for order: ' . $order->getIncrementId());
@@ -212,7 +210,7 @@ class BillPaid
         }
 
         $code = $bill['code'];
-        // Remove suffix -01, -02 para multimeios
+
         if (substr($code, -3) === '-01' || substr($code, -3) === '-02') {
             $code = substr($code, 0, -3);
         }

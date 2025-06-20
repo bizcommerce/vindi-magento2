@@ -397,7 +397,6 @@ class View extends Container
         $collection = $this->subscriptionsOrderCollectionFactory->create();
         $collection->addFieldToFilter('subscription_id', $subscriptionId);
 
-        // Debug logging
         $items = $collection->getItems();
         $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/vindi_subscription_orders_debug.log');
         $logger = new \Zend_Log();
@@ -481,7 +480,6 @@ class View extends Container
         if ($this->subscriptions === null) {
             $id = $this->registry->registry('vindi_payment_subscription_id');
             
-            // Debug logging
             $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/vindi_subscription_orders_debug.log');
             $logger = new \Zend_Log();
             $logger->addWriter($writer);
