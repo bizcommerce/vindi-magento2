@@ -191,6 +191,10 @@ class BillPaid
             }
         }
 
+        if ($currentSplit && $this->shouldCreateInvoiceForCreditCard($currentSplit, $order)) {
+            $this->logInfo('Credit card payment detected - creating invoice immediately for order: ' . $order->getIncrementId());
+            return $this->createInvoice($order);
+        }
 
         $allPaid = $this->areAllSplitsPaid($splits);
 
@@ -235,5 +239,34 @@ class BillPaid
         $pi = $order->getPayment()->getAdditionalInformation();
         $pi['qrcode_path'] = $pi['print_url'] = $pi['due_at'] = null;
         $order->getPayment()->setAdditionalInformation($pi)->save();
+    }
+
+    /**
+     * Verifica se deve criar invoice imediatamente para cartão de crédito em multimeios
+     * 
+     * @param \Vindi\Payment\Model\PaymentSplit $currentSplit
+     * @param \Magento\Sales\Model\Order $order
+     * @return bool
+     */
+    private function shouldCreateInvoiceForCreditCard($currentSplit, $order)
+    {
+        if ($currentSplit->getPaymentMethod() !== 'credit_card') {
+            return false;
+        }
+
+        if ($order->hasInvoices()) {
+                return false;
+        }
+
+        $allSplits = $this->paymentSplitFactory->create()
+                ->getCollection()
+            ->addFieldToFilter('order_increment_id', $order->getIncrementId());
+
+        if ($allSplits->getSize() <= 1) {
+                return false;
+        }
+
+        $this->logInfo('Credit card payment in multimethod order - will create invoice immediately');
+        return true;
     }
 }
