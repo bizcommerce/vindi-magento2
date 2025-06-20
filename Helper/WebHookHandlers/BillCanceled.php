@@ -160,11 +160,11 @@ class BillCanceled
             // Cancel bill in Vindi
             $this->bill->cancel($billId);
             // Create creditmemo in Magento
-            $this->refundHelper->createSplitRefund(
-                $order,
-                $amount,
-                $split->getPaymentMethod() ?: 'Método de Pagamento'
-            );
+//            $this->refundHelper->createSplitRefund(
+//                $order,
+//                $amount,
+//                $split->getPaymentMethod() ?: 'Método de Pagamento'
+//            );
             $order->addStatusHistoryComment(sprintf(
                 'Multimeios: Bill %d paga foi estornada, bill cancelada na Vindi e creditmemo criado.',
                 $billId

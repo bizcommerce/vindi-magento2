@@ -52,7 +52,7 @@ class RefundHelper extends AbstractHelper
     {
         try {
             $order = $this->orderRepository->get($orderId);
-            
+
             // Verificar se pode criar creditmemo
             if (!$order->canCreditmemo()) {
                 $this->logger->warning('REFUND_HELPER: Order cannot have creditmemo - Order ID: ' . $orderId);
@@ -111,7 +111,7 @@ class RefundHelper extends AbstractHelper
     {
         try {
             $order = $this->orderRepository->get($orderId);
-            
+
             // Verificar se pode criar creditmemo
             if (!$order->canCreditmemo()) {
                 $this->logger->warning('REFUND_HELPER: Order cannot have creditmemo - Order ID: ' . $orderId);
@@ -172,10 +172,10 @@ class RefundHelper extends AbstractHelper
     {
         try {
             // Verificar se pode criar creditmemo
-            if (!$order->canCreditmemo()) {
-                $this->logger->warning('REFUND_HELPER: Order cannot have creditmemo for split refund - Order: ' . $order->getIncrementId());
-                return null;
-            }
+//            if (!$order->canCreditmemo()) {
+//                $this->logger->warning('REFUND_HELPER: Order cannot have creditmemo for split refund - Order: ' . $order->getIncrementId());
+//                return null;
+//            }
 
             // Buscar primeira invoice
             $invoice = $order->getInvoiceCollection()->getFirstItem();
