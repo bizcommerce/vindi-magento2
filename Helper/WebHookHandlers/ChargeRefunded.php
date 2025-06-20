@@ -57,12 +57,12 @@ class ChargeRefunded
 
         $this->logger->info('CHARGE_REFUNDED: Processing refunded charge ' . $chargeId);
         $this->logger->info('CHARGE_REFUNDED: Charge data - ' . json_encode([
-            'charge_id' => $chargeId,
-            'amount' => $refundAmount,
-            'bill_id' => $billId,
-            'bill_code' => $billCode,
-            'payment_method' => $charge['payment_method']['code'] ?? 'unknown'
-        ]));
+                'charge_id' => $chargeId,
+                'amount' => $refundAmount,
+                'bill_id' => $billId,
+                'bill_code' => $billCode,
+                'payment_method' => $charge['payment_method']['code'] ?? 'unknown'
+            ]));
 
         $isMultimethod = $this->isMultimethodBill($billCode, $billId);
 

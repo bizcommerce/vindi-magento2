@@ -157,11 +157,6 @@ class RefundHelper extends AbstractHelper
     public function createSplitRefund($order, $splitAmount, $paymentMethod = '')
     {
         try {
-
-
-
-
-
             $invoice = $order->getInvoiceCollection()->getFirstItem();
             if (!$invoice || !$invoice->getId()) {
                 $this->logger->warning('REFUND_HELPER: No invoice found for split refund - Order: ' . $order->getIncrementId());
