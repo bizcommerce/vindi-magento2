@@ -23,6 +23,8 @@
                 <item name="vindi_subscription_update_command" xsi:type="object">Vindi\Payment\Console\Command\UpdateSubscriptionCommand</item>
                 <item name="vindi:payment:cancel-orders-with-expired-links" xsi:type="object">Vindi\Payment\Console\Command\RunCancelOrdersWithExpiredLinks</item>
                 <item name="vindi_diagnose_multi_payments" xsi:type="object">Vindi\Payment\Console\Command\DiagnoseMultiPayments</item>
+                <item name="vindi:diagnose:card-pix-invoice" xsi:type="object">Vindi\Payment\Console\Command\DiagnoseCardPixInvoice</item>
+                <item name="vindi:webhook:queue" xsi:type="object">Vindi\Payment\Console\Command\WebhookQueueManagerCommand</item>
             </argument>
         </arguments>
     </type>
@@ -234,4 +236,22 @@
             </argument>
         </arguments>
     </type>
+
+    <!-- Webhook Queue System -->
+    <preference for="Vindi\Payment\Api\WebhookQueueRepositoryInterface" type="Vindi\Payment\Model\WebhookQueueRepository"/>
+
+    <type name="Magento\Framework\View\Element\UiComponent\DataProvider\CollectionFactory">
+        <arguments>
+            <argument name="collections" xsi:type="array">
+                <item name="vindi_payment_webhookqueue_listing_data_source" xsi:type="string">Vindi\Payment\Model\ResourceModel\WebhookQueue\Grid\Collection</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <virtualType name="Vindi\Payment\Model\ResourceModel\WebhookQueue\Grid\Collection" type="Magento\Framework\View\Element\UiComponent\DataProvider\SearchResult">
+        <arguments>
+            <argument name="mainTable" xsi:type="string">vindi_webhook_queue</argument>
+            <argument name="resourceModel" xsi:type="string">Vindi\Payment\Model\ResourceModel\WebhookQueue</argument>
+        </arguments>
+    </virtualType>
 </config>

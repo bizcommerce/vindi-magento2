@@ -204,4 +204,32 @@
             <column name="bill_id"/>
         </index>
     </table>
+
+    <table name="vindi_webhook_queue" resource="default" engine="innodb" comment="Webhook Queue Table">
+        <column xsi:type="int" name="queue_id" nullable="false" identity="true" unsigned="true" comment="Queue ID"/>
+        <column xsi:type="varchar" name="event_type" nullable="false" length="50" comment="Webhook Event Type"/>
+        <column xsi:type="text" name="payload" nullable="false" comment="Webhook JSON Payload"/>
+        <column xsi:type="varchar" name="status" nullable="false" default="pending" length="32" comment="Processing Status"/>
+        <column xsi:type="varchar" name="priority" nullable="false" default="normal" length="16" comment="Processing Priority"/>
+        <column xsi:type="int" name="retry_count" nullable="false" default="0" comment="Number of Processing Attempts"/>
+        <column xsi:type="int" name="max_retries" nullable="false" default="3" comment="Maximum Retry Attempts"/>
+        <column xsi:type="text" name="error_message" nullable="true" comment="Last Error Message"/>
+        <column xsi:type="timestamp" name="scheduled_at" nullable="true" comment="Scheduled Processing Time"/>
+        <column xsi:type="timestamp" name="processed_at" nullable="true" comment="Processing Completion Time"/>
+        <column xsi:type="timestamp" name="created_at" nullable="false" default="CURRENT_TIMESTAMP" comment="Creation Time"/>
+        <column xsi:type="timestamp" name="updated_at" nullable="false" default="CURRENT_TIMESTAMP" on_update="true" comment="Update Time"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="queue_id"/>
+        </constraint>
+        <index referenceId="VINDI_WEBHOOK_QUEUE_EVENT_TYPE_STATUS" indexType="btree">
+            <column name="event_type"/>
+            <column name="status"/>
+        </index>
+        <index referenceId="VINDI_WEBHOOK_QUEUE_STATUS" indexType="btree">
+            <column name="status"/>
+        </index>
+        <index referenceId="VINDI_WEBHOOK_QUEUE_SCHEDULED_AT" indexType="btree">
+            <column name="scheduled_at"/>
+        </index>
+    </table>
 </schema>
