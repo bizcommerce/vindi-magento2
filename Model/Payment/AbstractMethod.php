@@ -364,8 +364,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
             return $this->handleError($order);
         }
 
-        $this->createInvoiceIfNotExists($order, $billCredit['amount']);
-
         $bodyPix = [
             'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::PIX,
@@ -491,8 +489,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
         $this->handleBankSplitAdditionalInformation($payment, $bodyCard1, $billCard1);
 
-        $this->createInvoiceIfNotExists($order, $billCard1['amount']);
-
         $billCard2 = $this->bill->create($bodyCard2);
         if (!$billCard2 || !$this->successfullyPaid($bodyCard2, $billCard2)) {
             if ($billCard2 && isset($billCard2['id'])) {
@@ -502,8 +498,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
             return $this->handleError($order);
         }
         $this->handleBankSplitAdditionalInformation($payment, $bodyCard2, $billCard2);
-
-        $this->createInvoiceIfNotExists($order, $billCard1['amount']);
 
         $order->setData('vindi_bill_id', $billCard1['id'] . ',' . $billCard2['id']);
         $this->savePaymentSplitRecord(
@@ -578,8 +572,6 @@ abstract class AbstractMethod extends OriginAbstractMethod
             return $this->handleError($order);
         }
         $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
-
-        $this->createInvoiceIfNotExists($order, $billCard1['amount']);
 
         $bodyBankslipPix = [
             'customer_id'         => $customerId,
@@ -720,10 +712,10 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
     /**
      * MÉTODO DEPRECADO - NÃO MAIS USADO
-     *
+     * 
      * Este método processava split payment para assinaturas, mas foi deprecado porque
      * multimeios de pagamento não são mais suportados para assinaturas.
-     *
+     * 
      * @deprecated A partir de junho 2025
      * @see processPayment() - agora bloqueia multimeios para assinaturas
      */
@@ -1300,32 +1292,5 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
 
         return $masked;
-    }
-
-    /**
-     * Create Magento invoice for the order if not already created.
-     *
-     * @param Order $order
-     * @param float $amount
-     * @return void
-     */
-    protected function createInvoiceIfNotExists(Order $order, $amount)
-    {
-        if (!$order->canInvoice()) {
-            $this->psrLogger->info('Invoice already exists or cannot be created for order: ' . $order->getIncrementId());
-            return;
-        }
-        try {
-            $invoice = $this->invoiceService->prepareInvoice($order);
-            $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_ONLINE);
-            $invoice->setGrandTotal($amount);
-            $invoice->register();
-            $invoice->save();
-            $order->addRelatedObject($invoice);
-            $this->orderRepository->save($order);
-            $this->psrLogger->info('Invoice created successfully for order: ' . $order->getIncrementId());
-        } catch (\Exception $e) {
-            $this->psrLogger->error('Error creating invoice: ' . $e->getMessage());
-        }
     }
 }

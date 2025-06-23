@@ -243,7 +243,7 @@ class BillPaid
 
     /**
      * Verifica se deve criar invoice imediatamente para cartão de crédito em multimeios
-     *
+     * 
      * @param \Vindi\Payment\Model\PaymentSplit $currentSplit
      * @param \Magento\Sales\Model\Order $order
      * @return bool

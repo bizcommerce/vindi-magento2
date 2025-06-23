@@ -20,26 +20,5 @@
         <job name="vindi_payment_cancel_orders_with_expired_links" instance="Vindi\Payment\Cron\CancelOrdersWithExpiredLinks" method="execute">
             <schedule>0 3 * * *</schedule>
         </job>
-        <job name="vindi_payment_process_webhook_bill_created" instance="Vindi\Payment\Cron\ProcessWebhookBillCreated" method="execute">
-            <schedule>*/1 * * * *</schedule>
-        </job>
-        <job name="vindi_payment_process_webhook_bill_paid" instance="Vindi\Payment\Cron\ProcessWebhookBillPaid" method="execute">
-            <schedule>*/1 * * * *</schedule>
-        </job>
-        <job name="vindi_payment_process_webhook_charge_rejected" instance="Vindi\Payment\Cron\ProcessWebhookChargeRejected" method="execute">
-            <schedule>*/1 * * * *</schedule>
-        </job>
-        <job name="vindi_payment_process_webhook_charge_refunded" instance="Vindi\Payment\Cron\ProcessWebhookChargeRefunded" method="execute">
-            <schedule>*/1 * * * *</schedule>
-        </job>
-        <job name="vindi_payment_process_webhook_bill_canceled" instance="Vindi\Payment\Cron\ProcessWebhookBillCanceled" method="execute">
-            <schedule>*/1 * * * *</schedule>
-        </job>
-        <job name="vindi_payment_process_webhook_subscription" instance="Vindi\Payment\Cron\ProcessWebhookSubscription" method="execute">
-            <schedule>*/2 * * * *</schedule>
-        </job>
-        <job name="vindi_payment_clean_webhook_queue" instance="Vindi\Payment\Cron\CleanWebhookQueue" method="execute">
-            <schedule>0 2 * * *</schedule>
-        </job>
     </group>
 </config>
