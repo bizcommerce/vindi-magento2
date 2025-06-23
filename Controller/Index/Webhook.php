@@ -75,7 +75,7 @@ class Webhook extends Action
         try {
             // Process webhook normally using the existing WebhookHandler
             $result = $this->webhookHandler->handle($body);
-            
+
             if ($result) {
                 return $this->getResponse()->setHttpResponseCode(200);
             } else {

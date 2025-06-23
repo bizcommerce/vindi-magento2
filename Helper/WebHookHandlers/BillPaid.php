@@ -12,7 +12,6 @@ use Vindi\Payment\Helper\Data;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Sales\Api\InvoiceRepositoryInterface;
 use Vindi\Payment\Model\PaymentSplitFactory;
-use Vindi\Payment\Service\WebhookQueueService;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -31,7 +30,6 @@ class BillPaid
     private $searchCriteriaBuilder;
     private $helperData;
     private $paymentSplitFactory;
-    private $webhookQueueService;
 
     public function __construct(
         Logger $logger,
@@ -44,8 +42,7 @@ class BillPaid
         InvoiceRepositoryInterface $invoiceRepository,
         SearchCriteriaBuilder $searchCriteriaBuilder,
         Data $helperData,
-        PaymentSplitFactory $paymentSplitFactory,
-        WebhookQueueService $webhookQueueService
+        PaymentSplitFactory $paymentSplitFactory
     ) {
         $this->logger                          = $logger;
         $this->orderCreator                    = $orderCreator;
@@ -58,7 +55,6 @@ class BillPaid
         $this->searchCriteriaBuilder           = $searchCriteriaBuilder;
         $this->helperData                      = $helperData;
         $this->paymentSplitFactory             = $paymentSplitFactory;
-        $this->webhookQueueService             = $webhookQueueService;
     }
 
     public function billPaid($data)
@@ -177,44 +173,27 @@ class BillPaid
             ->getCollection()
             ->addFieldToFilter('order_increment_id', $order->getIncrementId());
 
-        // Check if it's a multimethod payment (more than one split)
-        $isMultimethod = $splits->getSize() > 1;
-
-        if (!$isMultimethod) {
-            // Single payment method - process normally (original behavior)
+        // Se não for multimeios, segue fluxo normal
+        if ($splits->getSize() === 0) {
             $this->logInfo('Single payment method detected for order: ' . $order->getIncrementId());
             return $this->createInvoice($order);
         }
 
-        // MULTIMETHOD PAYMENT - ADD TO QUEUE for asynchronous processing
-        $this->logInfo('Multimethod payment detected - adding to webhook queue for order: ' . $order->getIncrementId());
-        
+        // Multimeios: sempre cria invoice para o split pago
         $currentSplit = $splits->getItemByColumnValue('bill_id', $bill['id']);
-        if ($currentSplit && $currentSplit->getId()) {
+        if ($currentSplit && $currentSplit->getId() && $bill['status'] === 'paid') {
             $currentSplit->setStatus('paid')->save();
 
             if (in_array($currentSplit->getPaymentMethod(), ['pix', 'pix_bank_slip'])) {
                 $this->clearPixData($order);
             }
 
-            // Add to webhook queue for processing via cron
-            $result = $this->webhookQueueService->addMultimethodInvoiceCreation(
-                $bill,
-                $order->getIncrementId(),
-                (string)$bill['id']
-            );
-            
-            if ($result) {
-                $this->logInfo('Successfully added multimethod invoice creation to queue for bill_id: ' . $bill['id'] . ', order: ' . $order->getIncrementId());
-                return true;
-            } else {
-                $this->logError('Failed to add multimethod invoice creation to queue for bill_id: ' . $bill['id'] . ', order: ' . $order->getIncrementId());
-                return false;
-            }
+            // Cria invoice apenas para o valor/configuração do split atual
+            return $this->createInvoiceForSplit($order, $currentSplit, $bill);
         }
 
-        $this->logError('No payment split found for bill_id: ' . $bill['id'] . ' in order: ' . $order->getIncrementId());
-        return false;
+        $this->logInfo('No action taken for order: ' . $order->getIncrementId());
+        return true;
     }
 
     private function getOrderFromBill($bill)
@@ -234,10 +213,57 @@ class BillPaid
         return reset($items) ?: null;
     }
 
+    private function areAllSplitsPaid($splits)
+    {
+        foreach ($splits as $split) {
+            if ($split->getStatus() !== 'paid') {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private function clearPixData($order)
     {
         $pi = $order->getPayment()->getAdditionalInformation();
         $pi['qrcode_path'] = $pi['print_url'] = $pi['due_at'] = null;
         $order->getPayment()->setAdditionalInformation($pi)->save();
+    }
+
+    private function createInvoiceForSplit($order, $split, $bill)
+    {
+        if (!$order->getId() || !$order->canInvoice()) {
+            $this->logError('Impossible to generate invoice for order ' . $order->getId());
+            return false;
+        }
+
+        // Define o valor do invoice conforme o split/bill atual
+        $invoice = $order->prepareInvoice();
+        foreach ($invoice->getAllItems() as $item) {
+            // Ajuste conforme sua lógica de rateio, aqui é um exemplo simples:
+            $item->setQty($item->getQty() * ($split->getAmount() / $order->getGrandTotal()));
+        }
+
+        $invoice->setGrandTotal($split->getAmount());
+        $invoice->setBaseGrandTotal($split->getAmount());
+        $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE)
+            ->register()
+            ->pay()
+            ->setSendEmail(true);
+
+        $this->invoiceRepository->save($invoice);
+
+        $status = $this->helperData->getStatusToPaidOrder();
+        if ($state = $this->helperData->getStatusState($status)) {
+            $order->setState($state);
+        }
+        $order->addCommentToStatusHistory(
+            'Partial payment confirmed and invoice created for split',
+            $status
+        );
+        $this->orderRepository->save($order);
+
+        $this->logInfo('Partial invoice created for order ' . $order->getIncrementId() . ' (split/bill ' . $split->getId() . ')');
+        return true;
     }
 }
