@@ -12,7 +12,7 @@ use Vindi\Payment\Helper\Data;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Sales\Api\InvoiceRepositoryInterface;
 use Vindi\Payment\Model\PaymentSplitFactory;
-// use Vindi\Payment\Service\WebhookQueueService;
+use Vindi\Payment\Service\WebhookQueueService;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -31,7 +31,7 @@ class BillPaid
     private $searchCriteriaBuilder;
     private $helperData;
     private $paymentSplitFactory;
-    // private $webhookQueueService;
+    private $webhookQueueService;
 
     public function __construct(
         Logger $logger,
@@ -44,8 +44,8 @@ class BillPaid
         InvoiceRepositoryInterface $invoiceRepository,
         SearchCriteriaBuilder $searchCriteriaBuilder,
         Data $helperData,
-        PaymentSplitFactory $paymentSplitFactory
-        // WebhookQueueService $webhookQueueService
+        PaymentSplitFactory $paymentSplitFactory,
+        WebhookQueueService $webhookQueueService
     ) {
         $this->logger                          = $logger;
         $this->orderCreator                    = $orderCreator;
@@ -58,7 +58,7 @@ class BillPaid
         $this->searchCriteriaBuilder           = $searchCriteriaBuilder;
         $this->helperData                      = $helperData;
         $this->paymentSplitFactory             = $paymentSplitFactory;
-        // $this->webhookQueueService             = $webhookQueueService;
+        $this->webhookQueueService             = $webhookQueueService;
     }
 
     public function billPaid($data)
@@ -186,8 +186,8 @@ class BillPaid
             return $this->createInvoice($order);
         }
 
-        // MULTIMETHOD PAYMENT - Temporarily process normally until queue system is fixed
-        $this->logInfo('Multimethod payment detected for order: ' . $order->getIncrementId());
+        // MULTIMETHOD PAYMENT - ADD TO QUEUE for asynchronous processing
+        $this->logInfo('Multimethod payment detected - adding to webhook queue for order: ' . $order->getIncrementId());
         
         $currentSplit = $splits->getItemByColumnValue('bill_id', $bill['id']);
         if ($currentSplit && $currentSplit->getId()) {
@@ -197,21 +197,19 @@ class BillPaid
                 $this->clearPixData($order);
             }
 
-            // For now, check if all splits are paid and create invoice immediately
-            $allPaid = true;
-            foreach ($splits as $split) {
-                if ($split->getStatus() !== 'paid') {
-                    $allPaid = false;
-                    break;
-                }
-            }
+            // Add to webhook queue for processing via cron
+            $result = $this->webhookQueueService->addMultimethodInvoiceCreation(
+                $bill,
+                $order->getIncrementId(),
+                (string)$bill['id']
+            );
             
-            if ($allPaid) {
-                $this->logInfo('All splits paid - creating invoice for order: ' . $order->getIncrementId());
-                return $this->createInvoice($order);
-            } else {
-                $this->logInfo('Not all splits paid yet for order: ' . $order->getIncrementId());
+            if ($result) {
+                $this->logInfo('Successfully added multimethod invoice creation to queue for bill_id: ' . $bill['id'] . ', order: ' . $order->getIncrementId());
                 return true;
+            } else {
+                $this->logError('Failed to add multimethod invoice creation to queue for bill_id: ' . $bill['id'] . ', order: ' . $order->getIncrementId());
+                return false;
             }
         }
 

@@ -236,8 +236,6 @@
         </arguments>
     </type>
 
-    <!-- Webhook Queue System - Temporarily disabled -->
-    <!--
+    <!-- Webhook Queue System -->
     <preference for="Vindi\Payment\Api\WebhookQueueRepositoryInterface" type="Vindi\Payment\Model\WebhookQueueRepository"/>
-    -->
 </config>
