@@ -419,10 +419,6 @@ class OrderCreator
      */
     public function enqueueManualBillsForMultiMeios($originalOrder, $subscriptionId, $billData)
     {
-        error_log("DEPRECATED: enqueueManualBillsForMultiMeios called. Multimeios is no longer supported for subscriptions.");
-
-
-
         return;
     }
 
@@ -438,7 +434,6 @@ class OrderCreator
      */
     protected function validatePaymentProfiles($originalOrder, $profileId1, $profileId2)
     {
-        error_log("DEPRECATED: validatePaymentProfiles called. This method is no longer used as multimeios is not supported for subscriptions.");
         throw new \Exception('Multimeios não é mais suportado para assinaturas');
     }
 
@@ -451,7 +446,6 @@ class OrderCreator
      */
     protected function getOrCreateDiscountProduct()
     {
-        error_log("DEPRECATED: getOrCreateDiscountProduct called. This method is no longer used as multimeios is not supported for subscriptions.");
         throw new \Exception('Multimeios não é mais suportado para assinaturas');
     }
 
@@ -466,7 +460,6 @@ class OrderCreator
      */
     protected function createBillsWithRollback($billData1, $billData2)
     {
-        error_log("DEPRECATED: createBillsWithRollback called. This method is no longer used as multimeios is not supported for subscriptions.");
         throw new \Exception('Multimeios não é mais suportado para assinaturas');
     }
 
@@ -482,8 +475,6 @@ class OrderCreator
      */
     protected function updateOrderAndSplits($originalOrder, $billsResult, $amountCredit, $amountSecondCard)
     {
-        error_log("DEPRECATED: updateOrderAndSplits called. This method is no longer used as multimeios is not supported for subscriptions.");
-
         return;
     }
 

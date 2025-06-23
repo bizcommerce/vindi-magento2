@@ -114,16 +114,6 @@ class Profile
             ? ($payment->getAdditionalInformation('cc_type2')       ?: $payment->getCcType())
             : ($payment->getAdditionalInformation('cc_type1')       ?: $payment->getAdditionalInformation('cc_type') ?: $payment->getCcType());
 
-
-        error_log('VINDI_PROFILE_DEBUG: Building credit card data for ' . $whichCard . ' card');
-        error_log('VINDI_PROFILE_DEBUG: cc_type found: ' . ($ccType ?: 'EMPTY'));
-        error_log('VINDI_PROFILE_DEBUG: Available payment data: ' . json_encode([
-            'cc_type1' => $payment->getAdditionalInformation('cc_type1'),
-            'cc_type2' => $payment->getAdditionalInformation('cc_type2'),
-            'cc_type' => $payment->getAdditionalInformation('cc_type'),
-            'getCcType' => $payment->getCcType()
-        ]));
-
         if (empty($holder)) {
             throw new LocalizedException(__('holder_name cannot be blank'));
         }
@@ -134,10 +124,6 @@ class Profile
         }
 
         $ccTypeCode = $this->paymentMethod->getCreditCardApiCode($ccType);
-
-
-        error_log('VINDI_PROFILE_DEBUG: Original ccType: ' . ($ccType ?: 'EMPTY'));
-        error_log('VINDI_PROFILE_DEBUG: Mapped ccTypeCode: ' . ($ccTypeCode ?: 'EMPTY'));
 
         return [
             'holder_name'          => $holder,

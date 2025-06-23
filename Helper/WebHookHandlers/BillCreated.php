@@ -104,7 +104,7 @@ class BillCreated
             if ($originalOrder) {
                 $payment = $originalOrder->getPayment();
                 if ($payment && $payment->getMethod() === 'vindi_cardcard') {
-                    error_log('DEPRECATED: vindi_cardcard method detected for subscription. Multimeios is no longer supported for subscriptions.');
+                    $this->logger->info(__('DEPRECATED: vindi_cardcard method detected for subscription. Multimeios is no longer supported for subscriptions.'));
                 }
             }
 

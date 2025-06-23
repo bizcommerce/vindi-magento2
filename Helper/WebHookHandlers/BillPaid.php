@@ -144,8 +144,6 @@ class BillPaid
     {
         if (method_exists($this->logger, 'info')) {
             $this->logger->info($message);
-        } else {
-            error_log('[VINDI INFO] ' . $message);
         }
     }
 
@@ -156,8 +154,6 @@ class BillPaid
     {
         if (method_exists($this->logger, 'error')) {
             $this->logger->error($message);
-        } else {
-            error_log('[VINDI ERROR] ' . $message);
         }
     }
 
