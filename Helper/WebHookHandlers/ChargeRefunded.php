@@ -7,6 +7,9 @@ use Vindi\Payment\Model\PaymentSplitFactory;
 use Magento\Sales\Api\OrderRepositoryInterface;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Vindi\Payment\Helper\RefundHelper;
+use Vindi\Payment\Helper\InvoiceBillHelper;
+use Magento\Sales\Api\InvoiceRepositoryInterface;
+use Magento\Sales\Model\Order\Invoice;
 
 /**
  * Class ChargeRefunded
@@ -21,19 +24,25 @@ class ChargeRefunded
     protected $orderRepository;
     protected $searchCriteriaBuilder;
     protected $refundHelper;
+    protected $invoiceBillHelper;
+    protected $invoiceRepository;
 
     public function __construct(
         LoggerInterface $logger,
         PaymentSplitFactory $paymentSplitFactory,
         OrderRepositoryInterface $orderRepository,
         SearchCriteriaBuilder $searchCriteriaBuilder,
-        RefundHelper $refundHelper
+        RefundHelper $refundHelper,
+        InvoiceBillHelper $invoiceBillHelper,
+        InvoiceRepositoryInterface $invoiceRepository
     ) {
         $this->logger = $logger;
         $this->paymentSplitFactory = $paymentSplitFactory;
         $this->orderRepository = $orderRepository;
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
         $this->refundHelper = $refundHelper;
+        $this->invoiceBillHelper = $invoiceBillHelper;
+        $this->invoiceRepository = $invoiceRepository;
     }
 
     public function chargeRefunded(array $data): bool
@@ -67,7 +76,8 @@ class ChargeRefunded
         $isMultimethod = $this->isMultimethodBill($billCode, $billId);
 
         if ($isMultimethod) {
-            $this->logger->info('CHARGE_REFUNDED: Detected multimethod bill - bill_canceled webhook will handle all logic');
+            $this->logger->info('CHARGE_REFUNDED: Detected multimethod bill - canceling invoice for bill ID: ' . $billId);
+            $this->cancelInvoiceByBillId($billId, $chargeId, $refundAmount);
         } else {
             $this->logger->info('CHARGE_REFUNDED: Single payment method - creating creditmemo only');
 
@@ -98,8 +108,7 @@ class ChargeRefunded
             }
         }
 
-
-        $this->logger->info('CHARGE_REFUNDED: Webhook processed. For multimethod bills, bill_canceled will handle cancellation logic.');
+        $this->logger->info('CHARGE_REFUNDED: Webhook processed successfully.');
 
         return true;
     }
@@ -187,6 +196,80 @@ class ChargeRefunded
         } catch (\Exception $e) {
             $this->logger->error('CHARGE_REFUNDED: Error finding order: ' . $e->getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Cancel invoice by bill ID for multimethod payments
+     *
+     * @param int $billId
+     * @param int $chargeId
+     * @param float $refundAmount
+     * @return bool
+     */
+    private function cancelInvoiceByBillId($billId, $chargeId, $refundAmount)
+    {
+        try {
+            // Busca invoices pelo bill ID
+            $invoices = $this->invoiceBillHelper->getInvoicesByVindiBillId($billId);
+            
+            if (empty($invoices)) {
+                $this->logger->warning('CHARGE_REFUNDED: No invoices found for bill ID: ' . $billId);
+                return false;
+            }
+            
+            $invoicesCanceled = 0;
+            
+            foreach ($invoices as $invoice) {
+                if ($invoice->getState() === Invoice::STATE_PAID) {
+                    try {
+                        // Cancela a invoice offline (já foi estornada na Vindi)
+                        $invoice->setState(Invoice::STATE_CANCELED);
+                        
+                        // Adiciona comentário explicativo
+                        $commentText = sprintf(
+                            'Invoice cancelada devido ao estorno do Charge %d (Bill ID: %d) - Valor estornado: R$ %s',
+                            $chargeId,
+                            $billId,
+                            number_format($refundAmount, 2, ',', '.')
+                        );
+                        
+                        $invoice->addComment($commentText, false, false);
+                        
+                        // Salva a invoice
+                        $this->invoiceRepository->save($invoice);
+                        
+                        $invoicesCanceled++;
+                        
+                        $this->logger->info('CHARGE_REFUNDED: Invoice ' . $invoice->getIncrementId() . ' canceled for bill ID: ' . $billId);
+                        
+                        // Atualiza o pedido com comentário
+                        $order = $invoice->getOrder();
+                        if ($order) {
+                            $orderComment = sprintf(
+                                'Invoice #%s cancelada devido ao estorno do pagamento (Charge %d, Bill ID: %d)',
+                                $invoice->getIncrementId(),
+                                $chargeId,
+                                $billId
+                            );
+                            $order->addStatusHistoryComment($orderComment);
+                            $this->orderRepository->save($order);
+                        }
+                        
+                    } catch (\Exception $e) {
+                        $this->logger->error('CHARGE_REFUNDED: Error canceling invoice ' . $invoice->getIncrementId() . ': ' . $e->getMessage());
+                    }
+                } else {
+                    $this->logger->info('CHARGE_REFUNDED: Invoice ' . $invoice->getIncrementId() . ' is not in PAID state (current state: ' . $invoice->getState() . '), skipping cancellation');
+                }
+            }
+            
+            $this->logger->info('CHARGE_REFUNDED: Successfully canceled ' . $invoicesCanceled . ' invoice(s) for bill ID: ' . $billId);
+            return $invoicesCanceled > 0;
+            
+        } catch (\Exception $e) {
+            $this->logger->error('CHARGE_REFUNDED: Error processing invoice cancellation for bill ID ' . $billId . ': ' . $e->getMessage());
+            return false;
         }
     }
 }

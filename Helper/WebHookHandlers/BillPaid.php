@@ -13,6 +13,7 @@ use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Sales\Api\InvoiceRepositoryInterface;
 use Vindi\Payment\Model\PaymentSplitFactory;
 use Psr\Log\LoggerInterface;
+use Magento\Sales\Api\Data\InvoiceExtensionFactory;
 
 /**
  * Class BillPaid
@@ -30,6 +31,7 @@ class BillPaid
     private $searchCriteriaBuilder;
     private $helperData;
     private $paymentSplitFactory;
+    private $invoiceExtensionFactory;
 
     public function __construct(
         Logger $logger,
@@ -42,7 +44,8 @@ class BillPaid
         InvoiceRepositoryInterface $invoiceRepository,
         SearchCriteriaBuilder $searchCriteriaBuilder,
         Data $helperData,
-        PaymentSplitFactory $paymentSplitFactory
+        PaymentSplitFactory $paymentSplitFactory,
+        InvoiceExtensionFactory $invoiceExtensionFactory
     ) {
         $this->logger                          = $logger;
         $this->orderCreator                    = $orderCreator;
@@ -55,6 +58,7 @@ class BillPaid
         $this->searchCriteriaBuilder           = $searchCriteriaBuilder;
         $this->helperData                      = $helperData;
         $this->paymentSplitFactory             = $paymentSplitFactory;
+        $this->invoiceExtensionFactory         = $invoiceExtensionFactory;
     }
 
     public function billPaid($data)
@@ -108,7 +112,7 @@ class BillPaid
         }
     }
 
-    public function createInvoice(\Magento\Sales\Model\Order $order)
+    public function createInvoice(\Magento\Sales\Model\Order $order, $billId = null)
     {
         if (!$order->getId() || !$order->canInvoice()) {
             $this->logError('Impossible to generate invoice for order ' . $order->getId());
@@ -116,10 +120,20 @@ class BillPaid
         }
 
         $invoice = $order->prepareInvoice();
-        $invoice->setRequestedCaptureCase(Invoice::CAPTURE_OFFLINE)
-            ->register()
-            ->pay()
-            ->setSendEmail(true);
+        $invoice->setRequestedCaptureCase(Invoice::CAPTURE_OFFLINE);
+        $invoice->register();
+        $invoice->pay();
+        $invoice->setSendEmail(true);
+
+        // Adiciona o bill ID como extension attribute na invoice
+        if ($billId) {
+            $extensionAttributes = $invoice->getExtensionAttributes();
+            if (!$extensionAttributes) {
+                $extensionAttributes = $this->invoiceExtensionFactory->create();
+            }
+            $extensionAttributes->setVindiBillId($billId);
+            $invoice->setExtensionAttributes($extensionAttributes);
+        }
 
         $this->invoiceRepository->save($invoice);
 
@@ -172,7 +186,7 @@ class BillPaid
         // Se não for multimeios, segue fluxo normal
         if ($splits->getSize() === 0) {
             $this->logInfo('Single payment method detected for order: ' . $order->getIncrementId());
-            return $this->createInvoice($order);
+            return $this->createInvoice($order, $bill['id']);
         }
 
         // Multimeios: sempre cria invoice para o split pago
@@ -242,10 +256,21 @@ class BillPaid
 
         $invoice->setGrandTotal($split->getAmount());
         $invoice->setBaseGrandTotal($split->getAmount());
-        $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE)
-            ->register()
-            ->pay()
-            ->setSendEmail(true);
+        
+        $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE);
+        $invoice->register();
+        $invoice->pay();
+        $invoice->setSendEmail(true);
+
+        // Adiciona o bill ID como extension attribute na invoice
+        if (isset($bill['id'])) {
+            $extensionAttributes = $invoice->getExtensionAttributes();
+            if (!$extensionAttributes) {
+                $extensionAttributes = $this->invoiceExtensionFactory->create();
+            }
+            $extensionAttributes->setVindiBillId($bill['id']);
+            $invoice->setExtensionAttributes($extensionAttributes);
+        }
 
         $this->invoiceRepository->save($invoice);
 

@@ -232,4 +232,9 @@
             <column name="scheduled_at"/>
         </index>
     </table>
+
+    <!-- Adicionando campo vindi_bill_id na tabela sales_invoice -->
+    <table name="sales_invoice">
+        <column xsi:type="varchar" name="vindi_bill_id" nullable="true" length="50" comment="Vindi Bill ID"/>
+    </table>
 </schema>
