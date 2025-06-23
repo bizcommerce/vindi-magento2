@@ -23,6 +23,7 @@
                 <item name="vindi_subscription_update_command" xsi:type="object">Vindi\Payment\Console\Command\UpdateSubscriptionCommand</item>
                 <item name="vindi:payment:cancel-orders-with-expired-links" xsi:type="object">Vindi\Payment\Console\Command\RunCancelOrdersWithExpiredLinks</item>
                 <item name="vindi_diagnose_multi_payments" xsi:type="object">Vindi\Payment\Console\Command\DiagnoseMultiPayments</item>
+                <item name="vindi:diagnose:card-pix-invoice" xsi:type="object">Vindi\Payment\Console\Command\DiagnoseCardPixInvoice</item>
             </argument>
         </arguments>
     </type>
@@ -234,4 +235,9 @@
             </argument>
         </arguments>
     </type>
+
+    <!-- Webhook Queue System - Temporarily disabled -->
+    <!--
+    <preference for="Vindi\Payment\Api\WebhookQueueRepositoryInterface" type="Vindi\Payment\Model\WebhookQueueRepository"/>
+    -->
 </config>

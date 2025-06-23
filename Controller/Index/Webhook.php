@@ -61,19 +61,31 @@ class Webhook extends Action
      */
     public function execute()
     {
+        // Validate webhook request
         if (!$this->validateRequest()) {
             $ip = $this->webhookHandler->getRemoteIp();
             $this->logger->error(__(sprintf('Invalid webhook attempt from IP %s', $ip)));
-            return $this->getResponse()->setHttpResponseCode(500);
+            return $this->getResponse()->setHttpResponseCode(401);
         }
 
         $body = file_get_contents('php://input');
         $this->logger->info("=========================");
         $this->logger->info(__(sprintf("Webhook New Event!\n%s", $body)));
 
-        $this->webhookHandler->handle($body);
+        try {
+            // Process webhook normally using the existing WebhookHandler
+            $result = $this->webhookHandler->handle($body);
+            
+            if ($result) {
+                return $this->getResponse()->setHttpResponseCode(200);
+            } else {
+                return $this->getResponse()->setHttpResponseCode(400);
+            }
 
-        return $this->getResponse()->setHttpResponseCode(200);
+        } catch (\Exception $e) {
+            $this->logger->error('Error processing webhook: ' . $e->getMessage());
+            return $this->getResponse()->setHttpResponseCode(500);
+        }
     }
 
     /**

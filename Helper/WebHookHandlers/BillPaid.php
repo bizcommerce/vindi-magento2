@@ -12,6 +12,7 @@ use Vindi\Payment\Helper\Data;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Sales\Api\InvoiceRepositoryInterface;
 use Vindi\Payment\Model\PaymentSplitFactory;
+// use Vindi\Payment\Service\WebhookQueueService;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -30,6 +31,7 @@ class BillPaid
     private $searchCriteriaBuilder;
     private $helperData;
     private $paymentSplitFactory;
+    // private $webhookQueueService;
 
     public function __construct(
         Logger $logger,
@@ -43,6 +45,7 @@ class BillPaid
         SearchCriteriaBuilder $searchCriteriaBuilder,
         Data $helperData,
         PaymentSplitFactory $paymentSplitFactory
+        // WebhookQueueService $webhookQueueService
     ) {
         $this->logger                          = $logger;
         $this->orderCreator                    = $orderCreator;
@@ -55,6 +58,7 @@ class BillPaid
         $this->searchCriteriaBuilder           = $searchCriteriaBuilder;
         $this->helperData                      = $helperData;
         $this->paymentSplitFactory             = $paymentSplitFactory;
+        // $this->webhookQueueService             = $webhookQueueService;
     }
 
     public function billPaid($data)
@@ -169,42 +173,50 @@ class BillPaid
             return false;
         }
 
-
         $splits = $this->paymentSplitFactory->create()
             ->getCollection()
             ->addFieldToFilter('order_increment_id', $order->getIncrementId());
 
+        // Check if it's a multimethod payment (more than one split)
+        $isMultimethod = $splits->getSize() > 1;
 
-        if ($splits->getSize() === 0) {
+        if (!$isMultimethod) {
+            // Single payment method - process normally (original behavior)
             $this->logInfo('Single payment method detected for order: ' . $order->getIncrementId());
             return $this->createInvoice($order);
         }
 
-
+        // MULTIMETHOD PAYMENT - Temporarily process normally until queue system is fixed
+        $this->logInfo('Multimethod payment detected for order: ' . $order->getIncrementId());
+        
         $currentSplit = $splits->getItemByColumnValue('bill_id', $bill['id']);
         if ($currentSplit && $currentSplit->getId()) {
             $currentSplit->setStatus('paid')->save();
 
-
             if (in_array($currentSplit->getPaymentMethod(), ['pix', 'pix_bank_slip'])) {
                 $this->clearPixData($order);
             }
+
+            // For now, check if all splits are paid and create invoice immediately
+            $allPaid = true;
+            foreach ($splits as $split) {
+                if ($split->getStatus() !== 'paid') {
+                    $allPaid = false;
+                    break;
+                }
+            }
+            
+            if ($allPaid) {
+                $this->logInfo('All splits paid - creating invoice for order: ' . $order->getIncrementId());
+                return $this->createInvoice($order);
+            } else {
+                $this->logInfo('Not all splits paid yet for order: ' . $order->getIncrementId());
+                return true;
+            }
         }
 
-        if ($currentSplit && $this->shouldCreateInvoiceForCreditCard($currentSplit, $order)) {
-            $this->logInfo('Credit card payment detected - creating invoice immediately for order: ' . $order->getIncrementId());
-            return $this->createInvoice($order);
-        }
-
-        $allPaid = $this->areAllSplitsPaid($splits);
-
-        if (!$allPaid) {
-            $this->logInfo('Not all payment splits are paid for order: ' . $order->getIncrementId());
-            return true;
-        }
-
-        $this->logInfo('All payment splits paid for order: ' . $order->getIncrementId());
-        return $this->createInvoice($order);
+        $this->logError('No payment split found for bill_id: ' . $bill['id'] . ' in order: ' . $order->getIncrementId());
+        return false;
     }
 
     private function getOrderFromBill($bill)
@@ -224,49 +236,10 @@ class BillPaid
         return reset($items) ?: null;
     }
 
-    private function areAllSplitsPaid($splits)
-    {
-        foreach ($splits as $split) {
-            if ($split->getStatus() !== 'paid') {
-                return false;
-            }
-        }
-        return true;
-    }
-
     private function clearPixData($order)
     {
         $pi = $order->getPayment()->getAdditionalInformation();
         $pi['qrcode_path'] = $pi['print_url'] = $pi['due_at'] = null;
         $order->getPayment()->setAdditionalInformation($pi)->save();
-    }
-
-    /**
-     * Verifica se deve criar invoice imediatamente para cartão de crédito em multimeios
-     * 
-     * @param \Vindi\Payment\Model\PaymentSplit $currentSplit
-     * @param \Magento\Sales\Model\Order $order
-     * @return bool
-     */
-    private function shouldCreateInvoiceForCreditCard($currentSplit, $order)
-    {
-        if ($currentSplit->getPaymentMethod() !== 'credit_card') {
-            return false;
-        }
-
-        if ($order->hasInvoices()) {
-                return false;
-        }
-
-        $allSplits = $this->paymentSplitFactory->create()
-                ->getCollection()
-            ->addFieldToFilter('order_increment_id', $order->getIncrementId());
-
-        if ($allSplits->getSize() <= 1) {
-                return false;
-        }
-
-        $this->logInfo('Credit card payment in multimethod order - will create invoice immediately');
-        return true;
     }
 }

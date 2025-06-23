@@ -20,5 +20,11 @@
         <job name="vindi_payment_cancel_orders_with_expired_links" instance="Vindi\Payment\Cron\CancelOrdersWithExpiredLinks" method="execute">
             <schedule>0 3 * * *</schedule>
         </job>
+        <!-- Temporarily disabled until DOM extension is available -->
+        <!--
+        <job name="vindi_payment_process_multimethod_webhook_queue" instance="Vindi\Payment\Cron\ProcessMultimethodWebhookQueue" method="execute">
+            <schedule>*/1 * * * *</schedule>
+        </job>
+        -->
     </group>
 </config>
