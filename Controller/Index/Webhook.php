@@ -61,7 +61,6 @@ class Webhook extends Action
      */
     public function execute()
     {
-        // Validate webhook request
         if (!$this->validateRequest()) {
             $ip = $this->webhookHandler->getRemoteIp();
             $this->logger->error(__(sprintf('Invalid webhook attempt from IP %s', $ip)));
@@ -73,7 +72,6 @@ class Webhook extends Action
         $this->logger->info(__(sprintf("Webhook New Event!\n%s", $body)));
 
         try {
-            // Process webhook normally using the existing WebhookHandler
             $result = $this->webhookHandler->handle($body);
 
             if ($result) {

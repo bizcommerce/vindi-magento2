@@ -45,7 +45,6 @@ class DiagnoseCardPixInvoice extends Command
         $output->writeln("🔍 DIAGNÓSTICO: Pedido $orderIncrementId");
         $output->writeln("=======================================\n");
 
-        // 1. Verificar se o pedido existe
         $orderQuery = $connection->select()
             ->from($connection->getTableName('sales_order'), ['entity_id', 'increment_id', 'status', 'method' => 'vindi_bill_id'])
             ->joinLeft(
@@ -68,7 +67,6 @@ class DiagnoseCardPixInvoice extends Command
         $output->writeln("   - Método de Pagamento: {$orderData['payment_method']}");
         $output->writeln("   - Vindi Bill ID: " . ($orderData['method'] ?: 'NÃO DEFINIDO'));
 
-        // 2. Verificar informações adicionais do pagamento
         if ($orderData['additional_information']) {
             $additionalInfo = json_decode($orderData['additional_information'], true);
             $output->writeln("\n📋 INFORMAÇÕES DO PAGAMENTO:");
@@ -76,7 +74,6 @@ class DiagnoseCardPixInvoice extends Command
             $output->writeln("   - Valor PIX: R$ " . ($additionalInfo['amount_pix'] ?? 'N/A'));
         }
 
-        // 3. Verificar Payment Splits
         $splitsQuery = $connection->select()
             ->from($connection->getTableName('vindi_payment_split'))
             ->where('order_increment_id = ?', $orderIncrementId);
@@ -98,7 +95,6 @@ class DiagnoseCardPixInvoice extends Command
             }
         }
 
-        // 4. Verificar se tem invoices
         $invoiceQuery = $connection->select()
             ->from($connection->getTableName('sales_invoice'), ['increment_id', 'created_at', 'state'])
             ->where('order_id = ?', $orderData['entity_id']);
@@ -117,7 +113,6 @@ class DiagnoseCardPixInvoice extends Command
             }
         }
 
-        // 5. Simulação da lógica do webhook
         $output->writeln("\n🧪 SIMULAÇÃO DA LÓGICA DO WEBHOOK:");
         
         $creditCardSplit = null;
@@ -156,7 +151,6 @@ class DiagnoseCardPixInvoice extends Command
             }
         }
 
-        // 6. Verificar logs recentes
         $output->writeln("\n📊 PRÓXIMOS PASSOS:");
         $output->writeln("1. Verificar logs do webhook:");
         $output->writeln("   tail -f /var/log/vindi/webhook.log | grep '$orderIncrementId'");

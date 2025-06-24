@@ -61,7 +61,6 @@ class FindInvoiceByBillIdCommand extends Command
             $output->writeln('Vindi Bill ID: ' . $this->invoiceBillHelper->getVindiBillIdFromInvoice($invoice));
             $output->writeln('Created At: ' . $invoice->getCreatedAt());
             
-            // Informações do pedido relacionado
             $order = $invoice->getOrder();
             if ($order) {
                 $output->writeln('Order Increment ID: ' . $order->getIncrementId());

@@ -36,17 +36,14 @@ class InvoiceBillHelper
         $connection = $this->resourceConnection->getConnection();
         $tableName = $this->resourceConnection->getTableName('sales_invoice');
         
-        // Converte para string para busca consistente
         $vindiBillIdStr = (string)$vindiBillId;
         
-        // Busca entity_ids das invoices que têm o vindi_bill_id
         $select = $connection->select()
             ->from($tableName, ['entity_id'])
             ->where('vindi_bill_id = ?', $vindiBillIdStr);
         
         $entityIds = $connection->fetchCol($select);
         
-        // Se não encontrou como string, tenta como integer (se aplicável)
         if (empty($entityIds) && is_numeric($vindiBillId)) {
             $vindiBillIdInt = (int)$vindiBillId;
             if ($vindiBillIdInt > 0) {
@@ -62,7 +59,6 @@ class InvoiceBillHelper
             return [];
         }
 
-        // Busca as invoices pelos entity_ids encontrados
         $searchCriteria = $this->searchCriteriaBuilder
             ->addFilter('entity_id', $entityIds, 'in')
             ->create();
@@ -84,7 +80,6 @@ class InvoiceBillHelper
             return $extensionAttributes->getVindiBillId();
         }
 
-        // Fallback: busca diretamente no banco se não estiver carregado
         $connection = $this->resourceConnection->getConnection();
         $tableName = $this->resourceConnection->getTableName('sales_invoice');
         
@@ -144,14 +139,12 @@ class InvoiceBillHelper
             'search_result' => null
         ];
         
-        // Count total invoices with bill IDs
         $countSelect = $connection->select()
             ->from($tableName, ['COUNT(*)'])
             ->where('vindi_bill_id IS NOT NULL');
         
         $result['total_invoices_with_bill_id'] = (int)$connection->fetchOne($countSelect);
         
-        // Get recent bill IDs
         $recentSelect = $connection->select()
             ->from($tableName, ['entity_id', 'increment_id', 'vindi_bill_id'])
             ->where('vindi_bill_id IS NOT NULL')
@@ -160,7 +153,6 @@ class InvoiceBillHelper
         
         $result['recent_bill_ids'] = $connection->fetchAll($recentSelect);
         
-        // Search for specific value if provided
         if ($searchValue !== null) {
             $searchSelect = $connection->select()
                 ->from($tableName, ['entity_id', 'increment_id', 'vindi_bill_id'])

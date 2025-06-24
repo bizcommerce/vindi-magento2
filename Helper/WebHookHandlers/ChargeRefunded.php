@@ -55,7 +55,6 @@ class ChargeRefunded
         $chargeId = $charge['id'];
         $refundAmount = $charge['amount'];
         
-        // Primeiro, tenta pegar bill data diretamente do webhook
         $billData = $data["bill"] ?? null;
         $billId = null;
         $billCode = '';
@@ -65,7 +64,6 @@ class ChargeRefunded
             $billCode = $billData['code'] ?? '';
             $this->logger->info('CHARGE_REFUNDED: Bill data found in webhook - Bill ID: ' . $billId . ', Code: ' . $billCode);
         } else {
-            // Se não tem bill data no webhook, tenta buscar pela bill_id do charge
             if (isset($charge['bill_id'])) {
                 $billId = $charge['bill_id'];
                 $this->logger->info('CHARGE_REFUNDED: Using bill_id from charge: ' . $billId);
@@ -74,10 +72,8 @@ class ChargeRefunded
                 $billCode = $charge['bill']['code'] ?? '';
                 $this->logger->info('CHARGE_REFUNDED: Using bill data from charge: Bill ID: ' . $billId . ', Code: ' . $billCode);
             } else {
-                // Última tentativa: buscar pela invoice com o charge_id (se tivermos essa informação salva)
                 $this->logger->warning('CHARGE_REFUNDED: No bill data found for charge ' . $chargeId . ' - trying to find by existing data');
                 
-                // Tenta buscar ordem através de payment splits
                 $billId = $this->findBillIdByChargeId($chargeId);
                 if (!$billId) {
                     $this->logger->error('CHARGE_REFUNDED: Could not determine bill ID for charge ' . $chargeId);
@@ -95,7 +91,6 @@ class ChargeRefunded
                 'payment_method' => $charge['payment_method']['code'] ?? 'unknown'
             ]));
 
-        // Se não tem bill code, tenta construir baseado no bill ID
         if (empty($billCode) && $billId) {
             $billCode = $this->findBillCodeByBillId($billId);
         }
@@ -110,12 +105,10 @@ class ChargeRefunded
 
             $order = $this->findOrderForBill($billCode);
             if (!$order && $billId) {
-                // Tenta buscar ordem pela invoice que tem o bill_id
                 $order = $this->findOrderByBillId($billId);
             }
             
             if ($order) {
-                // Verifica o estado do pedido e se já foi reembolsado
                 $this->logger->info('CHARGE_REFUNDED: Order state: ' . $order->getState() . 
                     ', Status: ' . $order->getStatus() . 
                     ', Total refunded: ' . $order->getTotalRefunded() . 
@@ -128,7 +121,6 @@ class ChargeRefunded
                         'Available: ' . $availableRefundAmount . ', Requested: ' . $refundAmount . 
                         '. Skipping creditmemo creation and only adding comment.');
                     
-                    // Apenas adiciona comentário sem criar creditmemo
                     $commentText = sprintf(
                         'Estorno detectado: Charge %d estornado (R$ %s) - Creditmemo não criado devido a valor insuficiente disponível (R$ %s)',
                         $chargeId,
@@ -141,7 +133,6 @@ class ChargeRefunded
                     
                     $this->logger->info('CHARGE_REFUNDED: Comment added to order without creating creditmemo');
                 } else {
-                    // Prossegue com a criação do creditmemo
                     try {
                         $creditmemo = $this->refundHelper->createSplitRefund(
                             $order,
@@ -168,7 +159,6 @@ class ChargeRefunded
                     } catch (\Exception $e) {
                         $this->logger->error('CHARGE_REFUNDED: Error creating creditmemo: ' . $e->getMessage());
                         
-                        // Adiciona comentário mesmo que falhe ao criar creditmemo
                         $commentText = sprintf(
                             'Estorno detectado: Charge %d estornado (R$ %s) - Erro ao criar creditmemo: %s',
                             $chargeId,
@@ -287,18 +277,15 @@ class ChargeRefunded
     private function cancelInvoiceByBillId($billId, $chargeId, $refundAmount)
     {
         try {
-            // Converte bill ID para string para garantir compatibilidade
             $billIdStr = (string)$billId;
 
             $this->logger->info('CHARGE_REFUNDED: Searching for invoices with bill ID: ' . $billIdStr . ' (original: ' . $billId . ', type: ' . gettype($billId) . ')');
 
-            // Busca invoices pelo bill ID
             $invoices = $this->invoiceBillHelper->getInvoicesByVindiBillId($billIdStr);
 
             if (empty($invoices)) {
                 $this->logger->warning('CHARGE_REFUNDED: No invoices found for bill ID: ' . $billIdStr);
 
-                // Tentativa adicional: buscar por bill ID como integer
                 $billIdInt = (int)$billId;
                 if ($billIdInt > 0 && $billIdInt != $billIdStr) {
                     $this->logger->info('CHARGE_REFUNDED: Trying search with integer bill ID: ' . $billIdInt);
@@ -323,14 +310,10 @@ class ChargeRefunded
                     ' - State: ' . $invoice->getState() . ' - Total: ' . $invoice->getGrandTotal() . 
                     ' - Refund Amount: ' . $refundAmount);
 
-                // Verifica se a invoice pode ser cancelada
                 if ($invoice->getState() == Invoice::STATE_PAID) {
-                    
-                    // Verifica se o valor do estorno corresponde ao valor da invoice
                     $invoiceTotal = (float)$invoice->getGrandTotal();
                     $refundAmountFloat = (float)$refundAmount;
                     
-                    // Tolerância para diferenças de centavos
                     $tolerance = 0.01;
                     $amountDifference = abs($invoiceTotal - $refundAmountFloat);
                     
@@ -339,16 +322,12 @@ class ChargeRefunded
                             $invoiceTotal . ', Refund amount: ' . $refundAmountFloat . 
                             ', Difference: ' . $amountDifference);
                             
-                        // Se a diferença for significativa, ainda assim cancela a invoice
-                        // porque o estorno já foi processado na Vindi
                         $this->logger->info('CHARGE_REFUNDED: Proceeding with cancellation despite amount difference');
                     }
                     
                     try {
-                        // Cancela a invoice offline (já foi estornada na Vindi)
                         $invoice->setState(Invoice::STATE_CANCELED);
 
-                        // Adiciona comentário explicativo
                         $commentText = sprintf(
                             'Invoice cancelada devido ao estorno do Charge %d (Bill ID: %d) - Valor estornado: R$ %s (Invoice: R$ %s)',
                             $chargeId,
@@ -359,14 +338,12 @@ class ChargeRefunded
 
                         $invoice->addComment($commentText, false, false);
 
-                        // Salva a invoice
                         $this->invoiceRepository->save($invoice);
 
                         $invoicesCanceled++;
 
                         $this->logger->info('CHARGE_REFUNDED: Invoice ' . $invoice->getIncrementId() . ' canceled for bill ID: ' . $billId);
 
-                        // Atualiza o pedido com comentário
                         $order = $invoice->getOrder();
                         if ($order) {
                             $orderComment = sprintf(
@@ -405,16 +382,7 @@ class ChargeRefunded
     private function findBillIdByChargeId($chargeId)
     {
         try {
-            // Como não temos charge_id salvo nos splits, vamos tentar buscar
-            // nas invoices recentes que tenham vindi_bill_id
-            // Isso é uma tentativa de fallback para casos onde não conseguimos
-            // obter o bill_id do webhook
-            
             $this->logger->info('CHARGE_REFUNDED: Attempting to find bill ID by checking recent invoices with vindi_bill_id');
-            
-            // Para esta implementação, vamos retornar null e deixar que o erro seja logado
-            // Em produção, pode ser necessário implementar uma lógica mais específica
-            // baseada em como os charges são relacionados aos bills no seu sistema
             
             $this->logger->warning('CHARGE_REFUNDED: Could not find bill ID for charge ' . $chargeId . ' - webhook should include bill data');
 
@@ -434,7 +402,6 @@ class ChargeRefunded
     private function findBillCodeByBillId($billId)
     {
         try {
-            // Busca order pela invoice que tem esse bill ID
             $invoices = $this->invoiceBillHelper->getInvoicesByVindiBillId($billId);
             
             if (!empty($invoices)) {
@@ -442,22 +409,18 @@ class ChargeRefunded
                 $order = $invoice->getOrder();
                 
                 if ($order) {
-                    // Verifica se é multimeios
                     $splits = $this->paymentSplitFactory->create()
                         ->getCollection()
                         ->addFieldToFilter('order_increment_id', $order->getIncrementId())
                         ->addFieldToFilter('bill_id', $billId);
                         
                     if ($splits->getSize() > 0) {
-                        // É multimeios, precisa do sufixo
                         $splitData = $splits->getFirstItem();
                         $paymentMethod = $splitData->getPaymentMethod();
                         
-                        // Determina sufixo baseado no método de pagamento
                         $suffix = (in_array($paymentMethod, ['credit_card', 'debit_card'])) ? '-01' : '-02';
                         return $order->getIncrementId() . $suffix;
                     } else {
-                        // Pagamento único
                         return $order->getIncrementId();
                     }
                 }

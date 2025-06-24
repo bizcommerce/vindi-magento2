@@ -59,7 +59,6 @@ class TestChargeRefundedCommand extends Command
         $output->writeln('Charge ID: ' . $chargeId);
         $output->writeln('Amount: ' . $amount);
         
-        // Simula os dados do webhook
         $webhookData = [
             'charge' => [
                 'id' => $chargeId,
@@ -71,7 +70,7 @@ class TestChargeRefundedCommand extends Command
             ],
             'bill' => [
                 'id' => $billId,
-                'code' => '100000123-01' // Simula um código de multimeios
+                'code' => '100000123-01'
             ]
         ];
         

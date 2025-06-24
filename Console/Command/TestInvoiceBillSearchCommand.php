@@ -46,10 +46,8 @@ class TestInvoiceBillSearchCommand extends Command
 
         $output->writeln("Searching for invoices with bill ID: $billId");
         
-        // Test direct database query
         $this->testDirectDatabaseQuery($billId, $output);
         
-        // Test helper method
         $this->testHelperMethod($billId, $output);
 
         return 0;
@@ -88,7 +86,6 @@ class TestInvoiceBillSearchCommand extends Command
         $connection = $this->resourceConnection->getConnection();
         $tableName = $this->resourceConnection->getTableName('sales_invoice');
         
-        // Test exact match
         $select = $connection->select()
             ->from($tableName, ['entity_id', 'increment_id', 'vindi_bill_id'])
             ->where('vindi_bill_id = ?', $billId);
@@ -98,7 +95,6 @@ class TestInvoiceBillSearchCommand extends Command
         if (empty($results)) {
             $output->writeln("  No results found with exact match");
             
-            // Try to find similar values
             $selectSimilar = $connection->select()
                 ->from($tableName, ['entity_id', 'increment_id', 'vindi_bill_id'])
                 ->where('vindi_bill_id LIKE ?', "%$billId%");
@@ -133,7 +129,6 @@ class TestInvoiceBillSearchCommand extends Command
                 foreach ($invoices as $invoice) {
                     $output->writeln("  Found: Invoice #{$invoice->getIncrementId()} (ID: {$invoice->getEntityId()})");
                     
-                    // Test getting bill ID back from invoice
                     $retrievedBillId = $this->invoiceBillHelper->getVindiBillIdFromInvoice($invoice);
                     $output->writeln("    Retrieved Bill ID: $retrievedBillId");
                 }

@@ -134,11 +134,9 @@ class BillPaid
             );
         }
 
-        // Salva a invoice
         try {
             $this->invoiceRepository->save($invoice);
 
-            // Salva bill ID diretamente na database
             if ($billId) {
                 $this->saveBillIdToInvoice($invoice->getId(), $billId);
             }
@@ -193,13 +191,11 @@ class BillPaid
             ->getCollection()
             ->addFieldToFilter('order_increment_id', $order->getIncrementId());
 
-        // Se não for multimeios, segue fluxo normal
         if ($splits->getSize() === 0) {
             $this->logInfo('Single payment method detected for order: ' . $order->getIncrementId());
             return $this->createInvoice($order, $bill['id']);
         }
 
-        // Multimeios: sempre cria invoice para o split pago
         $currentSplit = $splits->getItemByColumnValue('bill_id', $bill['id']);
         if ($currentSplit && $currentSplit->getId() && $bill['status'] === 'paid') {
             $currentSplit->setStatus('paid')->save();
@@ -208,7 +204,6 @@ class BillPaid
                 $this->clearPixData($order);
             }
 
-            // Cria invoice apenas para o valor/configuração do split atual
             return $this->createInvoiceForSplit($order, $currentSplit, $bill);
         }
 
@@ -257,7 +252,6 @@ class BillPaid
             return false;
         }
 
-        // Define o valor do invoice conforme o split/bill atual
         $invoice = $order->prepareInvoice();
         foreach ($invoice->getAllItems() as $item) {
             $item->setQty($item->getQty() * ($split->getAmount() / $order->getGrandTotal()));
