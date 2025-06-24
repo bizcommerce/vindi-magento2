@@ -26,6 +26,7 @@
                 <item name="vindi:diagnose:card-pix-invoice" xsi:type="object">Vindi\Payment\Console\Command\DiagnoseCardPixInvoice</item>
                 <item name="vindi:invoice:find-by-bill-id" xsi:type="object">Vindi\Payment\Console\Command\FindInvoiceByBillIdCommand</item>
                 <item name="vindi:test:charge-refunded" xsi:type="object">Vindi\Payment\Console\Command\TestChargeRefundedCommand</item>
+                <item name="vindi:test:invoice-bill-search" xsi:type="object">Vindi\Payment\Console\Command\TestInvoiceBillSearchCommand</item>
             </argument>
         </arguments>
     </type>
@@ -236,10 +237,5 @@
                 <item name="vindi_diagnose_multipayment_bills" xsi:type="object">Vindi\Payment\Console\Command\DiagnoseMultiPaymentBills</item>
             </argument>
         </arguments>
-    </type>
-
-    <!-- Plugin para salvar/recuperar vindi_bill_id nas invoices -->
-    <type name="Magento\Sales\Api\InvoiceRepositoryInterface">
-        <plugin name="vindi_invoice_repository_plugin" type="Vindi\Payment\Plugin\InvoiceRepositoryPlugin" sortOrder="10"/>
     </type>
 </config>

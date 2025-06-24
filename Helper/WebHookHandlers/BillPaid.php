@@ -14,6 +14,7 @@ use Magento\Sales\Api\InvoiceRepositoryInterface;
 use Vindi\Payment\Model\PaymentSplitFactory;
 use Psr\Log\LoggerInterface;
 use Magento\Sales\Api\Data\InvoiceExtensionFactory;
+use Magento\Sales\Api\Data\InvoiceInterface;
 
 /**
  * Class BillPaid
@@ -125,17 +126,26 @@ class BillPaid
         $invoice->pay();
         $invoice->setSendEmail(true);
 
-        // Adiciona o bill ID como extension attribute na invoice
         if ($billId) {
-            $extensionAttributes = $invoice->getExtensionAttributes();
-            if (!$extensionAttributes) {
-                $extensionAttributes = $this->invoiceExtensionFactory->create();
-            }
-            $extensionAttributes->setVindiBillId($billId);
-            $invoice->setExtensionAttributes($extensionAttributes);
+            $invoice->addComment(
+                'Vindi Bill ID: ' . $billId,
+                false,
+                false
+            );
         }
 
-        $this->invoiceRepository->save($invoice);
+        // Salva a invoice
+        try {
+            $this->invoiceRepository->save($invoice);
+
+            // Salva bill ID diretamente na database
+            if ($billId) {
+                $this->saveBillIdToInvoice($invoice->getId(), $billId);
+            }
+        } catch (\Exception $e) {
+            $this->logError('Failed to save invoice: ' . $e->getMessage());
+            return false;
+        }
 
         $status = $this->helperData->getStatusToPaidOrder();
         if ($state = $this->helperData->getStatusState($status)) {
@@ -250,29 +260,35 @@ class BillPaid
         // Define o valor do invoice conforme o split/bill atual
         $invoice = $order->prepareInvoice();
         foreach ($invoice->getAllItems() as $item) {
-            // Ajuste conforme sua lógica de rateio, aqui é um exemplo simples:
             $item->setQty($item->getQty() * ($split->getAmount() / $order->getGrandTotal()));
         }
 
         $invoice->setGrandTotal($split->getAmount());
         $invoice->setBaseGrandTotal($split->getAmount());
-        
+
         $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE);
         $invoice->register();
         $invoice->pay();
         $invoice->setSendEmail(true);
 
-        // Adiciona o bill ID como extension attribute na invoice
         if (isset($bill['id'])) {
-            $extensionAttributes = $invoice->getExtensionAttributes();
-            if (!$extensionAttributes) {
-                $extensionAttributes = $this->invoiceExtensionFactory->create();
-            }
-            $extensionAttributes->setVindiBillId($bill['id']);
-            $invoice->setExtensionAttributes($extensionAttributes);
+            $invoice->addComment(
+                'Vindi Bill ID: ' . $bill['id'] . ' (Split payment)',
+                false,
+                false
+            );
         }
 
-        $this->invoiceRepository->save($invoice);
+        try {
+            $this->invoiceRepository->save($invoice);
+
+            if (isset($bill['id'])) {
+                $this->saveBillIdToInvoice($invoice->getId(), $bill['id']);
+            }
+        } catch (\Exception $e) {
+            $this->logError('Failed to save invoice: ' . $e->getMessage());
+            return false;
+        }
 
         $status = $this->helperData->getStatusToPaidOrder();
         if ($state = $this->helperData->getStatusState($status)) {
@@ -286,5 +302,30 @@ class BillPaid
 
         $this->logInfo('Partial invoice created for order ' . $order->getIncrementId() . ' (split/bill ' . $split->getId() . ')');
         return true;
+    }
+
+    /**
+     * Save bill ID directly to database
+     *
+     * @param int $invoiceId
+     * @param string $billId
+     * @return void
+     */
+    private function saveBillIdToInvoice($invoiceId, $billId)
+    {
+        try {
+            $connection = $this->dbAdapter;
+            $tableName = $connection->getTableName('sales_invoice');
+
+            $connection->update(
+                $tableName,
+                ['vindi_bill_id' => $billId],
+                ['entity_id = ?' => $invoiceId]
+            );
+
+            $this->logInfo('Saved bill ID ' . $billId . ' to invoice ' . $invoiceId);
+        } catch (\Exception $e) {
+            $this->logError('Failed to save bill ID to invoice: ' . $e->getMessage());
+        }
     }
 }

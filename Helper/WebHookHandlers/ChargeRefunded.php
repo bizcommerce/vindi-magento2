@@ -210,12 +210,33 @@ class ChargeRefunded
     private function cancelInvoiceByBillId($billId, $chargeId, $refundAmount)
     {
         try {
+            // Converte bill ID para string para garantir compatibilidade
+            $billIdStr = (string)$billId;
+            
+            $this->logger->info('CHARGE_REFUNDED: Searching for invoices with bill ID: ' . $billIdStr . ' (original: ' . $billId . ', type: ' . gettype($billId) . ')');
+            
             // Busca invoices pelo bill ID
-            $invoices = $this->invoiceBillHelper->getInvoicesByVindiBillId($billId);
+            $invoices = $this->invoiceBillHelper->getInvoicesByVindiBillId($billIdStr);
             
             if (empty($invoices)) {
-                $this->logger->warning('CHARGE_REFUNDED: No invoices found for bill ID: ' . $billId);
-                return false;
+                $this->logger->warning('CHARGE_REFUNDED: No invoices found for bill ID: ' . $billIdStr);
+                
+                // Tentativa adicional: buscar por bill ID como integer
+                $billIdInt = (int)$billId;
+                if ($billIdInt > 0 && $billIdInt != $billIdStr) {
+                    $this->logger->info('CHARGE_REFUNDED: Trying search with integer bill ID: ' . $billIdInt);
+                    $invoices = $this->invoiceBillHelper->getInvoicesByVindiBillId($billIdInt);
+                    
+                    if (!empty($invoices)) {
+                        $this->logger->info('CHARGE_REFUNDED: Found invoices using integer bill ID: ' . $billIdInt);
+                    }
+                }
+                
+                if (empty($invoices)) {
+                    return false;
+                }
+            } else {
+                $this->logger->info('CHARGE_REFUNDED: Found ' . count($invoices) . ' invoice(s) for bill ID: ' . $billIdStr);
             }
             
             $invoicesCanceled = 0;

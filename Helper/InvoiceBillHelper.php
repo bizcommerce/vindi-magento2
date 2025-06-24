@@ -28,7 +28,7 @@ class InvoiceBillHelper
     /**
      * Busca invoices por Vindi Bill ID
      *
-     * @param string $vindiBillId
+     * @param string|int $vindiBillId
      * @return \Magento\Sales\Api\Data\InvoiceInterface[]
      */
     public function getInvoicesByVindiBillId($vindiBillId)
@@ -36,12 +36,27 @@ class InvoiceBillHelper
         $connection = $this->resourceConnection->getConnection();
         $tableName = $this->resourceConnection->getTableName('sales_invoice');
         
+        // Converte para string para busca consistente
+        $vindiBillIdStr = (string)$vindiBillId;
+        
         // Busca entity_ids das invoices que têm o vindi_bill_id
         $select = $connection->select()
             ->from($tableName, ['entity_id'])
-            ->where('vindi_bill_id = ?', $vindiBillId);
+            ->where('vindi_bill_id = ?', $vindiBillIdStr);
         
         $entityIds = $connection->fetchCol($select);
+        
+        // Se não encontrou como string, tenta como integer (se aplicável)
+        if (empty($entityIds) && is_numeric($vindiBillId)) {
+            $vindiBillIdInt = (int)$vindiBillId;
+            if ($vindiBillIdInt > 0) {
+                $select = $connection->select()
+                    ->from($tableName, ['entity_id'])
+                    ->where('vindi_bill_id = ?', $vindiBillIdInt);
+                
+                $entityIds = $connection->fetchCol($select);
+            }
+        }
         
         if (empty($entityIds)) {
             return [];
@@ -110,5 +125,50 @@ class InvoiceBillHelper
         
         $result = $connection->fetchPairs($select);
         return $result ?: [];
+    }
+
+    /**
+     * Debug method to check what bill IDs exist in the database
+     *
+     * @param mixed $searchValue Optional value to search for
+     * @return array Debug information
+     */
+    public function debugBillIds($searchValue = null)
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $tableName = $this->resourceConnection->getTableName('sales_invoice');
+        
+        $result = [
+            'total_invoices_with_bill_id' => 0,
+            'recent_bill_ids' => [],
+            'search_result' => null
+        ];
+        
+        // Count total invoices with bill IDs
+        $countSelect = $connection->select()
+            ->from($tableName, ['COUNT(*)'])
+            ->where('vindi_bill_id IS NOT NULL');
+        
+        $result['total_invoices_with_bill_id'] = (int)$connection->fetchOne($countSelect);
+        
+        // Get recent bill IDs
+        $recentSelect = $connection->select()
+            ->from($tableName, ['entity_id', 'increment_id', 'vindi_bill_id'])
+            ->where('vindi_bill_id IS NOT NULL')
+            ->order('entity_id DESC')
+            ->limit(10);
+        
+        $result['recent_bill_ids'] = $connection->fetchAll($recentSelect);
+        
+        // Search for specific value if provided
+        if ($searchValue !== null) {
+            $searchSelect = $connection->select()
+                ->from($tableName, ['entity_id', 'increment_id', 'vindi_bill_id'])
+                ->where('vindi_bill_id LIKE ?', '%' . $searchValue . '%');
+            
+            $result['search_result'] = $connection->fetchAll($searchSelect);
+        }
+        
+        return $result;
     }
 }
