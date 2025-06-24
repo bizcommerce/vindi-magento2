@@ -212,41 +212,41 @@ class ChargeRefunded
         try {
             // Converte bill ID para string para garantir compatibilidade
             $billIdStr = (string)$billId;
-            
+
             $this->logger->info('CHARGE_REFUNDED: Searching for invoices with bill ID: ' . $billIdStr . ' (original: ' . $billId . ', type: ' . gettype($billId) . ')');
-            
+
             // Busca invoices pelo bill ID
             $invoices = $this->invoiceBillHelper->getInvoicesByVindiBillId($billIdStr);
-            
+
             if (empty($invoices)) {
                 $this->logger->warning('CHARGE_REFUNDED: No invoices found for bill ID: ' . $billIdStr);
-                
+
                 // Tentativa adicional: buscar por bill ID como integer
                 $billIdInt = (int)$billId;
                 if ($billIdInt > 0 && $billIdInt != $billIdStr) {
                     $this->logger->info('CHARGE_REFUNDED: Trying search with integer bill ID: ' . $billIdInt);
                     $invoices = $this->invoiceBillHelper->getInvoicesByVindiBillId($billIdInt);
-                    
+
                     if (!empty($invoices)) {
                         $this->logger->info('CHARGE_REFUNDED: Found invoices using integer bill ID: ' . $billIdInt);
                     }
                 }
-                
+
                 if (empty($invoices)) {
                     return false;
                 }
             } else {
                 $this->logger->info('CHARGE_REFUNDED: Found ' . count($invoices) . ' invoice(s) for bill ID: ' . $billIdStr);
             }
-            
+
             $invoicesCanceled = 0;
-            
+
             foreach ($invoices as $invoice) {
-                if ($invoice->getState() === Invoice::STATE_PAID) {
+                if (intval($invoice->getState()) === Invoice::STATE_PAID) {
                     try {
                         // Cancela a invoice offline (já foi estornada na Vindi)
                         $invoice->setState(Invoice::STATE_CANCELED);
-                        
+
                         // Adiciona comentário explicativo
                         $commentText = sprintf(
                             'Invoice cancelada devido ao estorno do Charge %d (Bill ID: %d) - Valor estornado: R$ %s',
@@ -254,16 +254,16 @@ class ChargeRefunded
                             $billId,
                             number_format($refundAmount, 2, ',', '.')
                         );
-                        
+
                         $invoice->addComment($commentText, false, false);
-                        
+
                         // Salva a invoice
                         $this->invoiceRepository->save($invoice);
-                        
+
                         $invoicesCanceled++;
-                        
+
                         $this->logger->info('CHARGE_REFUNDED: Invoice ' . $invoice->getIncrementId() . ' canceled for bill ID: ' . $billId);
-                        
+
                         // Atualiza o pedido com comentário
                         $order = $invoice->getOrder();
                         if ($order) {
@@ -276,7 +276,7 @@ class ChargeRefunded
                             $order->addStatusHistoryComment($orderComment);
                             $this->orderRepository->save($order);
                         }
-                        
+
                     } catch (\Exception $e) {
                         $this->logger->error('CHARGE_REFUNDED: Error canceling invoice ' . $invoice->getIncrementId() . ': ' . $e->getMessage());
                     }
@@ -284,10 +284,10 @@ class ChargeRefunded
                     $this->logger->info('CHARGE_REFUNDED: Invoice ' . $invoice->getIncrementId() . ' is not in PAID state (current state: ' . $invoice->getState() . '), skipping cancellation');
                 }
             }
-            
+
             $this->logger->info('CHARGE_REFUNDED: Successfully canceled ' . $invoicesCanceled . ' invoice(s) for bill ID: ' . $billId);
             return $invoicesCanceled > 0;
-            
+
         } catch (\Exception $e) {
             $this->logger->error('CHARGE_REFUNDED: Error processing invoice cancellation for bill ID ' . $billId . ': ' . $e->getMessage());
             return false;
