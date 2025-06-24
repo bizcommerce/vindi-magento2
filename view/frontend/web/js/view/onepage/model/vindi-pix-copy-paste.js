@@ -15,10 +15,8 @@ define(
 
                 navigator.clipboard.writeText(value).then(function() {
                     //@todo application condition frontend
-                    console.log("success", value);
                 }, function() {
                     //@todo application condition frontend
-                    console.log("fail");
                 });
             }
         });

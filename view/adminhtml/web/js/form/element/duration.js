@@ -20,7 +20,6 @@ define([
          * @param {String} value
          */
         onUpdate: function (value) {
-            console.log('VINDI - Plans Change');
             this.fieldDepend(value);
             return this._super();
         },
