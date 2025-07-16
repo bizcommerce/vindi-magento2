@@ -69,9 +69,9 @@ use Vindi\Payment\Block\Info\Pix;
     <?php endif; ?>
 <?php else: ?>
     <strong>
-        <?=__('Pix expirado') ?>
+        <?=__('Pix expired') ?>
     </strong></br>
-    <a href="/vindiPayment/pix/renew?bill=<?= $block->getBillId()?>&order=<?= $block->getOrder()->getId() ?>"><button name="renew-pix"><?=__('Atualizar QR Code')?></button></a>
+    <a href="/vindiPayment/pix/renew?bill=<?= $block->getBillId()?>&order=<?= $block->getOrder()->getId() ?>"><button name="renew-pix"><?=__('Update QR Code')?></button></a>
 <?php endif; ?>
 <?php else: ?>
     <span>

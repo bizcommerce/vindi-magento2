@@ -64,6 +64,7 @@
 }
 
 .subscriptions-list .pager .limiter select {
+    min-width: 50px;
     padding: 5px;
     border: 1px solid #ddd;
 }
@@ -71,4 +72,21 @@
 .subscriptions-list .pager .limiter-label,
 .subscriptions-list .pager .limiter-text {
     margin-right: 5px;
+}
+
+@media only screen and (max-width: 667px) {
+    .subscriptions-list > div {
+        overflow-y: auto;
+    }
+
+    .subscriptions-list > .pager { margin: 0; }
+
+    .subscriptions-list .pager .limiter, 
+    .subscriptions-list .pager .toolbar-amount,
+    .subscriptions-list .pager .toolbar-number {
+        display: block;
+        width: 100%;
+        margin: 0;
+        text-align: left;
+    }
 }

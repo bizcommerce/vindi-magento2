@@ -64,6 +64,7 @@
 }
 
 .paymentProfiles-list .pager .limiter select {
+    min-width: 50px;
     padding: 5px;
     border: 1px solid #ddd;
 }
@@ -122,4 +123,21 @@
 
 .back-button-container button:hover {
     background-color: #004494;
+}
+
+@media only screen and (max-width: 667px) {
+    .paymentProfiles-list > div {
+        overflow-y: auto;
+    }
+
+    .paymentProfiles-list > .pager { margin: 0; }
+
+    .paymentProfiles-list .pager .limiter, 
+    .paymentProfiles-list .pager .toolbar-amount,
+    .paymentProfiles-list .pager .toolbar-number {
+        display: block;
+        width: 100%;
+        margin: 0;
+        text-align: left;
+    }
 }

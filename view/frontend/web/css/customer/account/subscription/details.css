@@ -166,6 +166,8 @@ table tr:nth-child(even) {
 }
 .back-button:hover {
     background-color: #004494;
+    color: #FFF;
+    border: 0;
 }
 
 /* Payment Profiles styles */
@@ -250,4 +252,34 @@ table tr:nth-child(even) {
 }
 .non-card-method-image {
     display: inline-block;
+}
+
+.subscription--cancelled h2::after {
+    content: ' CANCELADA';
+    display: inline-block;
+    background-color: #e74c3c;
+    color: #fff;
+    font-size: 0.85em;
+    font-weight: bold;
+    padding: 2px 8px;
+    margin-left: 0.5rem;
+    border-radius: 3px;
+}
+.subscription--cancelled .admin__page-section {
+    background-color: #fdecea;
+  border: 1px solid #e74c3c;
+  border-radius: 6px;
+  padding: 1rem;
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+@media only screen and (max-width: 667px) {
+    .admin__table-wrapper {
+        overflow-y: auto;
+    }
+
+    .paymentProfiles-list {
+        overflow-y: auto;
+    }
 }
