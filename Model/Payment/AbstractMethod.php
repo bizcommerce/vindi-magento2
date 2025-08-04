@@ -419,99 +419,115 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
     protected function processTwoCards(InfoInterface $payment, Order $order)
     {
-        $customerId = $this->customer->findOrCreate($order);
-        $productList = $this->productManagement->findOrCreateProductsFromOrder($order);
+        $customerId   = $this->customer->findOrCreate($order);
+        $productList  = $this->productManagement->findOrCreateProductsFromOrder($order);
+        $amount1      = $payment->getAdditionalInformation('amount_credit');
+        $amount2      = $payment->getAdditionalInformation('amount_second_card');
 
-        $amountCredit = $payment->getAdditionalInformation('amount_credit');
-        $amountSecondCard = $payment->getAdditionalInformation('amount_second_card');
-        if (!$amountCredit || !$amountSecondCard) {
+        if (!$amount1 || !$amount2) {
             return $this->handleError($order);
         }
 
-        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
+        $discountId = $this->getMultiPaymentDiscountProductId();
 
-        $bodyCard1 = [
-            'customer_id' => $customerId,
+        // -----------------------
+        // == CARTÃO 1 ==
+        // -----------------------
+        $body1 = [
+            'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
-            'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-01'
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-01',
         ];
-        $bodyCard1['bill_items'][] = [
-            'product_id' => $multiPaymentDiscountProductId,
-            'amount' => -((float)$amountSecondCard)
+        $body1['bill_items'][] = [
+            'product_id' => $discountId,
+            'amount'     => -((float)$amount2),
         ];
 
-        $profileId1 = (int)$payment->getAdditionalInformation('payment_profile');
-        if ($profileId1) {
-            $paymentProfile1 = $this->getPaymentProfileFromVindi($profileId1);
-            if (!$paymentProfile1) {
-                $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+        $local1 = (int)$payment->getAdditionalInformation('payment_profile');
+        if ($local1) {
+            $profile1    = $this->paymentProfileRepository->getById($local1);
+            $vindiId1    = $profile1->getPaymentProfileId();
+            $remote1     = $this->getPaymentProfileFromVindi($vindiId1);
+            if (!$remote1) {
+                $remote1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+                $profile1->setPaymentProfileId($remote1['id']);
+                $this->paymentProfileRepository->save($profile1);
             }
         } else {
-            $paymentProfile1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+            $remote1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
         }
-        $bodyCard1['payment_profile'] = ['id' => $paymentProfile1['id'] ?? null];
 
-        $installments1 = $payment->getAdditionalInformation('cc_installments') ?: 1;
-        $bodyCard1['installments'] = (int)$installments1;
+        $vindiId1 = $remote1['id'];
+        $body1['payment_profile'] = ['id' => $vindiId1];
+        $body1['installments']    = (int)($payment->getAdditionalInformation('cc_installments') ?: 1);
 
-        $bodyCard2 = [
-            'customer_id' => $customerId,
+        $bill1 = $this->bill->create($body1);
+        if (!$bill1 || !$this->successfullyPaid($body1, $bill1)) {
+            if (isset($bill1['id'])) {
+                $this->bill->delete($bill1['id']);
+            }
+            return $this->handleError($order);
+        }
+        $this->handleBankSplitAdditionalInformation($payment, $body1, $bill1);
+
+        // -----------------------
+        // == CARTÃO 2 ==
+        // -----------------------
+        $body2 = [
+            'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
-            'bill_items' => $productList,
-            'code' => $order->getIncrementId() . '-02'
+            'bill_items'          => $productList,
+            'code'                => $order->getIncrementId() . '-02',
         ];
-        $bodyCard2['bill_items'][] = [
-            'product_id' => $multiPaymentDiscountProductId,
-            'amount' => -((float)$amountCredit)
+        $body2['bill_items'][] = [
+            'product_id' => $discountId,
+            'amount'     => -((float)$amount1),
         ];
 
-        $profileId2 = (int)$payment->getAdditionalInformation('payment_profile2');
-        if ($profileId2) {
-            $paymentProfile2 = $this->getPaymentProfileFromVindi($profileId2);
-            if (!$paymentProfile2) {
-                $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+        $local2 = (int)$payment->getAdditionalInformation('payment_profile2');
+        if ($local2) {
+            $profile2    = $this->paymentProfileRepository->getById($local2);
+            $vindiId2    = $profile2->getPaymentProfileId();
+            $remote2     = $this->getPaymentProfileFromVindi($vindiId2);
+            if (!$remote2) {
+                $remote2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+                $profile2->setPaymentProfileId($remote2['id']);
+                $this->paymentProfileRepository->save($profile2);
             }
         } else {
-            $paymentProfile2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+            $remote2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
         }
-        $bodyCard2['payment_profile'] = ['id' => $paymentProfile2['id'] ?? null];
 
-        $installments2 = $payment->getAdditionalInformation('cc_installments2') ?: 1;
-        $bodyCard2['installments'] = (int)$installments2;
+        $vindiId2 = $remote2['id'];
+        $body2['payment_profile'] = ['id' => $vindiId2];
+        $body2['installments']    = (int)($payment->getAdditionalInformation('cc_installments2') ?: 1);
 
-        $billCard1 = $this->bill->create($bodyCard1);
-        if (!$billCard1 || !$this->successfullyPaid($bodyCard1, $billCard1)) {
-            if ($billCard1 && isset($billCard1['id'])) {
-                $this->bill->delete($billCard1['id']);
+        $bill2 = $this->bill->create($body2);
+        if (!$bill2 || !$this->successfullyPaid($body2, $bill2)) {
+            if (isset($bill2['id'])) {
+                $this->bill->delete($bill2['id']);
             }
+            // desfaz primeira cobrança caso dê erro
+            $this->bill->delete($bill1['id']);
             return $this->handleError($order);
         }
-        $this->handleBankSplitAdditionalInformation($payment, $bodyCard1, $billCard1);
+        $this->handleBankSplitAdditionalInformation($payment, $body2, $bill2);
 
-        $billCard2 = $this->bill->create($bodyCard2);
-        if (!$billCard2 || !$this->successfullyPaid($bodyCard2, $billCard2)) {
-            if ($billCard2 && isset($billCard2['id'])) {
-                $this->bill->delete($billCard2['id']);
-            }
-            $this->bill->delete($billCard1['id']);
-            return $this->handleError($order);
-        }
-        $this->handleBankSplitAdditionalInformation($payment, $bodyCard2, $billCard2);
-
-        $order->setData('vindi_bill_id', $billCard1['id'] . ',' . $billCard2['id']);
+        $order->setData('vindi_bill_id', $bill1['id'] . ',' . $bill2['id']);
         $this->savePaymentSplitRecord(
             $order,
-            $billCard1,
-            $billCard2,
-            $amountCredit,
-            $amountSecondCard,
+            $bill1,
+            $bill2,
+            $amount1,
+            $amount2,
             PaymentMethod::CREDIT_CARD,
             PaymentMethod::CREDIT_CARD
         );
         $order->getPayment()->setMethod('vindi_cardcard');
         $this->orderRepository->save($order);
-        return $billCard1['id'] . '|' . $billCard2['id'];
+
+        return $bill1['id'] . '|' . $bill2['id'];
     }
 
     protected function processCardBankslipPix(InfoInterface $payment, Order $order)
