@@ -428,7 +428,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             return $this->handleError($order);
         }
 
-        $discountId = $this->getMultiPaymentDiscountProductId();
+        $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
 
         // -----------------------
         // == CARTÃO 1 ==
@@ -440,7 +440,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'code'                => $order->getIncrementId() . '-01',
         ];
         $body1['bill_items'][] = [
-            'product_id' => $discountId,
+            'product_id' => $multiPaymentDiscountProductId,
             'amount'     => -((float)$amount2),
         ];
 
@@ -481,7 +481,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'code'                => $order->getIncrementId() . '-02',
         ];
         $body2['bill_items'][] = [
-            'product_id' => $discountId,
+            'product_id' => $multiPaymentDiscountProductId,
             'amount'     => -((float)$amount1),
         ];
 
