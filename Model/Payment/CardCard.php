@@ -95,15 +95,22 @@ class CardCard extends AbstractMethod
         }
 
         if ($additionalData->getData('payment_profile')) {
+            $ccOwner1 = 'Card Owner';
+            $ccLast41 = '****';
             $profileId = $additionalData->getData('payment_profile');
+            $profileData = $this->getCardInfoFromLocalProfile($profileId);
+            if ($profileData) {
+                $ccOwner1 = $profileData['cc_owner'];
+                $ccLast41 = $profileData['cc_last_4'];
+            }
 
             $ccType1 = $additionalData->getData('cc_type1') ?: $this->getCardTypeFromProfile($profileId);
 
             $this->psrLogger->info('VINDI_CARDCARD: First card - Profile ID: ' . $profileId . ', cc_type1 from frontend: ' . ($additionalData->getData('cc_type1') ?: 'EMPTY') . ', final ccType1: ' . $ccType1);
 
             $additionalInfo['cc_type'] = (string) $this->getCardTypeCode($ccType1);
-            $additionalInfo['cc_owner'] = 'Card Owner';
-            $additionalInfo['cc_last_4'] = '****';
+            $additionalInfo['cc_owner'] = (string) $ccOwner1;
+            $additionalInfo['cc_last_4'] = $ccLast41;
             $additionalInfo['cc_installments'] = (string) $additionalData->getData('cc_installments1');
         } else {
             $ccType1  = $additionalData->getData('cc_type1');
@@ -125,15 +132,22 @@ class CardCard extends AbstractMethod
         }
 
         if ($additionalData->getData('payment_profile2')) {
+            $ccOwner2 = 'Card Owner';
+            $ccLast42 = '****';
             $profileId2 = $additionalData->getData('payment_profile2');
+            $profileData2 = $this->getCardInfoFromLocalProfile($profileId2);
+            if ($profileData2) {
+                $ccOwner2 = $profileData2['cc_owner'];
+                $ccLast42 = $profileData2['cc_last_4'];
+            }
 
             $ccType2 = $additionalData->getData('cc_type2') ?: $this->getCardTypeFromProfile($profileId2);
 
             $this->psrLogger->info('VINDI_CARDCARD: Second card - Profile ID: ' . $profileId2 . ', cc_type2 from frontend: ' . ($additionalData->getData('cc_type2') ?: 'EMPTY') . ', final ccType2: ' . $ccType2);
 
             $additionalInfo['cc_type2'] = (string) $this->getCardTypeCode($ccType2);
-            $additionalInfo['cc_owner2'] = 'Card Owner';
-            $additionalInfo['cc_last_4_2'] = '****';
+            $additionalInfo['cc_owner2'] = (string) $ccOwner2;
+            $additionalInfo['cc_last_4_2'] = $ccLast42;
             $additionalInfo['cc_installments2'] = (string) $additionalData->getData('cc_installments2');
         } else {
             $additionalInfo['cc_type2'] = (string) $this->getCardTypeCode($additionalData->getData('cc_type2'));
@@ -154,6 +168,27 @@ class CardCard extends AbstractMethod
         $info->setAdditionalInformation($additionalInfo);
 
         return $this;
+    }
+
+    /**
+     * Returns card data based on the locally saved payment profile ID.
+     *
+     * @param int $localEntityId
+     * @return array|null
+     */
+    protected function getCardInfoFromLocalProfile(int $localEntityId)
+    {
+        try {
+            $profile = $this->paymentProfileRepository->getById($localEntityId);
+            return [
+                'cc_owner'  => $profile->getCcName(),
+                'cc_last_4' => $profile->getCcLast4(),
+                'cc_type'   => $profile->getCcType(),
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error("Erro ao buscar payment profile local: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**
