@@ -444,7 +444,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'amount'     => -((float)$amount2),
         ];
 
-        $local1 = (int)$payment->getAdditionalInformation('payment_profile');
+        /*$local1 = (int)$payment->getAdditionalInformation('payment_profile');
         if ($local1) {
             $profile1    = $this->paymentProfileRepository->getById($local1);
             $vindiId1    = $profile1->getPaymentProfileId();
@@ -456,6 +456,12 @@ abstract class AbstractMethod extends OriginAbstractMethod
             }
         } else {
             $remote1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+        }*/
+        $remote1 = $this->choosePaymentProfile($order, $payment, $customerId, 'first', null);
+        if (!$remote1) {
+            $remote1 = $this->createPaymentProfile($order, $payment, $customerId, 'first');
+            //$profile1->setPaymentProfileId($remote1['id']);
+            //$this->paymentProfileRepository->save($profile1);
         }
 
         $vindiId1 = $remote1['id'];
@@ -485,7 +491,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'amount'     => -((float)$amount1),
         ];
 
-        $local2 = (int)$payment->getAdditionalInformation('payment_profile2');
+        /*$local2 = (int)$payment->getAdditionalInformation('payment_profile2');
         if ($local2) {
             $profile2    = $this->paymentProfileRepository->getById($local2);
             $vindiId2    = $profile2->getPaymentProfileId();
@@ -497,6 +503,14 @@ abstract class AbstractMethod extends OriginAbstractMethod
             }
         } else {
             $remote2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+        }*/
+        $remote2 = $this->choosePaymentProfile($order, $payment, $customerId, 'second', null);
+        if (!$remote2) {
+            $remote2 = $this->createPaymentProfile($order, $payment, $customerId, 'second');
+            $this->psrLogger->warning("REMOTE 2 NÃO ENCONTRADO");
+            $this->psrLogger->warning(json_encode($remote2));
+            //$profile1->setPaymentProfileId($remote1['id']);
+            //$this->paymentProfileRepository->save($profile1);
         }
 
         $vindiId2 = $remote2['id'];
@@ -1173,7 +1187,8 @@ abstract class AbstractMethod extends OriginAbstractMethod
             }
 
             $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Using card: ' . $whichCard);
-
+            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Using card: ' . json_encode($payment->getAdditionalInformation()));
+            $this->psrLogger->info('VINDI_MULTIMEIOS_NEW: Using card: ' . $paymentMethodCode);
 
             $response = $this->profile->create($payment, $customerId, $paymentMethodCode, $whichCard);
 
@@ -1308,5 +1323,161 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
 
         return $masked;
+    }
+
+    protected function getSelectedLocalProfileId(InfoInterface $payment, string $whichCard = 'first'): ?int
+    {
+        $key = ($whichCard === 'second') ? 'payment_profile2' : 'payment_profile';
+        $val = $payment->getAdditionalInformation($key);
+        return $val ? (int)$val : null;
+    }
+
+    protected function localSelectedProfileToVindiId(int $localEntityId): ?int
+    {
+        try {
+            $entity = $this->paymentProfileRepository->getById($localEntityId);
+            if (!$entity) { return null; }
+
+            $candidates = [];
+            if (method_exists($entity, 'getProfileId'))       { $candidates[] = (int)$entity->getProfileId(); }
+            if (method_exists($entity, 'getVindiProfileId'))  { $candidates[] = (int)$entity->getVindiProfileId(); }
+            if (method_exists($entity, 'getVindiId'))         { $candidates[] = (int)$entity->getVindiId(); }
+            if (method_exists($entity, 'getPaymentProfileId')){ $candidates[] = (int)$entity->getPaymentProfileId(); }
+
+            $data = method_exists($entity, 'getData') ? (array)$entity->getData() : [];
+            foreach (['profile_id','vindi_profile_id','vindi_id','payment_profile_id'] as $k) {
+                if (isset($data[$k]) && is_numeric($data[$k])) {
+                    $candidates[] = (int)$data[$k];
+                }
+            }
+
+            foreach ($candidates as $id) {
+                if ($id > 0) {
+                    $this->psrLogger->info("VINDI_PROFILE_LOCAL: Local #{$localEntityId} -> Vindi #{$id}");
+                    return $id;
+                }
+            }
+
+            $this->psrLogger->warning("VINDI_PROFILE_LOCAL: Não encontrei profile_id Vindi para local #{$localEntityId}");
+            return null;
+        } catch (\Exception $e) {
+            $this->psrLogger->error('VINDI_PROFILE_LOCAL: erro ao mapear local->vindi: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    protected function extractCardBinLast4(InfoInterface $payment, string $whichCard = 'first'): array
+    {
+        $add = $payment->getAdditionalInformation();
+        if (!is_array($add)) { $add = []; }
+
+        $pick = function(array $keys) use ($add) {
+            foreach ($keys as $k) {
+                if (array_key_exists($k, $add) && $add[$k] !== '' && $add[$k] !== null) {
+                    return $add[$k];
+                }
+            }
+            return null;
+        };
+
+        if ($whichCard === 'second') {
+            $numKeys   = ['cc_number2'];
+            $binKeys   = ['cc_first62','cc_bin2','cc_bin','cc_first6_2','cc_first6'];
+            $last4Keys = ['cc_last_42','cc_last_4_2','cc_last_4_second','cc_last_4-2','cc_last_4_2nd','cc_last_4_2','cc_last_4-second','cc_last_4_2_card','cc_last_4_2_token','cc_last4','card_last4','last4'];
+        } else {
+            $numKeys   = ['cc_number1','cc_number']; 
+            $binKeys   = ['cc_first61','cc_bin1','cc_bin','cc_first6_1','cc_first6'];
+            $last4Keys = ['cc_last_41','cc_last_4_1','cc_last_4_first','cc_last_4','cc_last_4-1','cc_last_4_1_card','cc_last_4_1_token','cc_last4','card_last4','last4'];
+        }
+
+        $numRaw = $pick($numKeys);
+        $firstSix = $pick($binKeys);
+        $last4    = $pick($last4Keys);
+
+        if ($whichCard === 'first') {
+            if ($numRaw === null && method_exists($payment, 'getCcNumber')) {
+                $numRaw = $payment->getCcNumber();
+            }
+            if ($last4 === null && method_exists($payment, 'getCcLast4')) {
+                $last4 = $payment->getCcLast4();
+            }
+        }
+
+        $digitsNum = $numRaw !== null ? preg_replace('/\D/','', (string)$numRaw) : null;
+
+        if (!$firstSix && $digitsNum && strlen($digitsNum) >= 6) {
+            $firstSix = substr($digitsNum, 0, 6);
+        }
+        if (!$last4 && $digitsNum && strlen($digitsNum) >= 4) {
+            $last4 = substr($digitsNum, -4);
+        }
+
+        $firstSix = $firstSix !== null ? preg_replace('/\D/','', (string)$firstSix) : null;
+        $last4    = $last4    !== null ? preg_replace('/\D/','', (string)$last4)    : null;
+
+        $this->psrLogger->info('VINDI_PROFILE_LOOKUP.extractCardBinLast4.result', [
+            'whichCard'     => $whichCard,
+            'firstSix_len'  => $firstSix !== null ? strlen($firstSix) : null,
+            'last4'         => $last4,
+        ]);
+
+        if (!$firstSix || !$last4) {
+            $this->psrLogger->warning("VINDI_PROFILE_LOOKUP: faltou BIN/last4 para {$whichCard}");
+        }
+
+        return [$firstSix ?: null, $last4 ?: null];
+    }
+
+    protected function tryFindRemoteProfileByBinLast4(InfoInterface $payment, int $customerId, string $whichCard = 'first', ?int $excludeId = null): ?array
+    {
+        [$firstSix, $lastFour] = $this->extractCardBinLast4($payment, $whichCard);
+        if (!$firstSix || !$lastFour) {
+            return null;
+        }
+
+        try {
+            $resp = $this->profile->getPaymentProfile($customerId, $firstSix, $lastFour);
+            if ($resp && isset($resp['payment_profiles']) && is_array($resp['payment_profiles'])) {
+                foreach ($resp['payment_profiles'] as $pp) {
+                    $pid    = (int)($pp['id'] ?? 0);
+                    $status = $pp['status'] ?? 'active';
+                    if ($pid <= 0) continue;
+                    if (in_array($status, ['deleted','inactive','canceled'], true)) continue;
+                    if ($excludeId && $pid === $excludeId) continue;
+                    $this->psrLogger->info("VINDI_PROFILE_LOOKUP: match BIN/last4 ({$whichCard}) -> id {$pid}");
+                    return ['id' => $pid];
+                }
+            }
+        } catch (\Exception $e) {
+            $this->psrLogger->warning("VINDI_PROFILE_LOOKUP: erro ao buscar BIN/last4 ({$whichCard}): ".$e->getMessage());
+        }
+
+        return null;
+    }
+
+    protected function choosePaymentProfile(Order $order, InfoInterface $payment, int $customerId, string $whichCard = 'first', ?int $excludeId = null): ?array
+    {
+        $localId = $this->getSelectedLocalProfileId($payment, $whichCard);
+        if ($localId) {
+            $vindiId = $this->localSelectedProfileToVindiId($localId);
+            if ($vindiId) {
+                if ($excludeId && (int)$vindiId === (int)$excludeId) {
+                    $this->psrLogger->warning("VINDI_PROFILE_PICK: {$whichCard} selecionou perfil local {$localId} -> Vindi {$vindiId}, mas é igual ao excludeId; ignorando.");
+                } else {
+                    $validated = $this->getPaymentProfileFromVindi((int)$vindiId);
+                    if ($validated && isset($validated['id'])) {
+                        $this->psrLogger->info("VINDI_PROFILE_PICK: usando PERFIL LOCAL selecionado ({$whichCard}) -> Vindi ID {$validated['id']}");
+                        return ['id' => (int)$validated['id']];
+                    }
+                    $this->psrLogger->warning("VINDI_PROFILE_PICK: perfil local {$localId} mapeado para Vindi {$vindiId}, mas não validou na API. Tentando próximas estratégias.");
+                }
+            }
+        }
+
+        $byBin = $this->tryFindRemoteProfileByBinLast4($payment, $customerId, $whichCard, $excludeId);
+        if ($byBin) { return $byBin; }
+
+        $this->psrLogger->warning("VINDI_PROFILE_PICK: não foi possível resolver payment_profile para {$whichCard}.");
+        return null;
     }
 }

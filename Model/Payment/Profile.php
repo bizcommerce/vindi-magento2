@@ -4,21 +4,25 @@ namespace Vindi\Payment\Model\Payment;
 use Magento\Framework\Exception\LocalizedException;
 use Vindi\Payment\Helper\Data;
 use Vindi\Payment\Model\Payment\PaymentMethod;
+use Psr\Log\LoggerInterface;
 
 class Profile
 {
     private $api;
     private $helperData;
     private $paymentMethod;
+    private $psrLogger;
 
     public function __construct(
         \Vindi\Payment\Helper\Api $api,
         Data $helperData,
-        PaymentMethod $paymentMethod
+        PaymentMethod $paymentMethod,
+        LoggerInterface $psrLogger
     ) {
         $this->api = $api;
         $this->helperData = $helperData;
         $this->paymentMethod = $paymentMethod;
+        $this->psrLogger = $psrLogger;
     }
 
     /**
@@ -43,6 +47,11 @@ class Profile
         $verifyMethod = $this->helperData->getShouldVerifyProfile();
         if ($verifyMethod && !$this->verifyPaymentProfile($paymentProfile['payment_profile']['id'])) {
             throw new LocalizedException(__('Impossible to validate your credit card'));
+        }
+
+        if ($whichCard === 'second') {
+            $payment->unsAdditionalInformation('cc2_enc');
+            $payment->unsAdditionalInformation('cvv2_enc');
         }
 
         return $paymentProfile;
@@ -90,29 +99,60 @@ class Profile
             throw new LocalizedException(__('customer_id cannot be blank'));
         }
 
-        $holder  = $whichCard === 'second'
-            ? ($payment->getAdditionalInformation('cc_owner2')      ?: $payment->getCcOwner())
-            : ($payment->getAdditionalInformation('cc_owner1')      ?: $payment->getAdditionalInformation('cc_owner') ?: $payment->getCcOwner());
+        if ($whichCard === 'second') {
+            $encryptor = \Magento\Framework\App\ObjectManager::getInstance()
+                    ->get(\Magento\Framework\Encryption\EncryptorInterface::class);
 
-        $month   = $whichCard === 'second'
-            ? ($payment->getAdditionalInformation('cc_exp_month2')  ?: $payment->getCcExpMonth())
-            : ($payment->getAdditionalInformation('cc_exp_month1')  ?: $payment->getAdditionalInformation('cc_exp_month') ?: $payment->getCcExpMonth());
+            $holder = $payment->getAdditionalInformation('cc_owner2')
+                ?: $payment->getData('cc_owner2')
+                ?: $payment->getCcOwner();
 
-        $year    = $whichCard === 'second'
-            ? ($payment->getAdditionalInformation('cc_exp_year2')   ?: $payment->getCcExpYear())
-            : ($payment->getAdditionalInformation('cc_exp_year1')   ?: $payment->getAdditionalInformation('cc_exp_year') ?: $payment->getCcExpYear());
+            $month  = $payment->getAdditionalInformation('cc_exp_month2')
+                ?: $payment->getData('cc_exp_month2')
+                ?: $payment->getCcExpMonth();
 
-        $number  = $whichCard === 'second'
-            ? ($payment->getAdditionalInformation('cc_number2')     ?: $payment->getCcNumber())
-            : ($payment->getAdditionalInformation('cc_number1')     ?: $payment->getAdditionalInformation('cc_number') ?: $payment->getCcNumber());
+            $year   = $payment->getAdditionalInformation('cc_exp_year2')
+                ?: $payment->getData('cc_exp_year2')
+                ?: $payment->getCcExpYear();
 
-        $cvv     = $whichCard === 'second'
-            ? ($payment->getAdditionalInformation('cc_cvv2')        ?: $payment->getCcCid())
-            : ($payment->getAdditionalInformation('cc_cvv1')        ?: $payment->getAdditionalInformation('cc_cvv') ?: $payment->getCcCid());
+            $number = $payment->getData('cc_number2')
+                ?: ($payment->getAdditionalInformation('cc2_enc')
+                    ? $encryptor->decrypt($payment->getAdditionalInformation('cc2_enc')) : null)
+                ?: $payment->getCcNumber();
 
-        $ccType  = $whichCard === 'second'
-            ? ($payment->getAdditionalInformation('cc_type2')       ?: $payment->getCcType())
-            : ($payment->getAdditionalInformation('cc_type1')       ?: $payment->getAdditionalInformation('cc_type') ?: $payment->getCcType());
+            $cvv = $payment->getData('cc_cid2')
+                ?: ($payment->getAdditionalInformation('cvv2_enc')
+                    ? $encryptor->decrypt($payment->getAdditionalInformation('cvv2_enc')) : null)
+                ?: $payment->getCcCid();
+
+            $ccType = $payment->getAdditionalInformation('cc_type2')
+                ?: $payment->getData('cc_type2')
+                ?: $payment->getCcType();
+        } else {
+            $holder = $payment->getAdditionalInformation('cc_owner1')
+                ?: $payment->getAdditionalInformation('cc_owner')
+                ?: $payment->getCcOwner();
+
+            $month  = $payment->getAdditionalInformation('cc_exp_month1')
+                ?: $payment->getAdditionalInformation('cc_exp_month')
+                ?: $payment->getCcExpMonth();
+
+            $year   = $payment->getAdditionalInformation('cc_exp_year1')
+                ?: $payment->getAdditionalInformation('cc_exp_year')
+                ?: $payment->getCcExpYear();
+
+            $number = $payment->getAdditionalInformation('cc_number1')
+                ?: $payment->getAdditionalInformation('cc_number')
+                ?: $payment->getCcNumber();
+
+            $cvv    = $payment->getAdditionalInformation('cc_cvv1')
+                ?: $payment->getAdditionalInformation('cc_cvv')
+                ?: $payment->getCcCid();
+
+            $ccType = $payment->getAdditionalInformation('cc_type1')
+                ?: $payment->getAdditionalInformation('cc_type')
+                ?: $payment->getCcType();
+        }
 
         if (empty($holder)) {
             throw new LocalizedException(__('holder_name cannot be blank'));
@@ -235,15 +275,8 @@ class Profile
      */
     public function getPaymentProfileById($paymentProfileId)
     {
-
         $response = $this->api->request("payment_profiles/{$paymentProfileId}", 'GET');
-
-
-
         if ($response === false) {
-
-
-
             return ['not_found' => true];
         }
 
