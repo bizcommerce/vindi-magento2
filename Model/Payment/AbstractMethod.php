@@ -238,23 +238,21 @@ abstract class AbstractMethod extends OriginAbstractMethod
         ];
 
         if ($paymentMethodCode === PaymentMethod::CREDIT_CARD) {
-            $paymentProfile = null;
-            $profileId = $payment->getAdditionalInformation('payment_profile');
-
-
-            if ($profileId) {
-                $paymentProfile = $this->getPaymentProfileFromVindi((int)$profileId);
+            $resolvedProfile = $this->choosePaymentProfile($order, $payment, (int)$customerId, 'first', null);
+            if (!$resolvedProfile) {
+                $resolvedProfile = $this->createPaymentProfile($order, $payment, (int)$customerId, 'first');
             }
-
-
-            if (!$paymentProfile) {
-                $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+            if ($resolvedProfile && isset($resolvedProfile['id'])) {
+                $body['payment_profile'] = ['id' => (int)$resolvedProfile['id']];
+            } else {
+                $this->psrLogger->error('SINGLE_METHOD_INVOICE: não foi possível resolver/criar payment_profile.');
+                return $this->handleError($order);
             }
-
-            $body['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
         }
 
-        $installments = $payment->getAdditionalInformation('installments') ?: $payment->getInstallments();
+        $installments = $payment->getAdditionalInformation('cc_installments')
+            ?: $payment->getAdditionalInformation('installments')
+            ?: $payment->getInstallments();
         if ($installments) {
             $body['installments'] = (int)$installments;
         }
@@ -312,6 +310,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
         $this->psrLogger->info('Produto de desconto ID: ' . $multiPaymentDiscountProductId);
 
+        // ---- BILL 1 (Cartão) ----
         $bodyCredit = [
             'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
@@ -323,24 +322,19 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'amount'     => -((float)$amountPix),
         ];
 
-        $paymentProfile = null;
-        $profileId = $payment->getAdditionalInformation('payment_profile');
-
-
-        if ($profileId) {
-            $paymentProfile = $this->getPaymentProfile((int)$profileId);
+        $resolvedProfile = $this->choosePaymentProfile($order, $payment, (int)$customerId, 'first', null);
+        if (!$resolvedProfile) {
+            $resolvedProfile = $this->createPaymentProfile($order, $payment, (int)$customerId, 'first');
         }
-
-
-        if (!$paymentProfile) {
-            $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
+        if (!$resolvedProfile || !isset($resolvedProfile['id'])) {
+            $this->psrLogger->error('ERRO: não foi possível resolver/criar payment_profile para Cartão + PIX');
+            return $this->handleError($order);
         }
-
-        $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+        $bodyCredit['payment_profile'] = ['id' => (int)$resolvedProfile['id']];
 
         $installments = $payment->getAdditionalInformation('cc_installments')
             ?: $payment->getAdditionalInformation('installments')
-                ?: $payment->getInstallments();
+            ?: $payment->getInstallments();
         if ($installments) {
             $bodyCredit['installments'] = (int)$installments;
         }
@@ -353,17 +347,15 @@ abstract class AbstractMethod extends OriginAbstractMethod
             return $this->handleError($order);
         }
 
-        $this->psrLogger->info('BILL 1 criada com sucesso. ID: ' . ($billCredit['id'] ?? 'N/A') . ' | Status: ' . ($billCredit['status'] ?? 'N/A'));
+        $this->psrLogger->info('BILL 1 criada. ID: ' . ($billCredit['id'] ?? 'N/A') . ' | Status: ' . ($billCredit['status'] ?? 'N/A'));
 
         if (!$this->successfullyPaid($bodyCredit, $billCredit)) {
-            $this->psrLogger->error('ERRO: BILL 1 não passou na validação de pagamento. Status: ' . ($billCredit['status'] ?? 'N/A'));
-            if ($billCredit && isset($billCredit['id'])) {
-                $this->bill->delete($billCredit['id']);
-                $this->psrLogger->info('BILL 1 deletada devido à falha na validação');
-            }
+            $this->psrLogger->error('ERRO: BILL 1 não validada. Status: ' . ($billCredit['status'] ?? 'N/A'));
+            if (isset($billCredit['id'])) { $this->bill->delete($billCredit['id']); }
             return $this->handleError($order);
         }
 
+        // ---- BILL 2 (PIX) ----
         $bodyPix = [
             'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::PIX,
@@ -380,26 +372,22 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
         if (!$billPix) {
             $this->psrLogger->error('ERRO: Falha na criação da BILL 2 (PIX)');
-            $this->bill->delete($billCredit['id']);
-            $this->psrLogger->info('BILL 1 deletada devido à falha na criação da BILL 2');
+            if (isset($billCredit['id'])) { $this->bill->delete($billCredit['id']); }
             return $this->handleError($order);
         }
 
-        $this->psrLogger->info('BILL 2 criada com sucesso. ID: ' . ($billPix['id'] ?? 'N/A') . ' | Status: ' . ($billPix['status'] ?? 'N/A'));
+        $this->psrLogger->info('BILL 2 criada. ID: ' . ($billPix['id'] ?? 'N/A') . ' | Status: ' . ($billPix['status'] ?? 'N/A'));
 
         if (!$this->successfullyPaid($bodyPix, $billPix)) {
-            $this->psrLogger->error('ERRO: BILL 2 não passou na validação de pagamento. Status: ' . ($billPix['status'] ?? 'N/A'));
-            if ($billPix && isset($billPix['id'])) {
-                $this->bill->delete($billPix['id']);
-                $this->psrLogger->info('BILL 2 deletada devido à falha na validação');
-            }
-            $this->bill->delete($billCredit['id']);
-            $this->psrLogger->info('BILL 1 deletada devido à falha da BILL 2');
+            $this->psrLogger->error('ERRO: BILL 2 não validada. Status: ' . ($billPix['status'] ?? 'N/A'));
+            if (isset($billPix['id'])) { $this->bill->delete($billPix['id']); }
+            if (isset($billCredit['id'])) { $this->bill->delete($billCredit['id']); }
             return $this->handleError($order);
         }
 
-        $this->psrLogger->info('=== PROCESSO CARTÃO + PIX CONCLUÍDO COM SUCESSO ===');
-        $this->psrLogger->info('Bills criadas: ' . $billCredit['id'] . ' (Cartão) + ' . $billPix['id'] . ' (PIX)');
+        // sucesso
+        $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
+        $this->handleBankSplitAdditionalInformation($payment, $bodyPix, $billPix);
 
         $order->setData('vindi_bill_id', $billCredit['id'] . ',' . $billPix['id']);
         $this->savePaymentSplitRecord(
@@ -414,6 +402,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $order->getPayment()->setMethod('vindi_cardpix');
         $this->orderRepository->save($order);
 
+        $this->psrLogger->info('=== PROCESSO CARTÃO + PIX CONCLUÍDO COM SUCESSO ===');
         return $billCredit['id'] . '|' . $billPix['id'];
     }
 
@@ -557,6 +546,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
         $multiPaymentDiscountProductId = $this->getMultiPaymentDiscountProductId();
 
+        // ---- BILL 1 (Cartão) ----
         $bodyCredit = [
             'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::CREDIT_CARD,
@@ -568,28 +558,19 @@ abstract class AbstractMethod extends OriginAbstractMethod
             'amount'     => -((float)$amountBankslipPix),
         ];
 
-        $paymentProfile = null;
-        $profileId = $payment->getAdditionalInformation('payment_profile');
-
-
-        if ($profileId) {
-            $paymentProfile = $this->getPaymentProfileFromVindi((int)$profileId);
-        }
-
-
-        if (!$paymentProfile) {
-            $paymentProfile = $this->createPaymentProfile($order, $payment, $customerId);
-            if (!$paymentProfile) {
-                $this->psrLogger->error("Failed to create payment profile for CardBankslipPix. Using null profile.");
-
+        $resolvedProfile = $this->choosePaymentProfile($order, $payment, (int)$customerId, 'first', null);
+        if (!$resolvedProfile) {
+            $resolvedProfile = $this->createPaymentProfile($order, $payment, (int)$customerId, 'first');
+            if (!$resolvedProfile) {
+                $this->psrLogger->error("Failed to resolve/create payment profile for CardBankslipPix.");
+                return $this->handleError($order);
             }
         }
-
-        $bodyCredit['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+        $bodyCredit['payment_profile'] = ['id' => (int)$resolvedProfile['id']];
 
         $installments = $payment->getAdditionalInformation('cc_installments')
             ?: $payment->getAdditionalInformation('installments')
-                ?: $payment->getInstallments();
+            ?: $payment->getInstallments();
         if ($installments) {
             $bodyCredit['installments'] = (int)$installments;
         }
@@ -603,6 +584,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
         $this->handleBankSplitAdditionalInformation($payment, $bodyCredit, $billCredit);
 
+        // ---- BILL 2 (BankSlip+PIX) ----
         $bodyBankslipPix = [
             'customer_id'         => $customerId,
             'payment_method_code' => PaymentMethod::BANK_SLIP_PIX,
@@ -647,6 +629,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
             $customerId = $this->customer->findOrCreate($order);
             $vindiPlan = null;
             $options = $orderItem->getProductOptions();
+
             if (!empty($options['info_buyRequest']['selected_plan_id'])) {
                 $planId = $options['info_buyRequest']['selected_plan_id'];
                 $vindiPlan = $this->vindiPlanRepository->getById($planId);
@@ -654,7 +637,9 @@ abstract class AbstractMethod extends OriginAbstractMethod
             } else {
                 $planId = $this->planManagement->create($orderItem->getProductId());
             }
+
             $productItems = $this->productManagement->findOrCreateProductsToSubscription($order);
+
             $body = [
                 'customer_id' => $customerId,
                 'payment_method_code' => $this->getPaymentMethodCode(),
@@ -663,81 +648,85 @@ abstract class AbstractMethod extends OriginAbstractMethod
                 'code' => $order->getIncrementId(),
                 'bill_items' => []
             ];
-            $installments = $payment->getAdditionalInformation('installments');
-            if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
-                $paymentProfile = ($payment->getAdditionalInformation('payment_profile'))
-                    ? $this->getPaymentProfileFromVindi((int)$payment->getAdditionalInformation('payment_profile'))
-                    : $this->createPaymentProfile($order, $payment, $customerId);
 
-                if ($paymentProfile) {
-                    $body['payment_profile'] = ['id' => $paymentProfile['id'] ?? null];
+            $installments = $payment->getAdditionalInformation('cc_installments')
+                ?: $payment->getAdditionalInformation('installments')
+                ?: $payment->getInstallments();
+
+            if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
+                $resolvedProfile = $this->choosePaymentProfile($order, $payment, (int)$customerId, 'first', null);
+                if (!$resolvedProfile) {
+                    $resolvedProfile = $this->createPaymentProfile($order, $payment, (int)$customerId, 'first');
                 }
+                if ($resolvedProfile && isset($resolvedProfile['id'])) {
+                    $body['payment_profile'] = ['id' => (int)$resolvedProfile['id']];
+                } else {
+                    $this->psrLogger->error('SUBSCRIPTION_SINGLE: não foi possível resolver/criar payment_profile.');
+                    return $this->handleError($order);
+                }
+
                 if ($vindiPlan && $vindiPlan->getInstallments() != null) {
                     if ((int)$installments > (int)$vindiPlan->getInstallments()) {
                         throw new LocalizedException(__('The number of installments cannot be greater than the number of installments of the plan.'));
                     }
                 }
             }
+
             if ($installments) {
                 $body['installments'] = (int)$installments;
             }
+
             $responseData = $this->subscriptionRepository->create($body);
             if ($responseData) {
                 if (!isset($responseData['bill'])) {
                     $order->setData('vindi_subscription_can_create_new_order', true);
                 }
-                $bill = $responseData['bill'];
-                $subscription = $responseData['subscription'];
+                $bill = $responseData['bill'] ?? null;
+                $subscription = $responseData['subscription'] ?? null;
                 $billId = !$bill ? null : $bill['id'];
+
                 if ($subscription) {
                     $this->saveSubscriptionToDatabase($subscription, $order, $billId);
                 }
                 if ($bill) {
                     $this->handleBankSplitAdditionalInformation($payment, $body, $bill);
                 }
+
                 if ($this->successfullyPaid($body, $bill, $subscription)) {
                     $billId = $bill['id'] ?? 0;
-                    $subscriptionId = $responseData['subscription']['id'];
+                    $subscriptionId = $subscription['id'] ?? null;
 
                     $this->psrLogger->info('Setting vindi_bill_id: ' . $billId . ' for order: ' . $order->getIncrementId());
                     $order->setData('vindi_bill_id', $billId);
 
-                    $this->psrLogger->info('Setting vindi_subscription_id: ' . $subscriptionId . ' for order: ' . $order->getIncrementId());
-                    $order->setData('vindi_subscription_id', $subscriptionId);
+                    if ($subscriptionId) {
+                        $this->psrLogger->info('Setting vindi_subscription_id: ' . $subscriptionId . ' for order: ' . $order->getIncrementId());
+                        $order->setData('vindi_subscription_id', $subscriptionId);
+                    }
 
                     $this->psrLogger->info('Saving order to subscription orders table...');
                     $this->saveOrderToSubscriptionOrdersTable($order);
 
                     $this->psrLogger->info('Saving order via repository...');
-
                     $this->orderRepository->save($order);
 
-                    $this->psrLogger->info('Order saved successfully. Verifying saved data...');
-
-                    $savedSubscriptionId = $order->getData('vindi_subscription_id');
-                    $this->psrLogger->info('Verified subscription_id after save: ' . ($savedSubscriptionId ?: 'NULL'));
-
+                    $this->psrLogger->info('Order saved successfully for subscription.');
                     return $billId;
                 } else {
-                    $this->subscriptionRepository->deleteAndCancelBills($subscription['id']);
-                    $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-                    $sub = $objectManager->create(\Vindi\Payment\Model\Subscription::class)->load($subscription['id']);
-                    $sub->setStatus('canceled');
-                    $sub->save();
-                    if ($body['payment_method_code'] === PaymentMethod::CREDIT_CARD) {
-                        $paymentProfileId = $paymentProfile['id'] ?? null;
-                        if ($paymentProfileId) {
-                            $this->profile->deletePaymentProfile($paymentProfileId);
-                            $paymentProfileRepositoryModel = $this->paymentProfileRepository->getByProfileId($paymentProfileId);
-                            $this->paymentProfileRepository->delete($paymentProfileRepositoryModel);
-                        }
+                    if ($subscription && isset($subscription['id'])) {
+                        $this->subscriptionRepository->deleteAndCancelBills($subscription['id']);
+                        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+                        $sub = $objectManager->create(\Vindi\Payment\Model\Subscription::class)->load($subscription['id']);
+                        $sub->setStatus('canceled');
+                        $sub->save();
                     }
                 }
             }
         } catch (\Exception $e) {
-            return $this->handleError($order);
+            $this->psrLogger->error('SUBSCRIPTION_SINGLE: exception: ' . $e->getMessage());
+            return $this->handleError(isset($order) ? $order : null);
         }
-        return $this->handleError($order);
+        return $this->handleError(isset($order) ? $order : null);
     }
 
     /**
@@ -1371,35 +1360,53 @@ abstract class AbstractMethod extends OriginAbstractMethod
         $add = $payment->getAdditionalInformation();
         if (!is_array($add)) { $add = []; }
 
-        $pick = function(array $keys) use ($add) {
+        $pickFromArray = function(array $keys, array $arr) {
             foreach ($keys as $k) {
-                if (array_key_exists($k, $add) && $add[$k] !== '' && $add[$k] !== null) {
-                    return $add[$k];
+                if (array_key_exists($k, $arr) && $arr[$k] !== '' && $arr[$k] !== null) {
+                    return $arr[$k];
                 }
             }
             return null;
         };
 
         if ($whichCard === 'second') {
-            $numKeys   = ['cc_number2'];
+            $numKeys   = ['cc_number2','cc_number_2','cc_number_second'];
             $binKeys   = ['cc_first62','cc_bin2','cc_bin','cc_first6_2','cc_first6'];
-            $last4Keys = ['cc_last_42','cc_last_4_2','cc_last_4_second','cc_last_4-2','cc_last_4_2nd','cc_last_4_2','cc_last_4-second','cc_last_4_2_card','cc_last_4_2_token','cc_last4','card_last4','last4'];
+            $last4Keys = ['cc_last_42','cc_last_4_2','cc_last4','card_last4','last4'];
         } else {
-            $numKeys   = ['cc_number1','cc_number']; 
-            $binKeys   = ['cc_first61','cc_bin1','cc_bin','cc_first6_1','cc_first6'];
-            $last4Keys = ['cc_last_41','cc_last_4_1','cc_last_4_first','cc_last_4','cc_last_4-1','cc_last_4_1_card','cc_last_4_1_token','cc_last4','card_last4','last4'];
+            $numKeys   = ['cc_number1','cc_number','cc_number_1','cc_number_single'];
+            $binKeys   = ['cc_first61','cc_bin1','cc_bin','cc_first6_1','cc_first6','cc_first6'];
+            $last4Keys = ['cc_last_41','cc_last_4_1','cc_last_4','cc_last4','card_last4','last4'];
         }
 
-        $numRaw = $pick($numKeys);
-        $firstSix = $pick($binKeys);
-        $last4    = $pick($last4Keys);
+        $numRaw = $pickFromArray($numKeys, $add);
+        $firstSix = $pickFromArray($binKeys, $add);
+        $last4    = $pickFromArray($last4Keys, $add);
 
-        if ($whichCard === 'first') {
-            if ($numRaw === null && method_exists($payment, 'getCcNumber')) {
-                $numRaw = $payment->getCcNumber();
+        if ($numRaw === null) {
+            $data = method_exists($payment, 'getData') ? (array)$payment->getData() : [];
+            $candidates = array_merge(
+                $numKeys,
+                ['cc_number', 'cc_number_raw', 'cc_number_full', 'cc_number_enc', 'cc_number_plain']
+            );
+            $numRaw = $pickFromArray($candidates, $data);
+
+            if ($numRaw === null) {
+                if (method_exists($payment, 'getCcNumber')) {
+                    $val = $payment->getCcNumber();
+                    if ($val) { $numRaw = $val; }
+                }
+                if ($numRaw === null && method_exists($payment, 'getData')) {
+                    foreach (['cc_number','cc_number1'] as $k) {
+                        $v = $payment->getData($k);
+                        if ($v) { $numRaw = $v; break; }
+                    }
+                }
             }
+
             if ($last4 === null && method_exists($payment, 'getCcLast4')) {
-                $last4 = $payment->getCcLast4();
+                $val = $payment->getCcLast4();
+                if ($val) { $last4 = $val; }
             }
         }
 
@@ -1417,6 +1424,7 @@ abstract class AbstractMethod extends OriginAbstractMethod
 
         $this->psrLogger->info('VINDI_PROFILE_LOOKUP.extractCardBinLast4.result', [
             'whichCard'     => $whichCard,
+            'num_found'     => $digitsNum !== null ? (strlen($digitsNum) . ' digits') : 'none',
             'firstSix_len'  => $firstSix !== null ? strlen($firstSix) : null,
             'last4'         => $last4,
         ]);
