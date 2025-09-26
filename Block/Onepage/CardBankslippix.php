@@ -25,11 +25,6 @@ class CardBankslippix extends Template
         $this->priceHelper     = $priceHelper;
     }
 
-    /** =========================
-     *  Básicos / fonte de dados
-     *  =========================
-     */
-
     /** @return \Magento\Sales\Model\Order|null */
     public function getOrder()
     {
@@ -43,14 +38,12 @@ class CardBankslippix extends Template
         return $o ? $o->getPayment() : null;
     }
 
-    /** Compatível com call do template: $block->getMethod()->getTitle() */
     public function getMethod()
     {
         $p = $this->getPayment();
         return $p ? $p->getMethodInstance() : null;
     }
 
-    /** Mostra apenas quando o método é o multimeios Cartão+Bolepix */
     public function canShow(): bool
     {
         $p = $this->getPayment();
@@ -58,31 +51,21 @@ class CardBankslippix extends Template
         return $p->getMethod() === 'vindi_cardbankslippix';
     }
 
-    /** Acessa additional_information com segurança */
     private function addl(string $key)
     {
         $p = $this->getPayment();
         return $p ? $p->getAdditionalInformation($key) : null;
     }
 
-    /** =========================
-     *  Split (valores)
-     *  =========================
-     */
-
-    /** Valor no cartão (quando disponível) */
     public function getCreditAmount(): float
     {
-        // Prioriza campos já usados no checkout multimeios
         $fromAddl = $this->addl('amount_credit');
         if ($fromAddl !== null && $fromAddl !== '') {
             return (float)$fromAddl;
         }
-        // fallback: 0 (template já oculta a seção se 0)
         return 0.0;
     }
 
-    /** Valor no bolepix (quando disponível) */
     public function getBolepixAmount(): float
     {
         $fromAddl = $this->addl('amount_bankslippix') ?? $this->addl('amount_pix') ?? $this->addl('amount_bolepix');
@@ -92,26 +75,18 @@ class CardBankslippix extends Template
         return 0.0;
     }
 
-    /** Formata moeda (compatível com uso no phtml) */
     public function formatCurrency($amount): string
     {
         return $this->priceHelper->currency((float)$amount, true, false);
     }
 
-    /** =========================
-     *  Cartão (exibição opcional)
-     *  =========================
-     */
-
     public function canShowCcInfo(): bool
     {
-        // Mostra se ao menos marca/últimos 4/parcelas estiverem disponíveis
         return (bool)($this->getCcBrand() || $this->getCcNumber() || $this->getCcInstallments());
     }
 
     public function getCcBrand(): string
     {
-        // chaves que costumam existir no additional_information
         return (string)($this->addl('card_brand') ?? '');
     }
 
@@ -122,7 +97,6 @@ class CardBankslippix extends Template
 
     public function getCcNumber(): string
     {
-        // Exibe mascarado se existir last_4
         $last4 = (string)($this->addl('card_last_4') ?? '');
         return $last4 ? ('**** **** **** ' . $last4) : '';
     }
@@ -132,11 +106,6 @@ class CardBankslippix extends Template
         $i = $this->addl('cc_installments') ?? $this->addl('installments');
         return (int)($i ?: 0);
     }
-
-    /** =========================
-     *  Estado da ordem
-     *  =========================
-     */
 
     public function hasInvoice(): bool
     {
@@ -150,14 +119,8 @@ class CardBankslippix extends Template
         return $o ? $o->isCanceled() : false;
     }
 
-    /** =========================
-     *  Bolepix (QR/URL/Vencimento)
-     *  =========================
-     */
-
     public function canShowBolepixInfo(): bool
     {
-        // Exibe se houver algo útil do lado do Bolepix (qr ou print)
         return (bool)($this->getQrCodeBolepix() || $this->getQrcodeOriginalPath() || $this->getPrintUrl());
     }
 
@@ -185,7 +148,6 @@ class CardBankslippix extends Template
 
     public function getDaysToKeepWaitingPayment(): ?string
     {
-        // Seu template imprime "Pay up: %s". Aqui devolvo a data de vencimento formatada (se existir).
         $due = $this->addl('due_at') ?? $this->addl('vindi_charge_0_due_at');
         if (!$due) { return null; }
         try {
@@ -198,13 +160,11 @@ class CardBankslippix extends Template
 
     public function getQrCodeWarningMessage(): string
     {
-        // Caso queira, personalize um aviso; por ora, vazio.
         return '';
     }
 
     public function getBillId(): ?string
     {
-        // No multimeios você pode ter salvo o último bill_id no additional_information
         $id = $this->addl('vindi_bill_id');
         return $id !== null ? (string)$id : null;
     }
@@ -214,12 +174,6 @@ class CardBankslippix extends Template
         return (string)__('Card + Bolepix');
     }
 
-    /** =========================
-     *  Renderização condicional
-     *  =========================
-     */
-
-    /** Só renderiza quando for o método correto; evita HTML “vazio” */
     protected function _toHtml()
     {
         return $this->canShow() ? parent::_toHtml() : '';

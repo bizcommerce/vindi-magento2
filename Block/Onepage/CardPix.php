@@ -24,11 +24,6 @@ class CardPix extends Template
         $this->priceHelper     = $priceHelper;
     }
 
-    /** =========================
-     *  Básicos / fonte de dados
-     *  =========================
-     */
-
     /** @return \Magento\Sales\Model\Order|null */
     public function getOrder()
     {
@@ -42,14 +37,12 @@ class CardPix extends Template
         return $o ? $o->getPayment() : null;
     }
 
-    /** Compatível com $block->getMethod()->getTitle() no phtml */
     public function getMethod()
     {
         $p = $this->getPayment();
         return $p ? $p->getMethodInstance() : null;
     }
 
-    /** Renderiza só quando o método é Cartão+PIX (vindi_cardpix) */
     public function canShow(): bool
     {
         $p = $this->getPayment();
@@ -57,17 +50,11 @@ class CardPix extends Template
         return $p->getMethod() === 'vindi_cardpix';
     }
 
-    /** Lê additional_information com segurança */
     private function addl(string $key)
     {
         $p = $this->getPayment();
         return $p ? $p->getAdditionalInformation($key) : null;
     }
-
-    /** =========================
-     *  Split (valores)
-     *  =========================
-     */
 
     public function getCreditAmount(): float
     {
@@ -77,7 +64,6 @@ class CardPix extends Template
 
     public function getPixAmount(): float
     {
-        // No fluxo Cartão+PIX salvamos 'amount_pix'
         $v = $this->addl('amount_pix');
         return ($v !== null && $v !== '') ? (float)$v : 0.0;
     }
@@ -86,11 +72,6 @@ class CardPix extends Template
     {
         return $this->priceHelper->currency((float)$amount, true, false);
     }
-
-    /** =========================
-     *  Cartão (exibição opcional)
-     *  =========================
-     */
 
     public function canShowCcInfo(): bool
     {
@@ -119,11 +100,6 @@ class CardPix extends Template
         return (int)($i ?: 0);
     }
 
-    /** =========================
-     *  Estado da ordem
-     *  =========================
-     */
-
     public function hasInvoice(): bool
     {
         $o = $this->getOrder();
@@ -136,11 +112,6 @@ class CardPix extends Template
         return $o ? $o->isCanceled() : false;
     }
 
-    /** =========================
-     *  PIX (QR / vencimento)
-     *  =========================
-     */
-
     public function canShowPixInfo(): bool
     {
         return (bool)($this->getQrCodePix() || $this->getQrcodeOriginalPath());
@@ -148,7 +119,6 @@ class CardPix extends Template
 
     public function getQrCodePix(): ?string
     {
-        // geralmente em gateway_response_fields
         return $this->addl('qrcode_path')
             ?? $this->addl('vindi_charge_0_qrcode_path')
             ?? null;
@@ -163,7 +133,6 @@ class CardPix extends Template
 
     public function getDaysToKeepWaitingPayment(): ?string
     {
-        // Preferir validade explícita do PIX; se não houver, usar due_at
         $expires = $this->addl('pix_expires_at') ?? $this->addl('vindi_charge_0_pix_expires_at');
         $due     = $expires ?: ($this->addl('due_at') ?? $this->addl('vindi_charge_0_due_at'));
         if (!$due) { return null; }
@@ -182,15 +151,9 @@ class CardPix extends Template
 
     public function getBillId(): ?string
     {
-        // No split, o último handleBankSplitAdditionalInformation() tende a gravar o bill do PIX
         $id = $this->addl('vindi_bill_id');
         return $id !== null ? (string)$id : null;
     }
-
-    /** =========================
-     *  Render condicional
-     *  =========================
-     */
 
     protected function _toHtml()
     {

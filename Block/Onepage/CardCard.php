@@ -24,11 +24,6 @@ class CardCard extends Template
         $this->priceHelper     = $priceHelper;
     }
 
-    /** =========================
-     *  Básicos / fonte de dados
-     *  =========================
-     */
-
     /** @return \Magento\Sales\Model\Order|null */
     public function getOrder()
     {
@@ -42,14 +37,12 @@ class CardCard extends Template
         return $o ? $o->getPayment() : null;
     }
 
-    /** Compatível com $block->getMethod()->getTitle() no phtml */
     public function getMethod()
     {
         $p = $this->getPayment();
         return $p ? $p->getMethodInstance() : null;
     }
 
-    /** Renderiza só quando o método é Cartão+Cartão (vindi_cardcard) */
     public function canShow(): bool
     {
         $p = $this->getPayment();
@@ -57,14 +50,12 @@ class CardCard extends Template
         return $p->getMethod() === 'vindi_cardcard';
     }
 
-    /** Leitor seguro do additional_information */
     private function addl(string $key)
     {
         $p = $this->getPayment();
         return $p ? $p->getAdditionalInformation($key) : null;
     }
 
-    /** utilitário: pega a 1ª chave existente */
     private function pick(array $keys)
     {
         foreach ($keys as $k) {
@@ -74,21 +65,14 @@ class CardCard extends Template
         return null;
     }
 
-    /** =========================
-     *  Split (valores)
-     *  =========================
-     */
-
     public function getFirstCardAmount(): float
     {
-        // no fluxo, usamos amount_credit para o primeiro cartão
         $v = $this->pick(['amount_credit', 'amount_first_card', 'first_card_amount']);
         return ($v !== null && $v !== '') ? (float)$v : 0.0;
     }
 
     public function getSecondCardAmount(): float
     {
-        // e amount_second_card para o segundo
         $v = $this->pick(['amount_second_card', 'second_card_amount']);
         return ($v !== null && $v !== '') ? (float)$v : 0.0;
     }
@@ -97,11 +81,6 @@ class CardCard extends Template
     {
         return $this->priceHelper->currency((float)$amount, true, false);
     }
-
-    /** =========================
-     *  Cartões (exibição)
-     *  =========================
-     */
 
     public function canShowCcInfo(): bool
     {
@@ -113,13 +92,11 @@ class CardCard extends Template
         );
     }
 
-    /** Retorna informações do 1º cartão */
     public function getFirstCardInfo(): array
     {
         $brand = (string)$this->pick(['card_brand', 'cc_type1', 'cc_type', 'brand_first', 'brand1']) ?: '';
         $owner = (string)$this->pick(['cc_owner1', 'cc_owner', 'owner_first', 'owner1']) ?: '';
         $last4 = (string)$this->pick(['cc_last_41','cc_last_4_1','cc_last4','card_last4','last4']) ?: '';
-        // fallback para número mascarado
         $number = $last4 ? ('**** **** **** ' . $last4) : '';
         $installments = (int)($this->pick(['cc_installments','cc_installments1','installments_first','installments1']) ?: 0);
 
@@ -131,7 +108,6 @@ class CardCard extends Template
         ];
     }
 
-    /** Retorna informações do 2º cartão */
     public function getSecondCardInfo(): array
     {
         $brand = (string)$this->pick(['cc_type2', 'brand_second', 'brand2']) ?: '';
@@ -148,17 +124,11 @@ class CardCard extends Template
         ];
     }
 
-    /** Nome amigável caso precise no template */
     public function getPaymentMethodName(): string
     {
         $m = $this->getMethod();
         return $m ? (string)$m->getTitle() : 'Card + Card';
     }
-
-    /** =========================
-     *  Render condicional
-     *  =========================
-     */
 
     protected function _toHtml()
     {
