@@ -99,7 +99,7 @@
                         "components": {
                             "vindiBolepix": {
                                 "component": "Vindi_Payment/js/view/info/vindi-pix",
-                                "qrCodeKey": <?php echo $block->getQrcodeOriginalPath(); ?>
+                                "qrCodeKey": <?php echo json_encode($block->getQrcodeOriginalPath()); ?>
             }
         }
     }

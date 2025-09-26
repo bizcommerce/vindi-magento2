@@ -14,6 +14,9 @@
             <block class="Vindi\Payment\Block\Onepage\Bankslip" name="checkout.success.vindi.bankslip" template="onepage/bankslip.phtml" cacheable="false"/>
             <block class="Vindi\Payment\Block\Onepage\Pix" name="checkout.success.vindi.pix" template="Vindi_Payment::onepage/pix.phtml" cacheable="false"/>
             <block class="Vindi\Payment\Block\Onepage\CreditCard" name="checkout.success.vindi.creditcard" template="Vindi_Payment::onepage/cc.phtml" cacheable="false"/>
+            <block class="Vindi\Payment\Block\Onepage\CardBankslippix" name="checkout.success.vindi.cardbankslippix" template="Vindi_Payment::info/card_bankslippix.phtml" cacheable="false"/>
+            <block class="Vindi\Payment\Block\Onepage\CardPix" name="checkout.success.vindi.cardpix" template="Vindi_Payment::info/card_pix.phtml" cacheable="false"/>
+            <block class="Vindi\Payment\Block\Onepage\CardCard" name="checkout.success.vindi.cardcard" template="Vindi_Payment::info/card_card.phtml" cacheable="false"/>
         </referenceContainer>
     </body>
 </page>
