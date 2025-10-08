@@ -921,9 +921,9 @@ abstract class AbstractMethod extends OriginAbstractMethod
     }
 
     /**
-     * Handle bank split additional information for payment processing.
+     * Handle bank slip and pix additional information for payment processing.
      *
-     * @param InfoInterface $payment
+     * @param \Magento\Payment\Model\InfoInterface $payment
      * @param array $body
      * @param array $bill
      * @return void
@@ -935,63 +935,117 @@ abstract class AbstractMethod extends OriginAbstractMethod
         }
 
         try {
+            $put = function($k, $v) use ($payment) {
+                if ($v !== null && $v !== '') {
+                    $payment->setAdditionalInformation($k, $v);
+                }
+            };
 
-            $additionalInfo = $payment->getAdditionalInformation();
-            if (!is_array($additionalInfo)) {
-                $additionalInfo = [];
-            }
-
-
-            $additionalInfo['vindi_bill_id'] = $bill['id'] ?? null;
-            $additionalInfo['vindi_bill_status'] = $bill['status'] ?? null;
-
-
+            $put('vindi_bill_id',     $bill['id']     ?? null);
+            $put('vindi_bill_status', $bill['status'] ?? null);
             if (isset($body['payment_method_code'])) {
-                $additionalInfo['vindi_payment_method'] = $body['payment_method_code'];
+                $put('vindi_payment_method', $body['payment_method_code']);
             }
-
-
             if (isset($bill['amount'])) {
-                $additionalInfo['vindi_bill_amount'] = $bill['amount'];
+                $put('vindi_bill_amount', $bill['amount']);
             }
 
+            $charges = isset($bill['charges']) && is_array($bill['charges']) ? $bill['charges'] : [];
+            foreach ($charges as $index => $charge) {
+                $put("vindi_charge_{$index}_id",     $charge['id']     ?? null);
+                $put("vindi_charge_{$index}_status", $charge['status'] ?? null);
 
-            if (isset($bill['charges']) && is_array($bill['charges'])) {
-                foreach ($bill['charges'] as $index => $charge) {
-                    $additionalInfo["vindi_charge_{$index}_id"] = $charge['id'] ?? null;
-                    $additionalInfo["vindi_charge_{$index}_status"] = $charge['status'] ?? null;
+                $transaction = $charge['last_transaction'] ?? [];
+                $put("vindi_transaction_{$index}_id",     $transaction['id']     ?? null);
+                $put("vindi_transaction_{$index}_status", $transaction['status'] ?? null);
 
+                $gateway = $transaction['gateway_response_fields'] ?? [];
 
-                    if (isset($charge['last_transaction'])) {
-                        $transaction = $charge['last_transaction'];
-                        $additionalInfo["vindi_transaction_{$index}_id"] = $transaction['id'] ?? null;
-                        $additionalInfo["vindi_transaction_{$index}_status"] = $transaction['status'] ?? null;
+                $printUrl =
+                    ($charge['print_url'] ?? null)
+                    ?: ($transaction['print_url'] ?? null)
+                    ?: ($gateway['print_url'] ?? null)
+                    ?: ($gateway['bank_slip']['url'] ?? null)
+                    ?: ($charge['bank_slip']['url'] ?? null);
 
+                $dueAt =
+                    ($charge['due_at'] ?? null)
+                    ?: ($transaction['due_at'] ?? null)
+                    ?: ($gateway['due_at'] ?? null);
 
-                        if (isset($transaction['payment_profile'])) {
-                            $paymentProfile = $transaction['payment_profile'];
-                            if (isset($paymentProfile['bank_slip_url'])) {
-                                $additionalInfo["vindi_bank_slip_url_{$index}"] = $paymentProfile['bank_slip_url'];
-                            }
-                            if (isset($paymentProfile['pix_qr_code'])) {
-                                $additionalInfo["vindi_pix_qr_code_{$index}"] = $paymentProfile['pix_qr_code'];
-                            }
-                            if (isset($paymentProfile['pix_code'])) {
-                                $additionalInfo["vindi_pix_code_{$index}"] = $paymentProfile['pix_code'];
-                            }
+                if ($printUrl) {
+                    if (!$payment->getAdditionalInformation('print_url')) {
+                        $put('print_url', $printUrl);
+                    }
+                    if (!$payment->getAdditionalInformation('bankslip_print_url')) {
+                        $put('bankslip_print_url', $printUrl);
+                    }
+                    $put("vindi_charge_{$index}_print_url", $printUrl);
+                }
+                if ($dueAt) {
+                    if (!$payment->getAdditionalInformation('due_at')) {
+                        $put('due_at', $dueAt);
+                    }
+                    $put("vindi_charge_{$index}_due_at", $dueAt);
+                }
+
+                $pixCopyPaste =
+                    ($gateway['pix_code'] ?? null)
+                    ?: ($gateway['pix_copia_cola'] ?? null)
+                    ?: ($gateway['emv'] ?? null)
+                    ?: ($gateway['copy_paste'] ?? null)
+                    ?: ($gateway['pix_copy_paste'] ?? null);
+
+                $qrPath  = $gateway['qrcode_path']          ?? ($gateway['qr_code_path'] ?? null);
+                $qrUrl   = $gateway['qrcode_url']           ?? ($gateway['qr_code_url']  ?? null);
+                $qrOrig  = $gateway['qrcode_original_path'] ?? null;
+                $expires = $gateway['expires_at']           ?? ($gateway['expiration']   ?? $dueAt);
+
+                if ($pixCopyPaste || $qrPath || $qrUrl || $qrOrig || $expires) {
+                    if ($pixCopyPaste && !$payment->getAdditionalInformation('pix_copy_paste')) {
+                        $put('pix_copy_paste', $pixCopyPaste);
+                    }
+                    if ($qrPath && !$payment->getAdditionalInformation('qrcode_path')) {
+                        $put('qrcode_path', $qrPath);
+                    }
+                    if ($qrUrl && !$payment->getAdditionalInformation('qrcode_url')) {
+                        $put('qrcode_url', $qrUrl);
+                    }
+                    if ($qrOrig && !$payment->getAdditionalInformation('qrcode_original_path')) {
+                        $put('qrcode_original_path', $qrOrig);
+                    }
+                    if ($expires && !$payment->getAdditionalInformation('pix_expires_at')) {
+                        $put('pix_expires_at', $expires);
+                    }
+
+                    $put("vindi_charge_{$index}_pix_copy_paste",       $pixCopyPaste);
+                    $put("vindi_charge_{$index}_qrcode_path",          $qrPath);
+                    $put("vindi_charge_{$index}_qrcode_url",           $qrUrl);
+                    $put("vindi_charge_{$index}_qrcode_original_path", $qrOrig);
+                    $put("vindi_charge_{$index}_pix_expires_at",       $expires);
+                }
+
+                if (isset($transaction['payment_profile'])) {
+                    $pp = $transaction['payment_profile'];
+                    if (isset($pp['bank_slip_url'])) {
+                        $put("vindi_bank_slip_url_{$index}", $pp['bank_slip_url']);
+                        if (!$payment->getAdditionalInformation('print_url')) {
+                            $put('print_url', $pp['bank_slip_url']);
+                        }
+                    }
+                    if (isset($pp['pix_qr_code'])) {
+                        $put("vindi_pix_qr_code_{$index}", $pp['pix_qr_code']);
+                    }
+                    if (isset($pp['pix_code'])) {
+                        $put("vindi_pix_code_{$index}", $pp['pix_code']);
+                        if (!$payment->getAdditionalInformation('pix_copy_paste')) {
+                            $put('pix_copy_paste', $pp['pix_code']);
                         }
                     }
                 }
             }
-
-
-            $payment->setAdditionalInformation($additionalInfo);
-
-
-
-
         } catch (\Exception $e) {
-            $this->psrLogger->error('Error handling bank split additional information: ' . $e->getMessage());
+            $this->psrLogger->error('Error handling bank/pix additional information: ' . $e->getMessage());
         }
     }
 

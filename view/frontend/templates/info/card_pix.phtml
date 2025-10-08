@@ -86,7 +86,7 @@
                         "components": {
                             "vindiPix": {
                                 "component": "Vindi_Payment/js/view/info/vindi-pix",
-                                "qrCodeKey": <?= $block->getQrcodeOriginalPath() ?>
+                                "qrCodeKey": <?= json_encode($block->getQrcodeOriginalPath()) ?>
             }
         }
     }
