@@ -167,17 +167,57 @@ class Save extends Action
                 $paymentProfile = $this->paymentProfileRepository->getById($entityId);
             }
 
-            $vindiData = $this->formatPaymentProfileData($data, $customerId);
-
+            // Dados do cliente
             $customer = $this->customerRepository->getById($customerId);
             $customerVindiId = $this->vindiCustomer->findOrCreateFromCustomerAccount($customer);
 
-            $vindiPaymentProfile = $this->paymentProfileManager->createFromCustomerAccount($vindiData, $customerVindiId, 'credit_card');
+            // === AJUSTE: Buscar perfil existente na Vindi por BIN (6) + last4 ===
+            $linkedExisting = false;
+            $existingProfile = null;
 
+            list($firstSix, $lastFour) = $this->extractBinAndLast4FromForm($data);
+            if ($firstSix && $lastFour) {
+                // Usa o método já existente do módulo (Payment\Profile::getPaymentProfile)
+                $resp = $this->paymentProfileManager->getPaymentProfile((int)$customerVindiId, (int)$firstSix, (int)$lastFour);
+
+                if (is_array($resp)) {
+                    if (isset($resp['payment_profiles']) && is_array($resp['payment_profiles']) && !empty($resp['payment_profiles'])) {
+                        // já vem ordenado por sort_order=desc; pega o mais recente
+                        $existingProfile = $resp['payment_profiles'][0];
+                    } elseif (isset($resp['payment_profile']) && is_array($resp['payment_profile'])) {
+                        $existingProfile = $resp['payment_profile'];
+                    }
+                }
+            }
+
+            if ($existingProfile && isset($existingProfile['id'])) {
+                // Encontrou na Vindi — não cria; apenas vincula localmente
+                $vindiPaymentProfile = ['payment_profile' => $existingProfile];
+                $linkedExisting = true;
+            } else {
+                // Mantém a lógica original de criação na Vindi
+                $vindiData = $this->formatPaymentProfileData($data, $customerId);
+                $vindiPaymentProfile = $this->paymentProfileManager->createFromCustomerAccount(
+                    $vindiData,
+                    $customerVindiId,
+                    'credit_card'
+                );
+            }
+
+            // Mantém a lógica original de mascarar e setar dados de cartão
             $this->setCreditCardData($data);
 
+            // Evitar duplicidade local: se já existir o mesmo payment_profile_id para o cliente, reaproveita
+            $ppId = (int) ($vindiPaymentProfile['payment_profile']['id'] ?? 0);
+            if ($ppId > 0 && !$entityId) {
+                $alreadyLocal = $this->loadLocalByVindiPaymentProfileId($ppId, (int)$customerId);
+                if ($alreadyLocal) {
+                    $paymentProfile = $alreadyLocal;
+                }
+            }
+
             $paymentProfile->setData([
-                'payment_profile_id' => $vindiPaymentProfile['payment_profile']['id'],
+                'payment_profile_id' => $ppId,
                 'vindi_customer_id'  => $customerVindiId,
                 'customer_id'        => $customerId,
                 'customer_email'     => $customer->getEmail(),
@@ -186,19 +226,20 @@ class Save extends Action
                 'cc_name'            => $data['cc_name'],
                 'cc_type'            => $data['cc_type'],
                 'cc_last_4'          => $data['cc_last_4'],
-                'status'             => $vindiPaymentProfile["payment_profile"]["status"],
-                'token'              => $vindiPaymentProfile["payment_profile"]["token"],
-                'type'               => $vindiPaymentProfile["payment_profile"]["type"]
+                'status'             => $vindiPaymentProfile["payment_profile"]["status"] ?? null,
+                'token'              => $vindiPaymentProfile["payment_profile"]["token"]  ?? null,
+                'type'               => $vindiPaymentProfile["payment_profile"]["type"]   ?? 'credit_card'
             ]);
 
             $this->paymentProfileRepository->save($paymentProfile);
 
-            if ($subscriptionId) {
-                if ($this->updateVindiPaymentProfile($vindiPaymentProfile['payment_profile']['id'], $subscriptionId)) {
-                    $this->updateSubscriptionPaymentProfile($subscriptionId, $vindiPaymentProfile['payment_profile']['id']);
+            if ($subscriptionId && $ppId) {
+                if ($this->updateVindiPaymentProfile($ppId, $subscriptionId)) {
+                    $this->updateSubscriptionPaymentProfile($subscriptionId, $ppId);
                 }
             }
 
+            // Mantém sua mensagem original (se preferir diferenciar, posso ajustar)
             $this->messageManager->addSuccessMessage(__('New payment profile created successfully.'));
             $this->dataPersistor->set('vindi_payment_profile', $data);
         } catch (\Exception $e) {
@@ -310,5 +351,42 @@ class Save extends Action
             $this->messageManager->addErrorMessage(__('Failed to update Vindi payment profile: ') . '"' . $e->getMessage() . '"');
             return false;
         }
+    }
+
+    /**
+     * Extrai BIN (6 primeiros dígitos) e last4 (últimos 4) do número do cartão do formulário.
+     *
+     * @param array $data
+     * @return array [string|null $firstSix, string|null $lastFour]
+     */
+    private function extractBinAndLast4FromForm(array $data): array
+    {
+        $digits = isset($data['cc_number']) ? preg_replace('/\D+/', '', (string)$data['cc_number']) : '';
+        if ($digits === '') {
+            return [null, null];
+        }
+
+        $firstSix = (strlen($digits) >= 6) ? substr($digits, 0, 6) : null;
+        $lastFour = (strlen($digits) >= 4) ? substr($digits, -4)  : null;
+
+        return [$firstSix, $lastFour];
+    }
+
+    /**
+     * Carrega (se existir) um registro local com o mesmo payment_profile_id para o cliente.
+     *
+     * @param int $paymentProfileId
+     * @param int $customerId
+     * @return \Vindi\Payment\Model\PaymentProfile|null
+     */
+    private function loadLocalByVindiPaymentProfileId(int $paymentProfileId, int $customerId)
+    {
+        $collection = $this->paymentProfileFactory->create()->getCollection();
+        $collection->addFieldToFilter('payment_profile_id', $paymentProfileId);
+        $collection->addFieldToFilter('customer_id', $customerId);
+        $collection->setPageSize(1);
+
+        $item = $collection->getFirstItem();
+        return ($item && $item->getId()) ? $item : null;
     }
 }
